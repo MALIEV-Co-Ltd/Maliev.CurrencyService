@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    run: maliev-currencyservice-api
+  name: maliev-currencyservice-api
+  namespace: maliev
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      run: maliev-currencyservice-api
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        run: maliev-currencyservice-api
+    spec:
+      serviceAccountName: maliev-currencyservice-ksa
+      containers:
+      - image: asia-southeast1-docker.pkg.dev/maliev-website/maliev-website-artifact/maliev-currencyservice-api:##VERSION##
+        imagePullPolicy: Always
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: currencies/liveness
+            port: 8080
+            scheme: HTTP
+          initialDelaySeconds: 15
+          periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 1
+        name: maliev-currencyservice-api
+        ports:
+        - containerPort: 8080
+          protocol: TCP
+        readinessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: currencies/readiness
+            port: 8080
+            scheme: HTTP
+          initialDelaySeconds: 20
+          periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 5
+        volumeMounts:
+        - name: secrets-store-csi-driver
+          mountPath: "/mnt/secrets"
+          readOnly: true
+      terminationGracePeriodSeconds: 30
+      nodeSelector:
+        cloud.google.com/gke-nodepool: api-pool
+      volumes:
+      - name: secrets-store-csi-driver
+        csi:
+          driver: secrets-store.csi.k8s.io
+          readOnly: true
+          volumeAttributes:
+            secretProviderClass: "maliev-shared-secrets

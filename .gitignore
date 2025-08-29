@@ -52,3 +52,8 @@ CodeCoverage/
 *.VisualState.xml
 TestResult.xml
 nunit-*.xml
+migration_source/
+reference_project/
+
+# Custom
+*.csproj.user

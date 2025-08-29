@@ -1,0 +1,74 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "R:\\maliev\\Maliev.CurrencyService\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{8C7B3E1A-5F2D-4C9E-8B0A-1D2F3E4A5B6C}|Maliev.CurrencyService.Api\\Maliev.CurrencyService.Api.csproj|r:\\maliev\\maliev.currencyservice\\maliev.currencyservice.api\\appsettings.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}",
+      "RelativeMoniker": "D:0:0:{8C7B3E1A-5F2D-4C9E-8B0A-1D2F3E4A5B6C}|Maliev.CurrencyService.Api\\Maliev.CurrencyService.Api.csproj|solutionrelative:maliev.currencyservice.api\\appsettings.json||{90A6B3A7-C1A3-4009-A288-E2FF89E96FA0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A1B2C3D4-E5F6-7A8B-9C0D-1E2F3A4B5C6D}|Maliev.CurrencyService.Tests\\Maliev.CurrencyService.Tests.csproj|r:\\maliev\\maliev.currencyservice\\maliev.currencyservice.tests\\currencies\\createcurrencyasync_unittest.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{A1B2C3D4-E5F6-7A8B-9C0D-1E2F3A4B5C6D}|Maliev.CurrencyService.Tests\\Maliev.CurrencyService.Tests.csproj|solutionrelative:maliev.currencyservice.tests\\currencies\\createcurrencyasync_unittest.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 0,
+          "Children": [
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "appsettings.json",
+              "DocumentMoniker": "R:\\maliev\\Maliev.CurrencyService\\Maliev.CurrencyService.Api\\appsettings.json",
+              "RelativeDocumentMoniker": "Maliev.CurrencyService.Api\\appsettings.json",
+              "ToolTip": "R:\\maliev\\Maliev.CurrencyService\\Maliev.CurrencyService.Api\\appsettings.json",
+              "RelativeToolTip": "Maliev.CurrencyService.Api\\appsettings.json",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001642|",
+              "WhenOpened": "2025-08-29T09:03:25.021Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "CreateCurrencyAsync_UnitTest.cs",
+              "DocumentMoniker": "R:\\maliev\\Maliev.CurrencyService\\Maliev.CurrencyService.Tests\\Currencies\\CreateCurrencyAsync_UnitTest.cs",
+              "RelativeDocumentMoniker": "Maliev.CurrencyService.Tests\\Currencies\\CreateCurrencyAsync_UnitTest.cs",
+              "ToolTip": "R:\\maliev\\Maliev.CurrencyService\\Maliev.CurrencyService.Tests\\Currencies\\CreateCurrencyAsync_UnitTest.cs",
+              "RelativeToolTip": "Maliev.CurrencyService.Tests\\Currencies\\CreateCurrencyAsync_UnitTest.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-08-29T09:03:09.953Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{1c4feeaa-4718-4aa9-859d-94ce25d182ba}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:129:0:{1fc202d4-d401-403c-9834-5b218574bb67}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:131:0:{1fc202d4-d401-403c-9834-5b218574bb67}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:130:0:{116d2292-e37d-41cd-a077-ebacac4c8cc4}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{40ea2e6b-2121-4bb8-a43e-c83c04b51041}"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

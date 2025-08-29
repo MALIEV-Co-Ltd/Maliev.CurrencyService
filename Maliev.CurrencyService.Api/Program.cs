@@ -63,6 +63,7 @@ if (builder.Environment.IsDevelopment())
 
 // Register Currency Service
 builder.Services.AddScoped<ICurrencyService, CurrencyService>();
+builder.Services.AddHttpClient();
 
 // Configure CORS
 builder.Services.AddCors(options =>

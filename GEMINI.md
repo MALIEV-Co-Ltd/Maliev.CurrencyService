@@ -34,5 +34,5 @@ The migration aimed to bring `Maliev.CurrencyService` in line with modern .NET d
 
 *   **Secrets in Google Secret Manager**: Ensure the `ConnectionStrings-CurrencyServiceDbContext` secret is correctly configured in Google Secret Manager before deployment.
 *   **`SecretProviderClass`**: Verify that the `maliev-shared-secrets` `SecretProviderClass` is correctly applied to your Kubernetes cluster and configured to fetch the necessary secrets from Google Secret Manager.
-*   **Local Development Secrets**: For local development, the `ConnectionStrings-CurrencyServiceDbContext` is configured in `appsettings.Development.json`.
+*   **Local Development Secrets**: For local development, sensitive information (like connection strings and JWT settings) should be managed via Visual Studio's User Secrets.
 *   **Build and Test**: Always run `dotnet build` and `dotnet test` after any changes to ensure project integrity.

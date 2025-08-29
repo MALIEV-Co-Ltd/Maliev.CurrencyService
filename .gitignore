@@ -57,3 +57,5 @@ reference_project/
 
 # Custom
 *.csproj.user
+.gemini/
+gha-creds-*.json

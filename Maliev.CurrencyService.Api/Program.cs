@@ -63,16 +63,11 @@ try
         builder.Services.AddDbContext<CurrencyDbContext>(options =>
             options.UseInMemoryDatabase("TestDb"));
     }
-    else if (builder.Environment.IsDevelopment())
-    {
-        builder.Services.AddDbContext<CurrencyDbContext>(options =>
-            options.UseInMemoryDatabase("DevelopmentDb"));
-    }
     else
     {
         builder.Services.AddDbContext<CurrencyDbContext>(options =>
         {
-            options.UseNpgsql(builder.Configuration.GetConnectionString("Default"));
+            options.UseNpgsql(builder.Configuration.GetConnectionString("CurrencyDbContext"));
         });
     }
 

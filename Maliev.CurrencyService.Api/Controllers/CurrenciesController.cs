@@ -1,146 +1,209 @@
-namespace Maliev.CurrencyService.Api.Controllers
+using Asp.Versioning;
+using Maliev.CurrencyService.Api.Models;
+using Maliev.CurrencyService.Api.Services;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
+
+namespace Maliev.CurrencyService.Api.Controllers;
+
+[ApiController]
+[Route("currencies/v{version:apiVersion}")]
+[ApiVersion("1.0")]
+[EnableRateLimiting("CurrencyPolicy")]
+[Authorize] // Require valid JWT token for all endpoints
+public class CurrenciesController : ControllerBase
 {
-    using System.Collections.Generic;
-    using System.Linq;
-    using System.Threading.Tasks;
-    using Maliev.CurrencyService.Api.Models;
-    using Maliev.CurrencyService.Api.Services;
-    using Microsoft.AspNetCore.Authentication.JwtBearer;
-    using Microsoft.AspNetCore.Authorization;
-    using Microsoft.AspNetCore.Http;
-    using Microsoft.AspNetCore.Mvc;
-    using Microsoft.Extensions.Logging;
+    private readonly ICurrencyService _currencyService;
+    private readonly ILogger<CurrenciesController> _logger;
 
-    /// <summary>
-    /// Controller for managing currencies.
-    /// </summary>
-    [Route("currencies")]
-    [ApiController]
-    [ApiConventionType(typeof(DefaultApiConventions))]
-    [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
-    public class CurrenciesController : ControllerBase
+    public CurrenciesController(ICurrencyService currencyService, ILogger<CurrenciesController> logger)
     {
-        private readonly ICurrencyService _currencyService;
-        private readonly ILogger<CurrenciesController> _logger;
+        _currencyService = currencyService;
+        _logger = logger;
+    }
 
-        /// <summary>
-        /// Initializes a new instance of the <see cref="CurrenciesController"/> class.
-        /// </summary>
-        /// <param name="currencyService">The currency service.</param>
-        /// <param name="logger">The logger.</param>
-        public CurrenciesController(ICurrencyService currencyService, ILogger<CurrenciesController> logger)
+    [HttpGet("{id:int}")]
+    [ProducesResponseType(typeof(CurrencyDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
+    public async Task<ActionResult<CurrencyDto>> GetById(int id)
+    {
+        _logger.LogDebug("Getting currency by ID: {Id}", id);
+        
+        var currency = await _currencyService.GetByIdAsync(id);
+        
+        if (currency == null)
         {
-            _currencyService = currencyService;
-            _logger = logger;
+            _logger.LogWarning("Currency not found with ID: {Id}", id);
+            return NotFound($"Currency with ID {id} not found");
         }
 
-        /// <summary>
-        /// Creates a new currency.
-        /// </summary>
-        /// <param name="request">The request DTO for creating a currency.</param>
-        /// <returns>The created currency DTO.</returns>
-        [HttpPost]
-        [ProducesResponseType(StatusCodes.Status201Created)]
-        [ProducesResponseType(StatusCodes.Status400BadRequest)]
-        public async Task<ActionResult<CurrencyDto>> CreateCurrencyAsync([FromBody] CreateCurrencyRequest request)
-        {
-            if (!ModelState.IsValid)
-            {
-                _logger.LogWarning("Invalid model state for CreateCurrencyAsync.");
-                return BadRequest(ModelState);
-            }
+        return Ok(currency);
+    }
 
-            _logger.LogInformation("Received request to create currency: {ShortName}", request.ShortName);
-            var createdCurrency = await _currencyService.CreateCurrencyAsync(request);
-            return CreatedAtRoute("GetCurrency", new { id = createdCurrency.Id }, createdCurrency);
+    [HttpGet("code/{code}")]
+    [ProducesResponseType(typeof(CurrencyDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
+    public async Task<ActionResult<CurrencyDto>> GetByCode(string code)
+    {
+        _logger.LogDebug("Getting currency by code: {Code}", code);
+        
+        if (string.IsNullOrWhiteSpace(code) || code.Length != 3)
+        {
+            return BadRequest("Currency code must be exactly 3 characters");
         }
 
-        /// <summary>
-        /// Deletes a currency by its ID.
-        /// </summary>
-        /// <param name="id">The ID of the currency to delete.</param>
-        /// <returns>No content if successful, or not found.</n>
-        [HttpDelete("{id:int}")]
-        [ProducesResponseType(StatusCodes.Status204NoContent)]
-        [ProducesResponseType(StatusCodes.Status404NotFound)]
-        public async Task<ActionResult> DeleteCurrencyAsync(int id)
+        var currency = await _currencyService.GetByShortNameAsync(code);
+        
+        if (currency == null)
         {
-            _logger.LogInformation("Received request to delete currency with ID: {Id}", id);
-            var deleted = await _currencyService.DeleteCurrencyAsync(id);
-            if (!deleted)
-            {
-                _logger.LogWarning("Currency with ID: {Id} not found for deletion.", id);
-                return NotFound();
-            }
-            return NoContent();
+            _logger.LogWarning("Currency not found with code: {Code}", code);
+            return NotFound($"Currency with code {code.ToUpperInvariant()} not found");
         }
 
-        /// <summary>
-        /// Gets all currencies.
-        /// </summary>
-        /// <returns>A list of currency DTOs.</returns>
-        [HttpGet]
-        [AllowAnonymous]
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status404NotFound)]
-        public async Task<ActionResult<IEnumerable<CurrencyDto>>> GetAllCurrenciesAsync()
+        return Ok(currency);
+    }
+
+    [HttpGet]
+    [ProducesResponseType(typeof(PagedResult<CurrencyDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
+    public async Task<ActionResult<PagedResult<CurrencyDto>>> GetAll(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        [FromQuery] string? search = null)
+    {
+        _logger.LogDebug("Getting currencies - Page: {Page}, PageSize: {PageSize}, Search: {Search}", 
+            page, pageSize, search);
+
+        if (page < 1)
         {
-            _logger.LogInformation("Received request to get all currencies.");
-            var currencies = await _currencyService.GetAllCurrenciesAsync();
-            if (currencies == null || !currencies.Any())
-            {
-                _logger.LogInformation("No currencies found.");
-                return NotFound();
-            }
-            return Ok(currencies);
+            return BadRequest("Page must be greater than 0");
         }
 
-        /// <summary>
-        /// Gets a currency by its ID.
-        /// </summary>
-        /// <param name="id">The ID of the currency.</param>
-        /// <returns>The currency DTO, or not found.</returns>
-        [HttpGet("{id:int}", Name = "GetCurrency")]
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status404NotFound)]
-        public async Task<ActionResult<CurrencyDto>> GetCurrencyAsync(int id)
+        if (pageSize < 1 || pageSize > 100)
         {
-            _logger.LogInformation("Received request to get currency with ID: {Id}", id);
-            var currency = await _currencyService.GetCurrencyByIdAsync(id);
+            return BadRequest("PageSize must be between 1 and 100");
+        }
+
+        var result = await _currencyService.GetAllAsync(page, pageSize, search);
+        
+        _logger.LogDebug("Retrieved {Count} currencies out of {Total}", 
+            result.Items.Count(), result.TotalCount);
+
+        return Ok(result);
+    }
+
+    [HttpGet("codes")]
+    [ProducesResponseType(typeof(IEnumerable<string>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
+    public async Task<ActionResult<IEnumerable<string>>> GetCurrencyCodes()
+    {
+        _logger.LogDebug("Getting all currency codes");
+        
+        var codes = await _currencyService.GetCurrencyCodesAsync();
+        
+        return Ok(codes);
+    }
+
+    [HttpPost]
+    [ProducesResponseType(typeof(CurrencyDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
+    public async Task<ActionResult<CurrencyDto>> Create([FromBody] CreateCurrencyRequest request)
+    {
+        _logger.LogDebug("Creating currency: {ShortName} - {LongName}", 
+            request.ShortName, request.LongName);
+
+        if (!ModelState.IsValid)
+        {
+            return BadRequest(ModelState);
+        }
+
+        try
+        {
+            var currency = await _currencyService.CreateAsync(request);
+            
+            _logger.LogInformation("Created currency: {ShortName} - {LongName} with ID {Id}", 
+                currency.ShortName, currency.LongName, currency.Id);
+
+            return CreatedAtAction(nameof(GetById), new { id = currency.Id }, currency);
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("duplicate") || ex.Message.Contains("unique"))
+        {
+            _logger.LogWarning("Attempt to create duplicate currency: {ShortName} - {LongName}", 
+                request.ShortName, request.LongName);
+            return Conflict("A currency with this code or name already exists");
+        }
+    }
+
+    [HttpPut("{id:int}")]
+    [ProducesResponseType(typeof(CurrencyDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
+    public async Task<ActionResult<CurrencyDto>> Update(int id, [FromBody] UpdateCurrencyRequest request)
+    {
+        _logger.LogDebug("Updating currency ID {Id}: {ShortName} - {LongName}", 
+            id, request.ShortName, request.LongName);
+
+        if (!ModelState.IsValid)
+        {
+            return BadRequest(ModelState);
+        }
+
+        try
+        {
+            var currency = await _currencyService.UpdateAsync(id, request);
+            
             if (currency == null)
             {
-                _logger.LogWarning("Currency with ID: {Id} not found.", id);
-                return NotFound();
+                _logger.LogWarning("Attempt to update non-existent currency ID: {Id}", id);
+                return NotFound($"Currency with ID {id} not found");
             }
+
+            _logger.LogInformation("Updated currency ID {Id}: {ShortName} - {LongName}", 
+                id, currency.ShortName, currency.LongName);
+
             return Ok(currency);
         }
-
-        /// <summary>
-        /// Updates an existing currency.
-        /// </summary>
-        /// <param name="id">The ID of the currency to update.</param>
-        /// <param name="request">The request DTO for updating a currency.</param>
-        /// <returns>No content if successful, or bad request/not found.</returns>
-        [HttpPut("{id:int}")]
-        [ProducesResponseType(StatusCodes.Status204NoContent)]
-        [ProducesResponseType(StatusCodes.Status400BadRequest)]
-        [ProducesResponseType(StatusCodes.Status404NotFound)]
-        public async Task<ActionResult> UpdateCurrencyAsync(int id, [FromBody] UpdateCurrencyRequest request)
+        catch (InvalidOperationException ex) when (ex.Message.Contains("duplicate") || ex.Message.Contains("unique"))
         {
-            if (!ModelState.IsValid)
-            {
-                _logger.LogWarning("Invalid model state for UpdateCurrencyAsync for ID: {Id}.", id);
-                return BadRequest(ModelState);
-            }
-
-            _logger.LogInformation("Received request to update currency with ID: {Id}", id);
-            var updated = await _currencyService.UpdateCurrencyAsync(id, request);
-            if (!updated)
-            {
-                _logger.LogWarning("Currency with ID: {Id} not found for update.", id);
-                return NotFound();
-            }
-            return NoContent();
+            _logger.LogWarning("Attempt to update currency ID {Id} with duplicate data: {ShortName} - {LongName}", 
+                id, request.ShortName, request.LongName);
+            return Conflict("A currency with this code or name already exists");
         }
+    }
+
+    [HttpDelete("{id:int}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
+    public async Task<IActionResult> Delete(int id)
+    {
+        _logger.LogDebug("Deleting currency ID: {Id}", id);
+
+        var deleted = await _currencyService.DeleteAsync(id);
+        
+        if (!deleted)
+        {
+            _logger.LogWarning("Attempt to delete non-existent currency ID: {Id}", id);
+            return NotFound($"Currency with ID {id} not found");
+        }
+
+        _logger.LogInformation("Deleted currency ID: {Id}", id);
+        
+        return NoContent();
     }
 }

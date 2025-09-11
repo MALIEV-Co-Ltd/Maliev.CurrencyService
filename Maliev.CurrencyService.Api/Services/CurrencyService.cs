@@ -139,9 +139,21 @@ public class CurrencyService : ICurrencyService
 
     public async Task<CurrencyDto> CreateAsync(CreateCurrencyRequest request)
     {
+        var shortName = request.ShortName.ToUpperInvariant();
+        
+        // Check if a currency with this short name already exists
+        var existingCurrency = await _context.Currencies
+            .AsNoTracking()
+            .FirstOrDefaultAsync(c => c.ShortName == shortName);
+            
+        if (existingCurrency != null)
+        {
+            throw new InvalidOperationException($"A currency with the code '{shortName}' already exists (duplicate currency code)");
+        }
+
         var currency = new Currency
         {
-            ShortName = request.ShortName.ToUpperInvariant(),
+            ShortName = shortName,
             LongName = request.LongName.Trim(),
             CreatedDate = DateTime.UtcNow,
             ModifiedDate = DateTime.UtcNow

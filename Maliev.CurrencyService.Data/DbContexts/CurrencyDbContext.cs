@@ -10,6 +10,7 @@ public class CurrencyDbContext : DbContext
     }
 
     public DbSet<Currency> Currencies { get; set; }
+    public DbSet<ExchangeRate> ExchangeRates { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -46,6 +47,45 @@ public class CurrencyDbContext : DbContext
             // Add regular index for searching
             entity.HasIndex(e => e.ShortName)
                 .HasDatabaseName("IX_Currencies_ShortName");
+        });
+
+        // Configure ExchangeRate entity
+        modelBuilder.Entity<ExchangeRate>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+
+            entity.Property(e => e.FromCurrencyCode)
+                .IsRequired()
+                .HasMaxLength(3);
+
+            entity.Property(e => e.ToCurrencyCode)
+                .IsRequired()
+                .HasMaxLength(3);
+
+            entity.Property(e => e.Rate)
+                .IsRequired()
+                .HasPrecision(18, 8); // High precision for exchange rates
+
+            entity.Property(e => e.FetchedAt)
+                .IsRequired();
+
+            entity.Property(e => e.Source)
+                .IsRequired()
+                .HasMaxLength(50);
+
+            entity.Property(e => e.CreatedDate)
+                .IsRequired();
+
+            entity.Property(e => e.ModifiedDate)
+                .IsRequired();
+
+            // Add composite index for fast lookups
+            entity.HasIndex(e => new { e.FromCurrencyCode, e.ToCurrencyCode })
+                .HasDatabaseName("IX_ExchangeRates_FromTo");
+
+            // Add index for recent rates
+            entity.HasIndex(e => e.FetchedAt)
+                .HasDatabaseName("IX_ExchangeRates_FetchedAt");
         });
     }
 }

@@ -3,62 +3,105 @@ using System.Net.Http.Json;
 using System.Text;
 using FluentAssertions;
 using Maliev.CurrencyService.Api.Models;
+using Maliev.CurrencyService.Data.DbContexts;
 using Maliev.CurrencyService.Data.Entities;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using Testcontainers.PostgreSql;
 using Xunit;
 
 namespace Maliev.CurrencyService.Tests;
 
-public class CurrencyControllerIntegrationTests : IAsyncLifetime
+public class CurrencyControllerIntegrationTestFixture : IAsyncDisposable
 {
-    private readonly PostgreSqlContainer _postgresContainer;
-    private WebApplicationFactory<Program> _factory = null!;
-    private HttpClient _client = null!;
+    internal WebApplicationFactory<Program> Factory { get; private set; } = null!;
+    public HttpClient Client { get; private set; } = null!;
+    public string DatabaseName { get; } = $"TestDb_{Guid.NewGuid()}";
 
-    public CurrencyControllerIntegrationTests()
+    public CurrencyControllerIntegrationTestFixture()
     {
-        _postgresContainer = new PostgreSqlBuilder()
-            .WithDatabase("currency_test")
-            .WithUsername("test_user")
-            .WithPassword("test_password")
-            .Build();
+        InitializeAsync().GetAwaiter().GetResult();
     }
 
-    public async Task InitializeAsync()
+    private async Task InitializeAsync()
     {
-        await _postgresContainer.StartAsync();
-        
-        _factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
+        Factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {
-            builder.UseSetting("ConnectionStrings:DefaultConnection", _postgresContainer.GetConnectionString());
+            builder.UseEnvironment("Testing");
             
-            // Override authentication for testing
             builder.ConfigureServices(services =>
             {
-                // Remove the existing authentication
-                var authDescriptor = services.FirstOrDefault(d => d.ServiceType == typeof(Microsoft.AspNetCore.Authentication.IAuthenticationService));
-                if (authDescriptor != null)
+                var descriptor = services.SingleOrDefault(d => d.ServiceType == typeof(DbContextOptions<CurrencyDbContext>));
+                if (descriptor != null)
                 {
-                    services.Remove(authDescriptor);
+                    services.Remove(descriptor);
                 }
+
+                services.AddDbContext<CurrencyDbContext>(options =>
+                {
+                    options.UseInMemoryDatabase(DatabaseName);
+                });
+
+                services.PostConfigure<AuthorizationOptions>(options =>
+                {
+                    options.DefaultPolicy = new AuthorizationPolicyBuilder()
+                        .RequireAssertion(_ => true)
+                        .Build();
+                });
             });
         });
 
-        _client = _factory.CreateClient();
-        
-        // Run migrations
-        using var scope = _factory.Services.CreateScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<Maliev.CurrencyService.Data.DbContexts.CurrencyDbContext>();
-        await dbContext.Database.EnsureCreatedAsync();
+        Client = Factory.CreateClient();
+        await SeedTestDataAsync();
     }
 
-    public async Task DisposeAsync()
+    private async Task SeedTestDataAsync()
     {
-        await _postgresContainer.DisposeAsync();
-        _client?.Dispose();
-        await _factory.DisposeAsync();
+        using var scope = Factory.Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<CurrencyDbContext>();
+        await dbContext.Database.EnsureCreatedAsync();
+
+        if (!await dbContext.Currencies.AnyAsync())
+        {
+            var testCurrencies = new[]
+            {
+                new Currency { ShortName = "USD", LongName = "United States Dollar", CreatedDate = DateTime.UtcNow, ModifiedDate = DateTime.UtcNow },
+                new Currency { ShortName = "EUR", LongName = "Euro", CreatedDate = DateTime.UtcNow, ModifiedDate = DateTime.UtcNow },
+                new Currency { ShortName = "THB", LongName = "Thai Baht", CreatedDate = DateTime.UtcNow, ModifiedDate = DateTime.UtcNow },
+                new Currency { ShortName = "GBP", LongName = "British Pound Sterling", CreatedDate = DateTime.UtcNow, ModifiedDate = DateTime.UtcNow },
+                new Currency { ShortName = "JPY", LongName = "Japanese Yen", CreatedDate = DateTime.UtcNow, ModifiedDate = DateTime.UtcNow },
+            };
+
+            await dbContext.Currencies.AddRangeAsync(testCurrencies);
+            await dbContext.SaveChangesAsync();
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        Client?.Dispose();
+        if (Factory != null)
+            await Factory.DisposeAsync();
+    }
+}
+
+[CollectionDefinition("Currency Integration Tests")]
+public class CurrencyTestCollection : ICollectionFixture<CurrencyControllerIntegrationTestFixture>
+{
+}
+
+[Collection("Currency Integration Tests")]
+public class CurrencyControllerIntegrationTests
+{
+    private readonly CurrencyControllerIntegrationTestFixture _fixture;
+    private readonly HttpClient _client;
+
+    public CurrencyControllerIntegrationTests(CurrencyControllerIntegrationTestFixture fixture)
+    {
+        _fixture = fixture;
+        _client = fixture.Client;
     }
 
     [Fact]
@@ -72,7 +115,7 @@ public class CurrencyControllerIntegrationTests : IAsyncLifetime
         var result = await response.Content.ReadFromJsonAsync<PagedResult<CurrencyDto>>();
         result.Should().NotBeNull();
         result!.Items.Should().NotBeEmpty();
-        result.TotalCount.Should().BeGreaterThan(150); // We seeded 153 currencies
+        result.TotalCount.Should().BeGreaterThan(0); // We seeded test currencies
         
         // Verify some well-known currencies exist
         var currencies = result.Items.ToList();

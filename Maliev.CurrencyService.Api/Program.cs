@@ -4,6 +4,7 @@ using HealthChecks.UI.Client;
 using Maliev.CurrencyService.Api.Configurations;
 using Maliev.CurrencyService.Api.HealthChecks;
 using Maliev.CurrencyService.Api.Middleware;
+using Maliev.CurrencyService.Api.Models;
 using Maliev.CurrencyService.Api.Services;
 using Maliev.CurrencyService.Data.DbContexts;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -62,6 +63,11 @@ try
         builder.Services.AddDbContext<CurrencyDbContext>(options =>
             options.UseInMemoryDatabase("TestDb"));
     }
+    else if (builder.Environment.IsDevelopment())
+    {
+        builder.Services.AddDbContext<CurrencyDbContext>(options =>
+            options.UseInMemoryDatabase("DevelopmentDb"));
+    }
     else
     {
         builder.Services.AddDbContext<CurrencyDbContext>(options =>
@@ -100,6 +106,21 @@ try
 
     // Register services
     builder.Services.AddScoped<ICurrencyService, Maliev.CurrencyService.Api.Services.CurrencyService>();
+
+    // Configure exchange rate options
+    builder.Services.Configure<ExchangeRateOptions>(builder.Configuration.GetSection(ExchangeRateOptions.SectionName));
+    builder.Services.AddOptions<ExchangeRateOptions>()
+        .Bind(builder.Configuration.GetSection(ExchangeRateOptions.SectionName))
+        .ValidateDataAnnotations();
+
+    // Register exchange rate providers with typed HttpClients
+    builder.Services.AddHttpClient<FrankfurterProvider>();
+    builder.Services.AddHttpClient<FawazahmedProvider>();
+    builder.Services.AddScoped<IExchangeRateProvider, FrankfurterProvider>();
+    builder.Services.AddScoped<IExchangeRateProvider, FawazahmedProvider>();
+
+    // Register main exchange rate service
+    builder.Services.AddScoped<IExchangeRateService, ExchangeRateService>();
 
     // Configure Swagger
     builder.Services.AddTransient<IConfigureOptions<SwaggerGenOptions>, ConfigureSwaggerOptions>();

@@ -70,7 +70,11 @@ public class ExchangeRateService : IExchangeRateService
                 {
                     // Cache the result
                     var cacheExpiry = TimeSpan.FromMinutes(_options.CacheDurationMinutes);
-                    _cache.Set(cacheKey, rate, cacheExpiry);
+                    _cache.Set(cacheKey, rate, new MemoryCacheEntryOptions
+                    {
+                        AbsoluteExpirationRelativeToNow = cacheExpiry,
+                        Size = 1  // Each exchange rate entry counts as 1 unit
+                    });
 
                     // Store in database for historical purposes
                     await StoreRateInDatabaseAsync(rate, cancellationToken);
@@ -163,7 +167,11 @@ public class ExchangeRateService : IExchangeRateService
 
                         // Cache individual rates
                         var cacheKey = $"rate_{baseCurrency}_{kvp.Key}";
-                        _cache.Set(cacheKey, kvp.Value, cacheExpiry);
+                        _cache.Set(cacheKey, kvp.Value, new MemoryCacheEntryOptions
+                        {
+                            AbsoluteExpirationRelativeToNow = cacheExpiry,
+                            Size = 1  // Each exchange rate entry counts as 1 unit
+                        });
 
                         // Store in database
                         await StoreRateInDatabaseAsync(kvp.Value, cancellationToken);

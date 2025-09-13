@@ -13,6 +13,7 @@ using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
+using Prometheus;
 using Serilog;
 using Swashbuckle.AspNetCore.SwaggerGen;
 using System.Text;
@@ -211,6 +212,7 @@ try
 
     app.UseMiddleware<ExceptionHandlingMiddleware>();
     app.UseHttpsRedirection();
+    app.UseHttpMetrics();
 
     app.UseRateLimiter();
     app.UseCors();
@@ -236,6 +238,8 @@ try
         Predicate = healthCheck => healthCheck.Tags.Contains("readiness"),
         ResponseWriter = UIResponseWriter.WriteHealthCheckUIResponse
     });
+
+    app.MapMetrics("/currencies/metrics");
 
     // Ensure database is created and seeded
     using (var scope = app.Services.CreateScope())

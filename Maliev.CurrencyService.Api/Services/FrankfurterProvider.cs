@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Maliev.CurrencyService.Api.Models;
+using Maliev.CurrencyService.Api.Models.ApiResponses;
 using Microsoft.Extensions.Options;
 
 namespace Maliev.CurrencyService.Api.Services;
@@ -9,6 +10,7 @@ public class FrankfurterProvider : IExchangeRateProvider
     private readonly HttpClient _httpClient;
     private readonly ExchangeRateOptions _options;
     private readonly ILogger<FrankfurterProvider> _logger;
+    private readonly JsonSerializerOptions _jsonOptions;
 
     public string Name => "Frankfurter";
 
@@ -19,6 +21,11 @@ public class FrankfurterProvider : IExchangeRateProvider
         _logger = logger;
         _httpClient.BaseAddress = new Uri("https://api.frankfurter.app/");
         _httpClient.Timeout = TimeSpan.FromSeconds(_options.TimeoutSeconds);
+        
+        _jsonOptions = new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true
+        };
     }
 
     public async Task<ExchangeRateDto?> GetExchangeRateAsync(string fromCurrency, string toCurrency, CancellationToken cancellationToken = default)
@@ -36,19 +43,17 @@ public class FrankfurterProvider : IExchangeRateProvider
             }
 
             var json = await response.Content.ReadAsStringAsync(cancellationToken);
-            using var document = JsonDocument.Parse(json);
-            var root = document.RootElement;
-
-            if (!root.TryGetProperty("rates", out var rates) || 
-                !rates.TryGetProperty(toCurrency, out var rateElement))
+            var model = JsonSerializer.Deserialize<OpenRatesModel>(json, _jsonOptions);
+            
+            if (model?.Rates == null || !model.Rates.ContainsKey(toCurrency))
             {
                 _logger.LogWarning("Frankfurter API response missing rate data for {From} to {To}", 
                     fromCurrency, toCurrency);
                 return null;
             }
 
-            var rate = rateElement.GetDecimal();
-            var dateStr = root.GetProperty("date").GetString();
+            var rate = model.Rates[toCurrency];
+            var dateStr = model.Date;
             var fetchedAt = DateTime.Parse(dateStr ?? DateTime.UtcNow.ToString("yyyy-MM-dd"));
 
             return new ExchangeRateDto
@@ -84,26 +89,25 @@ public class FrankfurterProvider : IExchangeRateProvider
             }
 
             var json = await response.Content.ReadAsStringAsync(cancellationToken);
-            using var document = JsonDocument.Parse(json);
-            var root = document.RootElement;
-
-            if (!root.TryGetProperty("rates", out var rates))
+            var model = JsonSerializer.Deserialize<OpenRatesModel>(json, _jsonOptions);
+            
+            if (model?.Rates == null)
             {
                 _logger.LogWarning("Frankfurter API response missing rates data for bulk request from {Base}", baseCurrency);
                 return null;
             }
 
-            var dateStr = root.GetProperty("date").GetString();
+            var dateStr = model.Date;
             var fetchedAt = DateTime.Parse(dateStr ?? DateTime.UtcNow.ToString("yyyy-MM-dd"));
             var result = new Dictionary<string, ExchangeRateDto>();
 
-            foreach (var property in rates.EnumerateObject())
+            foreach (var kvp in model.Rates)
             {
-                result[property.Name] = new ExchangeRateDto
+                result[kvp.Key] = new ExchangeRateDto
                 {
                     FromCurrency = baseCurrency,
-                    ToCurrency = property.Name,
-                    Rate = property.Value.GetDecimal(),
+                    ToCurrency = kvp.Key,
+                    Rate = kvp.Value,
                     FetchedAt = fetchedAt,
                     Source = Name
                 };

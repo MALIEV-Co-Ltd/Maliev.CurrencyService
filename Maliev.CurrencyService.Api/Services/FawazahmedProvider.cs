@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Maliev.CurrencyService.Api.Models;
+using Maliev.CurrencyService.Api.Models.ApiResponses;
 using Microsoft.Extensions.Options;
 
 namespace Maliev.CurrencyService.Api.Services;
@@ -9,6 +10,7 @@ public class FawazahmedProvider : IExchangeRateProvider
     private readonly HttpClient _httpClient;
     private readonly ExchangeRateOptions _options;
     private readonly ILogger<FawazahmedProvider> _logger;
+    private readonly JsonSerializerOptions _jsonOptions;
 
     public string Name => "Fawazahmed";
 
@@ -19,6 +21,11 @@ public class FawazahmedProvider : IExchangeRateProvider
         _logger = logger;
         _httpClient.BaseAddress = new Uri("https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/");
         _httpClient.Timeout = TimeSpan.FromSeconds(_options.TimeoutSeconds);
+        
+        _jsonOptions = new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true
+        };
     }
 
     public async Task<ExchangeRateDto?> GetExchangeRateAsync(string fromCurrency, string toCurrency, CancellationToken cancellationToken = default)
@@ -39,12 +46,13 @@ public class FawazahmedProvider : IExchangeRateProvider
             }
 
             var json = await response.Content.ReadAsStringAsync(cancellationToken);
-            using var document = JsonDocument.Parse(json);
-            var root = document.RootElement;
-
-            if (!root.TryGetProperty("date", out var dateElement) ||
-                !root.TryGetProperty(fromLower, out var currencyRates) ||
-                !currencyRates.TryGetProperty(toLower, out var rateElement))
+            var model = JsonSerializer.Deserialize<Dictionary<string, object>>(json, _jsonOptions);
+            
+            if (model == null ||
+                !model.TryGetValue("date", out var dateObj) ||
+                !model.TryGetValue(fromLower, out var currencyRatesObj) ||
+                !(currencyRatesObj is JsonElement currencyRatesElement) ||
+                !currencyRatesElement.TryGetProperty(toLower, out var rateElement))
             {
                 _logger.LogWarning("Fawazahmed API response missing rate data for {From} to {To}", 
                     fromCurrency, toCurrency);
@@ -52,7 +60,7 @@ public class FawazahmedProvider : IExchangeRateProvider
             }
 
             var rate = rateElement.GetDecimal();
-            var dateStr = dateElement.GetString();
+            var dateStr = dateObj?.ToString();
             var fetchedAt = DateTime.Parse(dateStr ?? DateTime.UtcNow.ToString("yyyy-MM-dd"));
 
             return new ExchangeRateDto
@@ -88,24 +96,25 @@ public class FawazahmedProvider : IExchangeRateProvider
             }
 
             var json = await response.Content.ReadAsStringAsync(cancellationToken);
-            using var document = JsonDocument.Parse(json);
-            var root = document.RootElement;
-
-            if (!root.TryGetProperty("date", out var dateElement) ||
-                !root.TryGetProperty(baseLower, out var rates))
+            var model = JsonSerializer.Deserialize<Dictionary<string, object>>(json, _jsonOptions);
+            
+            if (model == null ||
+                !model.TryGetValue("date", out var dateObj) ||
+                !model.TryGetValue(baseLower, out var ratesObj) ||
+                !(ratesObj is JsonElement ratesElement))
             {
                 _logger.LogWarning("Fawazahmed API response missing rates data for bulk request from {Base}", baseCurrency);
                 return null;
             }
 
-            var dateStr = dateElement.GetString();
+            var dateStr = dateObj?.ToString();
             var fetchedAt = DateTime.Parse(dateStr ?? DateTime.UtcNow.ToString("yyyy-MM-dd"));
             var result = new Dictionary<string, ExchangeRateDto>();
 
             foreach (var target in targetCurrencies)
             {
                 var targetLower = target.ToLowerInvariant();
-                if (rates.TryGetProperty(targetLower, out var rateElement))
+                if (ratesElement.TryGetProperty(targetLower, out var rateElement))
                 {
                     result[target.ToUpperInvariant()] = new ExchangeRateDto
                     {

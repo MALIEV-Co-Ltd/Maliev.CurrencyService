@@ -18,6 +18,7 @@ public class CurrencyServiceUnitTests : IDisposable
     private readonly Mock<ILogger<Api.Services.CurrencyService>> _loggerMock;
     private readonly Api.Services.CurrencyService _currencyService;
     private readonly CacheOptions _cacheOptions;
+    private readonly ICacheTagService _cacheTagService;
 
     public CurrencyServiceUnitTests()
     {
@@ -36,7 +37,8 @@ public class CurrencyServiceUnitTests : IDisposable
             MaxCacheSize = 1000
         };
         
-        _currencyService = new Api.Services.CurrencyService(_context, _cache, _loggerMock.Object, _cacheOptions);
+        _cacheTagService = new CacheTagService(_cache, new Mock<ILogger<CacheTagService>>().Object);
+        _currencyService = new Api.Services.CurrencyService(_context, _cache, _loggerMock.Object, _cacheOptions, _cacheTagService);
         
         // Seed test data
         SeedTestData();

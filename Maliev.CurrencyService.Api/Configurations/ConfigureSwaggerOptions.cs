@@ -1,4 +1,5 @@
 using Asp.Versioning.ApiExplorer;
+using Maliev.CurrencyService.Api.Models;
 using Microsoft.Extensions.Options;
 using Microsoft.OpenApi.Models;
 using Swashbuckle.AspNetCore.SwaggerGen;
@@ -8,10 +9,14 @@ namespace Maliev.CurrencyService.Api.Configurations;
 public class ConfigureSwaggerOptions : IConfigureOptions<SwaggerGenOptions>
 {
     private readonly IApiVersionDescriptionProvider _provider;
+    private readonly SwaggerOptions _swaggerOptions;
 
-    public ConfigureSwaggerOptions(IApiVersionDescriptionProvider provider)
+    public ConfigureSwaggerOptions(
+        IApiVersionDescriptionProvider provider,
+        IOptions<SwaggerOptions> swaggerOptions)
     {
         _provider = provider;
+        _swaggerOptions = swaggerOptions.Value;
     }
 
     public void Configure(SwaggerGenOptions options)
@@ -22,13 +27,13 @@ public class ConfigureSwaggerOptions : IConfigureOptions<SwaggerGenOptions>
         }
 
         // Add JWT Bearer authorization
-        options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+        options.AddSecurityDefinition(_swaggerOptions.SecurityScheme.Id, new OpenApiSecurityScheme
         {
-            Description = "JWT Authorization header using the Bearer scheme. Enter 'Bearer' [space] and then your token in the text input below.",
-            Name = "Authorization",
-            In = ParameterLocation.Header,
-            Type = SecuritySchemeType.ApiKey,
-            Scheme = "Bearer"
+            Description = _swaggerOptions.SecurityScheme.Description,
+            Name = _swaggerOptions.SecurityScheme.Name,
+            In = Enum.Parse<ParameterLocation>(_swaggerOptions.SecurityScheme.In),
+            Type = Enum.Parse<SecuritySchemeType>(_swaggerOptions.SecurityScheme.Type),
+            Scheme = _swaggerOptions.SecurityScheme.Scheme
         });
 
         options.AddSecurityRequirement(new OpenApiSecurityRequirement
@@ -39,34 +44,34 @@ public class ConfigureSwaggerOptions : IConfigureOptions<SwaggerGenOptions>
                     Reference = new OpenApiReference
                     {
                         Type = ReferenceType.SecurityScheme,
-                        Id = "Bearer"
+                        Id = _swaggerOptions.SecurityScheme.Id
                     },
                     Scheme = "oauth2",
-                    Name = "Bearer",
-                    In = ParameterLocation.Header
+                    Name = _swaggerOptions.SecurityScheme.Scheme,
+                    In = Enum.Parse<ParameterLocation>(_swaggerOptions.SecurityScheme.In)
                 },
                 new List<string>()
             }
         });
     }
 
-    private static OpenApiInfo CreateInfoForApiVersion(ApiVersionDescription description)
+    private OpenApiInfo CreateInfoForApiVersion(ApiVersionDescription description)
     {
         var info = new OpenApiInfo
         {
-            Title = "Maliev Currency Service API",
+            Title = _swaggerOptions.Title,
             Version = description.ApiVersion.ToString(),
-            Description = "A comprehensive CRUD API for managing currency data with advanced features including caching, rate limiting, and full-text search capabilities.",
+            Description = _swaggerOptions.Description,
             Contact = new OpenApiContact
             {
-                Name = "Maliev Co. Ltd.",
-                Email = "support@maliev.com",
-                Url = new Uri("https://maliev.com")
+                Name = _swaggerOptions.Contact.Name,
+                Email = _swaggerOptions.Contact.Email,
+                Url = new Uri(_swaggerOptions.Contact.Url)
             },
             License = new OpenApiLicense
             {
-                Name = "Proprietary",
-                Url = new Uri("https://maliev.com/license")
+                Name = _swaggerOptions.License.Name,
+                Url = new Uri(_swaggerOptions.License.Url)
             }
         };
 

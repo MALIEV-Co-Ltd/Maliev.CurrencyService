@@ -1,49 +1,36 @@
-using System.Text.Json;
 using Maliev.CurrencyService.Api.Models;
 using Maliev.CurrencyService.Api.Models.ApiResponses;
+using Maliev.CurrencyService.Api.Services.Clients;
 using Microsoft.Extensions.Options;
 
 namespace Maliev.CurrencyService.Api.Services;
 
 public class FrankfurterProvider : IExchangeRateProvider
 {
-    private readonly HttpClient _httpClient;
+    private readonly FrankfurterApiClient _frankfurterApiClient;
     private readonly ExchangeRateOptions _options;
     private readonly ILogger<FrankfurterProvider> _logger;
-    private readonly JsonSerializerOptions _jsonOptions;
 
     public string Name => "Frankfurter";
 
-    public FrankfurterProvider(HttpClient httpClient, IOptions<ExchangeRateOptions> options, ILogger<FrankfurterProvider> logger)
+    public FrankfurterProvider(
+        FrankfurterApiClient frankfurterApiClient,
+        IOptions<ExchangeRateOptions> options,
+        ILogger<FrankfurterProvider> logger)
     {
-        _httpClient = httpClient;
+        _frankfurterApiClient = frankfurterApiClient;
         _options = options.Value;
         _logger = logger;
-        _httpClient.BaseAddress = new Uri(_options.FrankfurterApiUrl);
-        _httpClient.Timeout = TimeSpan.FromSeconds(_options.TimeoutSeconds);
-        
-        _jsonOptions = new JsonSerializerOptions
-        {
-            PropertyNameCaseInsensitive = true
-        };
     }
 
-    public async Task<ExchangeRateDto?> GetExchangeRateAsync(string fromCurrency, string toCurrency, CancellationToken cancellationToken = default)
+    public async Task<ExchangeRateDto?> GetExchangeRateAsync(
+        string fromCurrency,
+        string toCurrency,
+        CancellationToken cancellationToken = default)
     {
         try
         {
-            var url = $"latest?from={fromCurrency}&to={toCurrency}";
-            var response = await _httpClient.GetAsync(url, cancellationToken);
-
-            if (!response.IsSuccessStatusCode)
-            {
-                _logger.LogWarning("Frankfurter API returned {StatusCode} for {From} to {To}", 
-                    response.StatusCode, fromCurrency, toCurrency);
-                return null;
-            }
-
-            var json = await response.Content.ReadAsStringAsync(cancellationToken);
-            var model = JsonSerializer.Deserialize<OpenRatesModel>(json, _jsonOptions);
+            var model = await _frankfurterApiClient.GetLatestRatesAsync(fromCurrency, toCurrency, cancellationToken);
             
             if (model?.Rates == null || !model.Rates.ContainsKey(toCurrency))
             {
@@ -53,17 +40,9 @@ public class FrankfurterProvider : IExchangeRateProvider
             }
 
             var rate = model.Rates[toCurrency];
-            var dateStr = model.Date;
-            var fetchedAt = DateTime.Parse(dateStr ?? DateTime.UtcNow.ToString("yyyy-MM-dd"));
+            var fetchedAt = ParseDate(model.Date);
 
-            return new ExchangeRateDto
-            {
-                FromCurrency = fromCurrency,
-                ToCurrency = toCurrency,
-                Rate = rate,
-                FetchedAt = fetchedAt,
-                Source = Name
-            };
+            return CreateExchangeRateDto(fromCurrency, toCurrency, rate, fetchedAt);
         }
         catch (Exception ex)
         {
@@ -73,23 +52,14 @@ public class FrankfurterProvider : IExchangeRateProvider
         }
     }
 
-    public async Task<Dictionary<string, ExchangeRateDto>?> GetMultipleRatesAsync(string baseCurrency, IEnumerable<string> targetCurrencies, CancellationToken cancellationToken = default)
+    public async Task<Dictionary<string, ExchangeRateDto>?> GetMultipleRatesAsync(
+        string baseCurrency,
+        IEnumerable<string> targetCurrencies,
+        CancellationToken cancellationToken = default)
     {
         try
         {
-            var targets = string.Join(",", targetCurrencies);
-            var url = $"latest?from={baseCurrency}&to={targets}";
-            var response = await _httpClient.GetAsync(url, cancellationToken);
-
-            if (!response.IsSuccessStatusCode)
-            {
-                _logger.LogWarning("Frankfurter API returned {StatusCode} for bulk request from {Base}", 
-                    response.StatusCode, baseCurrency);
-                return null;
-            }
-
-            var json = await response.Content.ReadAsStringAsync(cancellationToken);
-            var model = JsonSerializer.Deserialize<OpenRatesModel>(json, _jsonOptions);
+            var model = await _frankfurterApiClient.GetLatestRatesAsync(baseCurrency, targetCurrencies, cancellationToken);
             
             if (model?.Rates == null)
             {
@@ -97,20 +67,12 @@ public class FrankfurterProvider : IExchangeRateProvider
                 return null;
             }
 
-            var dateStr = model.Date;
-            var fetchedAt = DateTime.Parse(dateStr ?? DateTime.UtcNow.ToString("yyyy-MM-dd"));
+            var fetchedAt = ParseDate(model.Date);
             var result = new Dictionary<string, ExchangeRateDto>();
 
             foreach (var kvp in model.Rates)
             {
-                result[kvp.Key] = new ExchangeRateDto
-                {
-                    FromCurrency = baseCurrency,
-                    ToCurrency = kvp.Key,
-                    Rate = kvp.Value,
-                    FetchedAt = fetchedAt,
-                    Source = Name
-                };
+                result[kvp.Key] = CreateExchangeRateDto(baseCurrency, kvp.Key, kvp.Value, fetchedAt);
             }
 
             return result;
@@ -120,5 +82,26 @@ public class FrankfurterProvider : IExchangeRateProvider
             _logger.LogError(ex, "Error fetching bulk exchange rates from Frankfurter for {Base}", baseCurrency);
             return null;
         }
+    }
+
+    private ExchangeRateDto CreateExchangeRateDto(
+        string fromCurrency,
+        string toCurrency,
+        decimal rate,
+        DateTime fetchedAt)
+    {
+        return new ExchangeRateDto
+        {
+            FromCurrency = fromCurrency.ToUpperInvariant(),
+            ToCurrency = toCurrency.ToUpperInvariant(),
+            Rate = rate,
+            FetchedAt = fetchedAt,
+            Source = Name
+        };
+    }
+
+    private DateTime ParseDate(string? dateStr)
+    {
+        return DateTime.Parse(dateStr ?? DateTime.UtcNow.ToString("yyyy-MM-dd"));
     }
 }

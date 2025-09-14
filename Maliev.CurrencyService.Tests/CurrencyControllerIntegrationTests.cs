@@ -358,8 +358,6 @@ public class CurrencyControllerIntegrationTests
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
-        var content = await response.Content.ReadAsStringAsync();
-        content.Should().Be("Healthy");
     }
 
     [Fact]

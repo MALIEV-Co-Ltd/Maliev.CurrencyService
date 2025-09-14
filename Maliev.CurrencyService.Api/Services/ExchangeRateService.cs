@@ -4,6 +4,7 @@ using Maliev.CurrencyService.Data.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
+using System.Collections.Concurrent;
 
 namespace Maliev.CurrencyService.Api.Services;
 
@@ -14,6 +15,7 @@ public class ExchangeRateService : IExchangeRateService
     private readonly CurrencyDbContext _dbContext;
     private readonly ExchangeRateOptions _options;
     private readonly ILogger<ExchangeRateService> _logger;
+    private readonly ConcurrentDictionary<string, ProviderMetrics> _providerMetrics;
 
     public ExchangeRateService(
         IEnumerable<IExchangeRateProvider> providers,
@@ -27,6 +29,7 @@ public class ExchangeRateService : IExchangeRateService
         _dbContext = dbContext;
         _options = options.Value;
         _logger = logger;
+        _providerMetrics = new ConcurrentDictionary<string, ProviderMetrics>();
     }
 
     public async Task<ExchangeRateDto?> GetExchangeRateAsync(string fromCurrency, string toCurrency, CancellationToken cancellationToken = default)
@@ -65,7 +68,13 @@ public class ExchangeRateService : IExchangeRateService
                 _logger.LogDebug("Trying provider {Provider} for {From} to {To}", 
                     provider.Name, fromCurrency, toCurrency);
 
+                var stopwatch = System.Diagnostics.Stopwatch.StartNew();
                 var rate = await provider.GetExchangeRateAsync(fromCurrency, toCurrency, cancellationToken);
+                stopwatch.Stop();
+                
+                // Update provider metrics
+                UpdateProviderMetrics(provider.Name, rate != null, stopwatch.ElapsedMilliseconds);
+                
                 if (rate != null)
                 {
                     // Cache the result
@@ -88,6 +97,9 @@ public class ExchangeRateService : IExchangeRateService
             {
                 _logger.LogWarning(ex, "Provider {Provider} failed for {From} to {To}", 
                     provider.Name, fromCurrency, toCurrency);
+                
+                // Update provider metrics for failed request
+                UpdateProviderMetrics(provider.Name, false, 0);
             }
         }
 
@@ -155,7 +167,13 @@ public class ExchangeRateService : IExchangeRateService
                 _logger.LogDebug("Trying bulk fetch from {Provider} for {Base} to [{Targets}]", 
                     provider.Name, baseCurrency, string.Join(",", uncachedTargets));
 
+                var stopwatch = System.Diagnostics.Stopwatch.StartNew();
                 var rates = await provider.GetMultipleRatesAsync(baseCurrency, uncachedTargets, cancellationToken);
+                stopwatch.Stop();
+                
+                // Update provider metrics
+                UpdateProviderMetrics(provider.Name, rates != null && rates.Any(), stopwatch.ElapsedMilliseconds);
+                
                 if (rates != null && rates.Any())
                 {
                     var cacheExpiry = TimeSpan.FromMinutes(_options.CacheDurationMinutes);
@@ -184,6 +202,9 @@ public class ExchangeRateService : IExchangeRateService
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Bulk fetch from {Provider} failed for {Base}", provider.Name, baseCurrency);
+                
+                // Update provider metrics for failed request
+                UpdateProviderMetrics(provider.Name, false, 0);
             }
         }
 
@@ -226,20 +247,75 @@ public class ExchangeRateService : IExchangeRateService
     {
         var providerDict = _providers.ToDictionary(p => p.Name, p => p);
         
-        // Return providers in configured order, then any remaining ones
+        // If dynamic prioritization is disabled, use static ordering
+        if (!_options.EnableDynamicPrioritization)
+        {
+            // Return providers in configured order, then any remaining ones
+            foreach (var providerName in _options.ProviderOrder)
+            {
+                if (providerDict.TryGetValue(providerName, out var provider))
+                {
+                    yield return provider;
+                    providerDict.Remove(providerName);
+                }
+            }
+
+            // Add any remaining providers
+            foreach (var provider in providerDict.Values)
+            {
+                yield return provider;
+            }
+            
+            yield break;
+        }
+        
+        // Dynamic prioritization is enabled
+        // First apply static ordering as baseline
+        var orderedProviders = new List<IExchangeRateProvider>();
+        
+        // Add providers in configured order first
         foreach (var providerName in _options.ProviderOrder)
         {
             if (providerDict.TryGetValue(providerName, out var provider))
             {
-                yield return provider;
+                orderedProviders.Add(provider);
                 providerDict.Remove(providerName);
             }
         }
 
         // Add any remaining providers
-        foreach (var provider in providerDict.Values)
+        orderedProviders.AddRange(providerDict.Values);
+        
+        // If we don't have enough data for any provider, return static order
+        var providersWithSufficientData = orderedProviders
+            .Where(p => _providerMetrics.TryGetValue(p.Name, out var metrics) && 
+                       metrics.TotalRequests >= _options.MinRequestsForPrioritization)
+            .ToList();
+        
+        if (!providersWithSufficientData.Any())
         {
-            yield return provider;
+            foreach (var provider in orderedProviders)
+            {
+                yield return provider;
+            }
+            yield break;
+        }
+        
+        // Reorder based on performance scores
+        var scoredProviders = orderedProviders
+            .Select(provider => new 
+            {
+                Provider = provider,
+                Score = _providerMetrics.TryGetValue(provider.Name, out var metrics) ? 
+                       CalculateProviderScore(metrics) : 0
+            })
+            .OrderByDescending(x => x.Score)
+            .ThenBy(provider => _options.ProviderOrder.IndexOf(provider.Provider.Name)) // Fallback to static order
+            .ToList();
+        
+        foreach (var scoredProvider in scoredProviders)
+        {
+            yield return scoredProvider.Provider;
         }
     }
 
@@ -293,5 +369,67 @@ public class ExchangeRateService : IExchangeRateService
             _logger.LogWarning(ex, "Failed to get rate from database: {From} to {To}", fromCurrency, toCurrency);
             return null;
         }
+    }
+
+    public Dictionary<string, ProviderMetrics> GetProviderMetrics()
+    {
+        return _providerMetrics.ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+    }
+
+    private void UpdateProviderMetrics(string providerName, bool success, long responseTimeMs)
+    {
+        _providerMetrics.AddOrUpdate(
+            providerName,
+            _ => new ProviderMetrics
+            {
+                ProviderName = providerName,
+                TotalRequests = 1,
+                SuccessfulRequests = success ? 1 : 0,
+                TotalResponseTimeMs = responseTimeMs,
+                LastRequestAt = DateTime.UtcNow
+            },
+            (_, existing) => 
+            {
+                existing.TotalRequests++;
+                if (success)
+                {
+                    existing.SuccessfulRequests++;
+                }
+                existing.TotalResponseTimeMs += responseTimeMs;
+                existing.LastRequestAt = DateTime.UtcNow;
+                return existing;
+            });
+    }
+
+    private double CalculateProviderScore(ProviderMetrics metrics)
+    {
+        // Ensure we have enough requests before calculating score
+        if (metrics.TotalRequests < _options.MinRequestsForPrioritization)
+        {
+            return 0; // Not enough data
+        }
+
+        // Normalize response time (lower is better)
+        // Using a simple normalization where faster response times get higher scores
+        var normalizedResponseTime = metrics.AverageResponseTimeMs > 0 
+            ? 1.0 / (1.0 + metrics.AverageResponseTimeMs / 1000.0) 
+            : 1.0;
+
+        // Success rate (higher is better)
+        var successRate = metrics.SuccessRate;
+
+        // Error rate (lower is better, so we invert it)
+        var invertedErrorRate = 1.0 - metrics.ErrorRate;
+
+        // Request count factor (more requests provide more confidence)
+        var requestCountFactor = Math.Min((double)metrics.TotalRequests / _options.MinRequestsForPrioritization, 1.0);
+
+        // Calculate weighted score
+        var score = (_options.ResponseTimeWeight * normalizedResponseTime) +
+                   (_options.SuccessRateWeight * successRate) +
+                   (_options.ErrorRateWeight * invertedErrorRate) +
+                   (_options.RequestCountWeight * requestCountFactor);
+
+        return score;
     }
 }

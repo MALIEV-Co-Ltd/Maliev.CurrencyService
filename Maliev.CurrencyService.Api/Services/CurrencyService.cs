@@ -12,17 +12,20 @@ public class CurrencyService : ICurrencyService
     private readonly IMemoryCache _cache;
     private readonly ILogger<CurrencyService> _logger;
     private readonly CacheOptions _cacheOptions;
+    private readonly ICacheTagService _cacheTagService;
 
     public CurrencyService(
         CurrencyDbContext context,
         IMemoryCache cache,
         ILogger<CurrencyService> logger,
-        CacheOptions cacheOptions)
+        CacheOptions cacheOptions,
+        ICacheTagService cacheTagService)
     {
         _context = context;
         _cache = cache;
         _logger = logger;
         _cacheOptions = cacheOptions;
+        _cacheTagService = cacheTagService;
     }
 
     public async Task<CurrencyDto?> GetByIdAsync(int id)
@@ -48,11 +51,15 @@ public class CurrencyService : ICurrencyService
 
         var dto = MapToDto(currency);
         
-        _cache.Set(cacheKey, dto, new MemoryCacheEntryOptions
+        var cacheEntryOptions = new MemoryCacheEntryOptions
         {
             AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(_cacheOptions.CurrencyCacheDurationMinutes),
             Size = 1
-        });
+        };
+        
+        _cache.Set(cacheKey, dto, cacheEntryOptions);
+        _cacheTagService.AddCacheKeyToTag("currency", cacheKey);
+        _cacheTagService.AddCacheKeyToTag($"currency_id_{id}", cacheKey);
 
         return dto;
     }
@@ -80,11 +87,15 @@ public class CurrencyService : ICurrencyService
 
         var dto = MapToDto(currency);
         
-        _cache.Set(cacheKey, dto, new MemoryCacheEntryOptions
+        var cacheEntryOptions = new MemoryCacheEntryOptions
         {
             AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(_cacheOptions.CurrencyCacheDurationMinutes),
             Size = 1
-        });
+        };
+        
+        _cache.Set(cacheKey, dto, cacheEntryOptions);
+        _cacheTagService.AddCacheKeyToTag("currency", cacheKey);
+        _cacheTagService.AddCacheKeyToTag($"currency_code_{shortName.ToUpperInvariant()}", cacheKey);
 
         return dto;
     }
@@ -128,11 +139,20 @@ public class CurrencyService : ICurrencyService
             PageSize = pageSize
         };
         
-        _cache.Set(cacheKey, result, new MemoryCacheEntryOptions
+        var cacheEntryOptions = new MemoryCacheEntryOptions
         {
             AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(_cacheOptions.SearchCacheDurationMinutes),
             Size = result.Items.Count()
-        });
+        };
+        
+        _cache.Set(cacheKey, result, cacheEntryOptions);
+        _cacheTagService.AddCacheKeyToTag("currency", cacheKey);
+        _cacheTagService.AddCacheKeyToTag("currency_list", cacheKey);
+        
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            _cacheTagService.AddCacheKeyToTag($"currency_search_{search}", cacheKey);
+        }
 
         return result;
     }
@@ -164,8 +184,9 @@ public class CurrencyService : ICurrencyService
 
         _logger.LogInformation("Created currency: {ShortName} - {LongName}", currency.ShortName, currency.LongName);
 
-        // Clear relevant caches
-        ClearSearchCaches();
+        // Clear relevant caches using tags
+        _cacheTagService.RemoveCacheKeysByTag("currency_list");
+        _cacheTagService.RemoveCacheKeysByTag("currency_codes");
 
         return MapToDto(currency);
     }
@@ -190,11 +211,12 @@ public class CurrencyService : ICurrencyService
         _logger.LogInformation("Updated currency ID {Id}: {ShortName} - {LongName}", 
             id, currency.ShortName, currency.LongName);
 
-        // Clear relevant caches
-        _cache.Remove($"currency_id_{id}");
-        _cache.Remove($"currency_code_{oldShortName}");
-        _cache.Remove($"currency_code_{currency.ShortName}");
-        ClearSearchCaches();
+        // Clear relevant caches using tags
+        _cacheTagService.RemoveCacheKeysByTag("currency");
+        _cacheTagService.RemoveCacheKeysByTag($"currency_id_{id}");
+        _cacheTagService.RemoveCacheKeysByTag($"currency_code_{oldShortName}");
+        _cacheTagService.RemoveCacheKeysByTag("currency_list");
+        _cacheTagService.RemoveCacheKeysByTag("currency_codes");
 
         return MapToDto(currency);
     }
@@ -215,10 +237,12 @@ public class CurrencyService : ICurrencyService
 
         _logger.LogInformation("Deleted currency ID {Id}: {ShortName}", id, shortName);
 
-        // Clear relevant caches
-        _cache.Remove($"currency_id_{id}");
-        _cache.Remove($"currency_code_{shortName}");
-        ClearSearchCaches();
+        // Clear relevant caches using tags
+        _cacheTagService.RemoveCacheKeysByTag("currency");
+        _cacheTagService.RemoveCacheKeysByTag($"currency_id_{id}");
+        _cacheTagService.RemoveCacheKeysByTag($"currency_code_{shortName}");
+        _cacheTagService.RemoveCacheKeysByTag("currency_list");
+        _cacheTagService.RemoveCacheKeysByTag("currency_codes");
 
         return true;
     }
@@ -241,11 +265,15 @@ public class CurrencyService : ICurrencyService
             .Select(c => c.ShortName)
             .ToListAsync();
 
-        _cache.Set(cacheKey, codes, new MemoryCacheEntryOptions
+        var cacheEntryOptions = new MemoryCacheEntryOptions
         {
             AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(_cacheOptions.CurrencyCacheDurationMinutes),
             Size = codes.Count
-        });
+        };
+        
+        _cache.Set(cacheKey, codes, cacheEntryOptions);
+        _cacheTagService.AddCacheKeyToTag("currency", cacheKey);
+        _cacheTagService.AddCacheKeyToTag("currency_codes", cacheKey);
 
         return codes;
     }
@@ -260,16 +288,6 @@ public class CurrencyService : ICurrencyService
             CreatedDate = currency.CreatedDate,
             ModifiedDate = currency.ModifiedDate
         };
-    }
-
-    private void ClearSearchCaches()
-    {
-        // Clear search-related caches - this is a simplified approach
-        // In production, you might want to use cache tags or a more sophisticated cache invalidation strategy
-        _cache.Remove("currency_codes_all");
-        
-        // Note: In a real implementation, you'd want to clear paginated search results too
-        // For simplicity, we're not implementing a full cache tag system here
     }
 }
 

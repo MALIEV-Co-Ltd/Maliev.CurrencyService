@@ -24,4 +24,17 @@ public class ExchangeRateOptions
         "ExchangeRateHost",
         "ExchangeRateApi"
     };
+
+    // Dynamic provider prioritization settings
+    public bool EnableDynamicPrioritization { get; set; } = false;
+    
+    public int MinRequestsForPrioritization { get; set; } = 10;
+    
+    public double ResponseTimeWeight { get; set; } = 0.4;
+    
+    public double SuccessRateWeight { get; set; } = 0.3;
+    
+    public double ErrorRateWeight { get; set; } = 0.2;
+    
+    public double RequestCountWeight { get; set; } = 0.1;
 }

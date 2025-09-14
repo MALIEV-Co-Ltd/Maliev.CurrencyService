@@ -6,11 +6,14 @@ using Maliev.CurrencyService.Api.HealthChecks;
 using Maliev.CurrencyService.Api.Middleware;
 using Maliev.CurrencyService.Api.Models;
 using Maliev.CurrencyService.Api.Services;
+using Maliev.CurrencyService.Api.Services.Background;
+using Maliev.CurrencyService.Api.Services.Clients;
 using Maliev.CurrencyService.Data.DbContexts;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Prometheus;
@@ -32,14 +35,15 @@ try
 {
     Log.Information("Starting Maliev Currency Service");
 
-    // Load secrets.yaml
-    builder.Configuration.AddYamlFile("secrets.yaml", optional: true, reloadOnChange: true);
+    // Load secrets.yaml with configurable path
+    var secretsPath = builder.Configuration.GetValue<string>("Secrets:Path", "secrets.yaml");
+    builder.Configuration.AddYamlFile(secretsPath, optional: true, reloadOnChange: true);
 
     // Load secrets from mounted Kubernetes secrets
-    var secretsPath = "/mnt/secrets";
-    if (Directory.Exists(secretsPath))
+    var kubernetesSecretsPath = builder.Configuration.GetValue<string>("Secrets:KubernetesPath", "/mnt/secrets");
+    if (Directory.Exists(kubernetesSecretsPath))
     {
-        builder.Configuration.AddKeyPerFile(directoryPath: secretsPath, optional: true);
+        builder.Configuration.AddKeyPerFile(directoryPath: kubernetesSecretsPath, optional: true);
     }
 
     // API Versioning
@@ -102,6 +106,7 @@ try
 
     // Register services
     builder.Services.AddScoped<ICurrencyService, Maliev.CurrencyService.Api.Services.CurrencyService>();
+    builder.Services.AddScoped<ICacheTagService, CacheTagService>();
 
     // Configure exchange rate options
     builder.Services.Configure<ExchangeRateOptions>(builder.Configuration.GetSection(ExchangeRateOptions.SectionName));
@@ -109,14 +114,32 @@ try
         .Bind(builder.Configuration.GetSection(ExchangeRateOptions.SectionName))
         .ValidateDataAnnotations();
 
+    // Configure Swagger options
+    builder.Services.Configure<SwaggerOptions>(builder.Configuration.GetSection(SwaggerOptions.SectionName));
+    builder.Services.AddOptions<SwaggerOptions>()
+        .Bind(builder.Configuration.GetSection(SwaggerOptions.SectionName));
+
     // Register exchange rate providers with typed HttpClients
-    builder.Services.AddHttpClient<FrankfurterProvider>();
-    builder.Services.AddHttpClient<FawazahmedProvider>();
+    builder.Services.AddHttpClient<FrankfurterApiClient>((serviceProvider, httpClient) =>
+    {
+        var exchangeRateOptions = serviceProvider.GetRequiredService<IOptions<ExchangeRateOptions>>().Value;
+        httpClient.BaseAddress = new Uri(exchangeRateOptions.FrankfurterApiUrl);
+        httpClient.Timeout = TimeSpan.FromSeconds(exchangeRateOptions.TimeoutSeconds);
+    });
+    builder.Services.AddHttpClient<FawazahmedApiClient>((serviceProvider, httpClient) =>
+    {
+        var exchangeRateOptions = serviceProvider.GetRequiredService<IOptions<ExchangeRateOptions>>().Value;
+        httpClient.BaseAddress = new Uri("https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/");
+        httpClient.Timeout = TimeSpan.FromSeconds(exchangeRateOptions.TimeoutSeconds);
+    });
     builder.Services.AddScoped<IExchangeRateProvider, FrankfurterProvider>();
     builder.Services.AddScoped<IExchangeRateProvider, FawazahmedProvider>();
 
     // Register main exchange rate service
     builder.Services.AddScoped<IExchangeRateService, ExchangeRateService>();
+
+    // Register data retention background service
+    builder.Services.AddHostedService<ExchangeRateDataRetentionService>();
 
     // Configure Swagger
     builder.Services.AddTransient<IConfigureOptions<SwaggerGenOptions>, ConfigureSwaggerOptions>();
@@ -186,7 +209,10 @@ try
 
     builder.Services.AddHealthChecks()
         .AddDbContextCheck<CurrencyDbContext>("CurrencyDbContext", tags: new[] { "readiness" })
-        .AddCheck<DatabaseHealthCheck>("Database Health Check", tags: new[] { "readiness" });
+        .AddCheck<DatabaseHealthCheck>("Database Health Check", tags: new[] { "readiness" })
+        .AddCheck("Liveness Check", () => HealthCheckResult.Healthy(), tags: new[] { "liveness" })
+        .AddPrivateMemoryHealthCheck(4_000_000_000L, "Private Memory Check", tags: new[] { "liveness", "readiness" }) // 4 GB
+        .AddWorkingSetHealthCheck(4_000_000_000L, "Working Set Check", tags: new[] { "liveness", "readiness" }); // 4 GB
 
     var app = builder.Build();
 
@@ -231,7 +257,11 @@ try
     app.MapControllers();
 
     // Health check endpoints
-    app.MapGet("/currencies/liveness", () => "Healthy");
+    app.MapHealthChecks("/currencies/liveness", new HealthCheckOptions
+    {
+        Predicate = healthCheck => healthCheck.Tags.Contains("liveness"),
+        ResponseWriter = UIResponseWriter.WriteHealthCheckUIResponse
+    });
 
     app.MapHealthChecks("/currencies/readiness", new HealthCheckOptions
     {

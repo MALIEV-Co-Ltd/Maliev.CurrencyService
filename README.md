@@ -437,6 +437,38 @@ For support and questions:
 - [ ] Connection pooling enhancements
 - [ ] Response compression
 
+## ⚙️ Exchange Rate Service
+
+The Currency Service includes an Exchange Rate Service that provides currency conversion capabilities using multiple external providers. The service implements a provider prioritization mechanism to ensure optimal performance and reliability.
+
+### Provider Prioritization
+
+The service dynamically reorders exchange rate providers based on their performance metrics to ensure the most reliable and fastest providers are used first. This feature can be configured through the `ExchangeRate` section in the application settings.
+
+#### Configuration Options
+
+- `EnableDynamicPrioritization`: Enable or disable dynamic provider prioritization (default: false)
+- `MinRequestsForPrioritization`: Minimum number of requests before applying dynamic prioritization (default: 10)
+- `ResponseTimeWeight`: Weight for response time in scoring algorithm (default: 0.4)
+- `SuccessRateWeight`: Weight for success rate in scoring algorithm (default: 0.3)
+- `ErrorRateWeight`: Weight for error rate in scoring algorithm (default: 0.2)
+- `RequestCountWeight`: Weight for request count in scoring algorithm (default: 0.1)
+
+#### Performance Metrics
+
+The service tracks the following metrics for each provider:
+- Total requests
+- Successful requests
+- Average response time
+- Success rate
+- Error rate
+
+Providers are scored based on these metrics using a weighted algorithm. The scoring algorithm normalizes each metric and applies the configured weights to determine an overall score for each provider.
+
+#### Static Ordering
+
+When dynamic prioritization is disabled or when insufficient data is available, the service uses the static ordering defined in `ProviderOrder` configuration.
+
 ---
 
 **Maliev Currency Service** - Part of the Maliev Co. Ltd. microservices ecosystem.

@@ -1,52 +1,40 @@
-using System.Text.Json;
 using Maliev.CurrencyService.Api.Models;
 using Maliev.CurrencyService.Api.Models.ApiResponses;
+using Maliev.CurrencyService.Api.Services.Clients;
 using Microsoft.Extensions.Options;
+using System.Text.Json;
 
 namespace Maliev.CurrencyService.Api.Services;
 
 public class FawazahmedProvider : IExchangeRateProvider
 {
-    private readonly HttpClient _httpClient;
+    private readonly FawazahmedApiClient _fawazahmedApiClient;
     private readonly ExchangeRateOptions _options;
     private readonly ILogger<FawazahmedProvider> _logger;
-    private readonly JsonSerializerOptions _jsonOptions;
 
     public string Name => "Fawazahmed";
 
-    public FawazahmedProvider(HttpClient httpClient, IOptions<ExchangeRateOptions> options, ILogger<FawazahmedProvider> logger)
+    public FawazahmedProvider(
+        FawazahmedApiClient fawazahmedApiClient,
+        IOptions<ExchangeRateOptions> options,
+        ILogger<FawazahmedProvider> logger)
     {
-        _httpClient = httpClient;
+        _fawazahmedApiClient = fawazahmedApiClient;
         _options = options.Value;
         _logger = logger;
-        _httpClient.BaseAddress = new Uri("https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/");
-        _httpClient.Timeout = TimeSpan.FromSeconds(_options.TimeoutSeconds);
-        
-        _jsonOptions = new JsonSerializerOptions
-        {
-            PropertyNameCaseInsensitive = true
-        };
     }
 
-    public async Task<ExchangeRateDto?> GetExchangeRateAsync(string fromCurrency, string toCurrency, CancellationToken cancellationToken = default)
+    public async Task<ExchangeRateDto?> GetExchangeRateAsync(
+        string fromCurrency,
+        string toCurrency,
+        CancellationToken cancellationToken = default)
     {
         try
         {
             var fromLower = fromCurrency.ToLowerInvariant();
             var toLower = toCurrency.ToLowerInvariant();
-            var url = $"currencies/{fromLower}.json";
-
-            var response = await _httpClient.GetAsync(url, cancellationToken);
-
-            if (!response.IsSuccessStatusCode)
-            {
-                _logger.LogWarning("Fawazahmed API returned {StatusCode} for {From} to {To}", 
-                    response.StatusCode, fromCurrency, toCurrency);
-                return null;
-            }
-
-            var json = await response.Content.ReadAsStringAsync(cancellationToken);
-            var model = JsonSerializer.Deserialize<Dictionary<string, object>>(json, _jsonOptions);
+            
+            var model = await _fawazahmedApiClient.GetCurrencyRatesAsync(fromLower, cancellationToken);
             
             if (model == null ||
                 !model.TryGetValue("date", out var dateObj) ||
@@ -60,17 +48,9 @@ public class FawazahmedProvider : IExchangeRateProvider
             }
 
             var rate = rateElement.GetDecimal();
-            var dateStr = dateObj?.ToString();
-            var fetchedAt = DateTime.Parse(dateStr ?? DateTime.UtcNow.ToString("yyyy-MM-dd"));
+            var fetchedAt = ParseDate(dateObj?.ToString());
 
-            return new ExchangeRateDto
-            {
-                FromCurrency = fromCurrency.ToUpperInvariant(),
-                ToCurrency = toCurrency.ToUpperInvariant(),
-                Rate = rate,
-                FetchedAt = fetchedAt,
-                Source = Name
-            };
+            return CreateExchangeRateDto(fromCurrency, toCurrency, rate, fetchedAt);
         }
         catch (Exception ex)
         {
@@ -80,23 +60,15 @@ public class FawazahmedProvider : IExchangeRateProvider
         }
     }
 
-    public async Task<Dictionary<string, ExchangeRateDto>?> GetMultipleRatesAsync(string baseCurrency, IEnumerable<string> targetCurrencies, CancellationToken cancellationToken = default)
+    public async Task<Dictionary<string, ExchangeRateDto>?> GetMultipleRatesAsync(
+        string baseCurrency,
+        IEnumerable<string> targetCurrencies,
+        CancellationToken cancellationToken = default)
     {
         try
         {
             var baseLower = baseCurrency.ToLowerInvariant();
-            var url = $"currencies/{baseLower}.json";
-            var response = await _httpClient.GetAsync(url, cancellationToken);
-
-            if (!response.IsSuccessStatusCode)
-            {
-                _logger.LogWarning("Fawazahmed API returned {StatusCode} for bulk request from {Base}", 
-                    response.StatusCode, baseCurrency);
-                return null;
-            }
-
-            var json = await response.Content.ReadAsStringAsync(cancellationToken);
-            var model = JsonSerializer.Deserialize<Dictionary<string, object>>(json, _jsonOptions);
+            var model = await _fawazahmedApiClient.GetCurrencyRatesAsync(baseLower, cancellationToken);
             
             if (model == null ||
                 !model.TryGetValue("date", out var dateObj) ||
@@ -107,8 +79,7 @@ public class FawazahmedProvider : IExchangeRateProvider
                 return null;
             }
 
-            var dateStr = dateObj?.ToString();
-            var fetchedAt = DateTime.Parse(dateStr ?? DateTime.UtcNow.ToString("yyyy-MM-dd"));
+            var fetchedAt = ParseDate(dateObj?.ToString());
             var result = new Dictionary<string, ExchangeRateDto>();
 
             foreach (var target in targetCurrencies)
@@ -116,14 +87,7 @@ public class FawazahmedProvider : IExchangeRateProvider
                 var targetLower = target.ToLowerInvariant();
                 if (ratesElement.TryGetProperty(targetLower, out var rateElement))
                 {
-                    result[target.ToUpperInvariant()] = new ExchangeRateDto
-                    {
-                        FromCurrency = baseCurrency.ToUpperInvariant(),
-                        ToCurrency = target.ToUpperInvariant(),
-                        Rate = rateElement.GetDecimal(),
-                        FetchedAt = fetchedAt,
-                        Source = Name
-                    };
+                    result[target.ToUpperInvariant()] = CreateExchangeRateDto(baseCurrency, target, rateElement.GetDecimal(), fetchedAt);
                 }
             }
 
@@ -134,5 +98,26 @@ public class FawazahmedProvider : IExchangeRateProvider
             _logger.LogError(ex, "Error fetching bulk exchange rates from Fawazahmed for {Base}", baseCurrency);
             return null;
         }
+    }
+
+    private ExchangeRateDto CreateExchangeRateDto(
+        string fromCurrency,
+        string toCurrency,
+        decimal rate,
+        DateTime fetchedAt)
+    {
+        return new ExchangeRateDto
+        {
+            FromCurrency = fromCurrency.ToUpperInvariant(),
+            ToCurrency = toCurrency.ToUpperInvariant(),
+            Rate = rate,
+            FetchedAt = fetchedAt,
+            Source = Name
+        };
+    }
+
+    private DateTime ParseDate(string? dateStr)
+    {
+        return DateTime.Parse(dateStr ?? DateTime.UtcNow.ToString("yyyy-MM-dd"));
     }
 }

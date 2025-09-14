@@ -19,7 +19,7 @@ public class FrankfurterProvider : IExchangeRateProvider
         _httpClient = httpClient;
         _options = options.Value;
         _logger = logger;
-        _httpClient.BaseAddress = new Uri("https://api.frankfurter.app/");
+        _httpClient.BaseAddress = new Uri(_options.FrankfurterApiUrl);
         _httpClient.Timeout = TimeSpan.FromSeconds(_options.TimeoutSeconds);
         
         _jsonOptions = new JsonSerializerOptions

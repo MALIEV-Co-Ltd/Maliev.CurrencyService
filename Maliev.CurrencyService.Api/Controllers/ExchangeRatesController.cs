@@ -123,46 +123,6 @@ public class ExchangeRatesController : ControllerBase
     }
 
     /// <summary>
-    /// Get exchange rate between two specific currencies using path parameters
-    /// </summary>
-    /// <param name="from">Source currency code</param>
-    /// <param name="to">Target currency code</param>
-    /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>Exchange rate information</returns>
-    [HttpGet("{from}/{to}")]
-    [ProducesResponseType(typeof(ExchangeRateDto), StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
-    public async Task<ActionResult<ExchangeRateDto>> GetExchangeRateByPath(
-        string from,
-        string to,
-        CancellationToken cancellationToken = default)
-    {
-        if (from.Length != 3 || to.Length != 3)
-        {
-            return BadRequest("Currency codes must be exactly 3 characters long");
-        }
-
-        try
-        {
-            var rate = await _exchangeRateService.GetExchangeRateAsync(from, to, cancellationToken);
-            
-            if (rate == null)
-            {
-                return NotFound($"Exchange rate not available for {from} to {to}");
-            }
-
-            return Ok(rate);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error getting exchange rate for {From} to {To}", from, to);
-            return StatusCode(500, "An error occurred while fetching exchange rate");
-        }
-    }
-
-    /// <summary>
     /// Convert an amount from one currency to another
     /// </summary>
     /// <param name="request">Currency conversion request</param>

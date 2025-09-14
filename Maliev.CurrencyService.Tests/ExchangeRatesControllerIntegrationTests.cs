@@ -221,41 +221,6 @@ public class ExchangeRatesControllerIntegrationTests : IClassFixture<ExchangeRat
     }
 
     [Fact]
-    public async Task GetExchangeRateByPath_WithValidCurrencies_ReturnsExchangeRate()
-    {
-        // Arrange
-        var fromCurrency = "USD";
-        var toCurrency = "THB";
-
-        // Act
-        var response = await _client.GetAsync($"/currencies/v1/exchange-rates/{fromCurrency}/{toCurrency}");
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
-        
-        var exchangeRate = await response.Content.ReadFromJsonAsync<ExchangeRateDto>();
-        exchangeRate.Should().NotBeNull();
-        exchangeRate!.FromCurrency.Should().Be(fromCurrency);
-        exchangeRate.ToCurrency.Should().Be(toCurrency);
-        exchangeRate.Rate.Should().BeGreaterThan(0);
-        exchangeRate.Source.Should().NotBeNullOrWhiteSpace();
-    }
-
-    [Theory]
-    [InlineData("US", "USD")]
-    [InlineData("USD", "US")]
-    [InlineData("USDD", "EUR")]
-    [InlineData("EUR", "USDD")]
-    public async Task GetExchangeRateByPath_WithInvalidCurrencyLength_ReturnsBadRequest(string from, string to)
-    {
-        // Act
-        var response = await _client.GetAsync($"/currencies/v1/exchange-rates/{from}/{to}");
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
-    }
-
-    [Fact]
     public async Task ConvertCurrency_WithValidRequest_ReturnsConversionResult()
     {
         // Arrange

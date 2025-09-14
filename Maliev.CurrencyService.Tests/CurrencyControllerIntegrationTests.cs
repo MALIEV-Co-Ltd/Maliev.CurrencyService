@@ -272,16 +272,20 @@ public class CurrencyControllerIntegrationTests
         // Arrange - Create a currency first
         var createRequest = new CreateCurrencyRequest
         {
-            ShortName = "UPD",
-            LongName = "Update Test Currency"
+            ShortName = "ABC", // Use unique code that shouldn't exist
+            LongName = "Alpha Beta Currency"
         };
         var createResponse = await _client.PostAsJsonAsync("/currencies/v1.0", createRequest);
+        
+        // Check if creation was successful
+        createResponse.StatusCode.Should().Be(HttpStatusCode.Created);
+        
         var createdCurrency = await createResponse.Content.ReadFromJsonAsync<CurrencyDto>();
 
         var updateRequest = new UpdateCurrencyRequest
         {
-            ShortName = "UPD",
-            LongName = "Updated Test Currency Name"
+            ShortName = "XYZ", // Update to another unique code that shouldn't exist
+            LongName = "X Y Z Currency Updated"
         };
 
         // Act
@@ -292,8 +296,8 @@ public class CurrencyControllerIntegrationTests
         var updatedCurrency = await response.Content.ReadFromJsonAsync<CurrencyDto>();
         updatedCurrency.Should().NotBeNull();
         updatedCurrency!.Id.Should().Be(createdCurrency.Id);
-        updatedCurrency.ShortName.Should().Be("UPD");
-        updatedCurrency.LongName.Should().Be("Updated Test Currency Name");
+        updatedCurrency.ShortName.Should().Be("XYZ");
+        updatedCurrency.LongName.Should().Be("X Y Z Currency Updated");
     }
 
     [Fact]

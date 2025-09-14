@@ -30,7 +30,7 @@ public class CorrelationIdMiddleware
         }
     }
 
-    private static string GetOrGenerateCorrelationId(HttpContext context)
+    private string GetOrGenerateCorrelationId(HttpContext context)
     {
         if (context.Request.Headers.TryGetValue(CorrelationIdHeaderName, out var correlationId) &&
             !string.IsNullOrWhiteSpace(correlationId))

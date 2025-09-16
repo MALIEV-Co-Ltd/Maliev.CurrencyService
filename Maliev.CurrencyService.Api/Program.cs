@@ -81,10 +81,7 @@ try
     builder.Configuration.GetSection("Cache").Bind(cacheOptions);
     builder.Services.AddSingleton(cacheOptions);
 
-    builder.Services.AddMemoryCache(options =>
-    {
-        options.SizeLimit = cacheOptions.MaxCacheSize;
-    });
+    builder.Services.AddMemoryCache();
 
     // Configure rate limiting
     builder.Services.AddRateLimiter(options =>

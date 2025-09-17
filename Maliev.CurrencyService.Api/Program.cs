@@ -16,7 +16,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
-using Prometheus;
 using Serilog;
 using Swashbuckle.AspNetCore.SwaggerGen;
 using System.Text;
@@ -235,7 +234,6 @@ try
 
     app.UseMiddleware<ExceptionHandlingMiddleware>();
     app.UseHttpsRedirection();
-    app.UseHttpMetrics();
 
     app.UseRateLimiter();
     app.UseCors();
@@ -266,7 +264,6 @@ try
         ResponseWriter = UIResponseWriter.WriteHealthCheckUIResponse
     });
 
-    app.MapMetrics("/currencies/metrics");
 
     // Ensure database is created and seeded
     using (var scope = app.Services.CreateScope())

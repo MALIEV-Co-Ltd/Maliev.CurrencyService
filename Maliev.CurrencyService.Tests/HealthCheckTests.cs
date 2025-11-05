@@ -1,6 +1,6 @@
 using FluentAssertions;
 using Maliev.CurrencyService.Api.HealthChecks;
-using Maliev.CurrencyService.Data.DbContexts;
+using Maliev.CurrencyService.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Xunit;
@@ -9,16 +9,16 @@ namespace Maliev.CurrencyService.Tests;
 
 public class HealthCheckTests : IDisposable
 {
-    private readonly CurrencyDbContext _context;
+    private readonly CurrencyServiceDbContext _context;
     private readonly DatabaseHealthCheck _healthCheck;
 
     public HealthCheckTests()
     {
-        var options = new DbContextOptionsBuilder<CurrencyDbContext>()
+        var options = new DbContextOptionsBuilder<CurrencyServiceDbContext>()
             .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
             .Options;
-        
-        _context = new CurrencyDbContext(options);
+
+        _context = new CurrencyServiceDbContext(options);
         _healthCheck = new DatabaseHealthCheck(_context);
     }
 
@@ -46,11 +46,11 @@ public class HealthCheckTests : IDisposable
     public async Task CheckHealthAsync_WithDatabaseConnectionIssue_ShouldReturnUnhealthy()
     {
         // Arrange - Use a context with invalid connection string
-        var invalidOptions = new DbContextOptionsBuilder<CurrencyDbContext>()
+        var invalidOptions = new DbContextOptionsBuilder<CurrencyServiceDbContext>()
             .UseNpgsql("Host=nonexistent;Database=test;Username=test;Password=test")
             .Options;
-        
-        using var invalidContext = new CurrencyDbContext(invalidOptions);
+
+        using var invalidContext = new CurrencyServiceDbContext(invalidOptions);
         var invalidHealthCheck = new DatabaseHealthCheck(invalidContext);
         var context = new HealthCheckContext();
 

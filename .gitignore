@@ -348,3 +348,9 @@ logs/
 *.csv.bak
 currency-*.csv
 parse_currency_csv.py
+
+# Speckit documentation (keep in specs/ only)
+.specify/
+.claude/
+specs/
+!README.md

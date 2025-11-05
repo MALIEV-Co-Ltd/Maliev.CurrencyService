@@ -1,299 +1,520 @@
-using Maliev.CurrencyService.Api.Models;
-using Maliev.CurrencyService.Data.DbContexts;
-using Maliev.CurrencyService.Data.Entities;
+using Maliev.CurrencyService.Api.Models.Currencies;
+using Maliev.CurrencyService.Data;
+using Maliev.CurrencyService.Data.Models;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Caching.Memory;
 
 namespace Maliev.CurrencyService.Api.Services;
 
+/// <summary>
+/// Currency metadata service implementation with caching
+/// </summary>
+/// <remarks>
+/// Per research.md decision 3: Uses two-tier caching (in-process + Redis) for currency metadata.
+/// Cache TTL: 300 seconds (5 minutes) for currency list, 3600 seconds (1 hour) for country mapping.
+/// </remarks>
 public class CurrencyService : ICurrencyService
 {
-    private readonly CurrencyDbContext _context;
-    private readonly IMemoryCache _cache;
+    private readonly CurrencyServiceDbContext _context;
+    private readonly ICacheService _cacheService;
     private readonly ILogger<CurrencyService> _logger;
-    private readonly CacheOptions _cacheOptions;
-    private readonly ICacheTagService _cacheTagService;
+
+    private const string CurrencyListCacheKeyPrefix = "currency:list";
+    private const string CountryCurrencyCacheKeyPrefix = "country:currency";
+    private const int CurrencyListCacheTtlSeconds = 300; // 5 minutes
+    private const int CountryCurrencyCacheTtlSeconds = 3600; // 1 hour
 
     public CurrencyService(
-        CurrencyDbContext context,
-        IMemoryCache cache,
-        ILogger<CurrencyService> logger,
-        CacheOptions cacheOptions,
-        ICacheTagService cacheTagService)
+        CurrencyServiceDbContext context,
+        ICacheService cacheService,
+        ILogger<CurrencyService> logger)
     {
         _context = context;
-        _cache = cache;
+        _cacheService = cacheService;
         _logger = logger;
-        _cacheOptions = cacheOptions;
-        _cacheTagService = cacheTagService;
     }
 
-    public async Task<CurrencyDto?> GetByIdAsync(int id)
+    public async Task<PaginatedCurrencyResponse> GetAllAsync(
+        int page = 1,
+        int pageSize = 50,
+        bool? isActive = null,
+        CancellationToken cancellationToken = default)
     {
-        var cacheKey = $"currency_id_{id}";
-        
-        if (_cache.TryGetValue(cacheKey, out CurrencyDto? cachedCurrency))
+        // Validate pagination parameters
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 200);
+
+        // Generate cache key
+        var cacheKey = $"{CurrencyListCacheKeyPrefix}:page{page}:size{pageSize}:active{isActive?.ToString() ?? "all"}";
+
+        // Try to get from cache
+        var cachedResponse = await _cacheService.GetAsync<PaginatedCurrencyResponse>(cacheKey, cancellationToken);
+        if (cachedResponse != null)
         {
-            _logger.LogDebug("Cache hit for currency ID: {Id}", id);
-            return cachedCurrency;
+            _logger.LogDebug("Currency list cache hit for key: {CacheKey}", cacheKey);
+            return cachedResponse;
         }
 
-        _logger.LogDebug("Cache miss for currency ID: {Id}", id);
-        
-        var currency = await _context.Currencies
-            .AsNoTracking()
-            .FirstOrDefaultAsync(c => c.Id == id);
+        _logger.LogDebug("Currency list cache miss for key: {CacheKey}", cacheKey);
 
-        if (currency == null)
-        {
-            return null;
-        }
-
-        var dto = MapToDto(currency);
-        
-        var cacheEntryOptions = new MemoryCacheEntryOptions
-        {
-            AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(_cacheOptions.CurrencyCacheDurationMinutes),
-            Size = 1
-        };
-        
-        _cache.Set(cacheKey, dto, cacheEntryOptions);
-        _cacheTagService.AddCacheKeyToTag("currency", cacheKey);
-        _cacheTagService.AddCacheKeyToTag($"currency_id_{id}", cacheKey);
-
-        return dto;
-    }
-
-    public async Task<CurrencyDto?> GetByShortNameAsync(string shortName)
-    {
-        var cacheKey = $"currency_code_{shortName.ToUpperInvariant()}";
-        
-        if (_cache.TryGetValue(cacheKey, out CurrencyDto? cachedCurrency))
-        {
-            _logger.LogDebug("Cache hit for currency code: {Code}", shortName);
-            return cachedCurrency;
-        }
-
-        _logger.LogDebug("Cache miss for currency code: {Code}", shortName);
-        
-        var currency = await _context.Currencies
-            .AsNoTracking()
-            .FirstOrDefaultAsync(c => c.ShortName == shortName.ToUpperInvariant());
-
-        if (currency == null)
-        {
-            return null;
-        }
-
-        var dto = MapToDto(currency);
-        
-        var cacheEntryOptions = new MemoryCacheEntryOptions
-        {
-            AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(_cacheOptions.CurrencyCacheDurationMinutes),
-            Size = 1
-        };
-        
-        _cache.Set(cacheKey, dto, cacheEntryOptions);
-        _cacheTagService.AddCacheKeyToTag("currency", cacheKey);
-        _cacheTagService.AddCacheKeyToTag($"currency_code_{shortName.ToUpperInvariant()}", cacheKey);
-
-        return dto;
-    }
-
-    public async Task<PagedResult<CurrencyDto>> GetAllAsync(int page = 1, int pageSize = 20, string? search = null)
-    {
-        var cacheKey = $"currency_list_{page}_{pageSize}_{search ?? "all"}";
-        
-        if (_cache.TryGetValue(cacheKey, out PagedResult<CurrencyDto>? cachedResult))
-        {
-            _logger.LogDebug("Cache hit for currency list: {CacheKey}", cacheKey);
-            return cachedResult!;
-        }
-
-        _logger.LogDebug("Cache miss for currency list: {CacheKey}", cacheKey);
-
+        // Build query
         var query = _context.Currencies.AsNoTracking();
 
-        // Apply search filter
-        if (!string.IsNullOrWhiteSpace(search))
+        // Apply active filter if specified
+        if (isActive.HasValue)
         {
-            search = search.Trim();
-            query = query.Where(c => 
-                c.ShortName.Contains(search) || 
-                c.LongName.Contains(search));
+            query = query.Where(c => c.IsActive == isActive.Value);
         }
 
-        var totalCount = await query.CountAsync();
+        // Get total count
+        var totalCount = await query.CountAsync(cancellationToken);
 
+        // Calculate total pages
+        var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
+
+        // Apply pagination and ordering (by code for consistency)
         var currencies = await query
-            .OrderBy(c => c.ShortName)
+            .OrderBy(c => c.Code)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
-            .ToListAsync();
+            .Select(c => new CurrencyResponse
+            {
+                Id = c.Id,
+                Code = c.Code,
+                Symbol = c.Symbol,
+                Name = c.Name,
+                DecimalPlaces = c.DecimalPlaces,
+                IsActive = c.IsActive,
+                IsPrimary = c.IsPrimary,
+                CreatedAt = c.CreatedAt,
+                UpdatedAt = c.UpdatedAt
+            })
+            .ToListAsync(cancellationToken);
 
-        var result = new PagedResult<CurrencyDto>
+        var response = new PaginatedCurrencyResponse
         {
-            Items = currencies.Select(MapToDto),
-            TotalCount = totalCount,
+            Items = currencies,
             Page = page,
-            PageSize = pageSize
+            PageSize = pageSize,
+            TotalCount = totalCount,
+            TotalPages = totalPages
         };
-        
-        var cacheEntryOptions = new MemoryCacheEntryOptions
-        {
-            AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(_cacheOptions.SearchCacheDurationMinutes),
-            Size = result.Items.Count()
-        };
-        
-        _cache.Set(cacheKey, result, cacheEntryOptions);
-        _cacheTagService.AddCacheKeyToTag("currency", cacheKey);
-        _cacheTagService.AddCacheKeyToTag("currency_list", cacheKey);
-        
-        if (!string.IsNullOrWhiteSpace(search))
-        {
-            _cacheTagService.AddCacheKeyToTag($"currency_search_{search}", cacheKey);
-        }
 
-        return result;
+        // Cache the response
+        await _cacheService.SetAsync(
+            cacheKey,
+            response,
+            TimeSpan.FromSeconds(CurrencyListCacheTtlSeconds),
+            cancellationToken);
+
+        _logger.LogInformation("Retrieved {Count} currencies for page {Page} (total: {TotalCount})",
+            currencies.Count, page, totalCount);
+
+        return response;
     }
 
-    public async Task<CurrencyDto> CreateAsync(CreateCurrencyRequest request)
+    public async Task<CurrencyResponse?> GetByCountryCodeAsync(
+        string countryCode,
+        CancellationToken cancellationToken = default)
     {
-        var shortName = request.ShortName.ToUpperInvariant();
-        
-        // Check if a currency with this short name already exists
-        var existingCurrency = await _context.Currencies
-            .AsNoTracking()
-            .FirstOrDefaultAsync(c => c.ShortName == shortName);
-            
-        if (existingCurrency != null)
+        if (string.IsNullOrWhiteSpace(countryCode))
         {
-            throw new InvalidOperationException($"A currency with the code '{shortName}' already exists (duplicate currency code)");
+            _logger.LogWarning("GetByCountryCodeAsync called with null or empty country code");
+            return null;
+        }
+
+        var normalizedCode = countryCode.ToUpperInvariant();
+
+        // Generate cache key
+        var cacheKey = $"{CountryCurrencyCacheKeyPrefix}:{normalizedCode}";
+
+        // Try to get from cache
+        var cachedResponse = await _cacheService.GetAsync<CurrencyResponse>(cacheKey, cancellationToken);
+        if (cachedResponse != null)
+        {
+            _logger.LogDebug("Country currency cache hit for {CountryCode}", normalizedCode);
+            return cachedResponse;
+        }
+
+        _logger.LogDebug("Country currency cache miss for {CountryCode}", normalizedCode);
+
+        // Determine if ISO2 or ISO3 based on length
+        var isIso2 = normalizedCode.Length == 2;
+        var isIso3 = normalizedCode.Length == 3;
+
+        if (!isIso2 && !isIso3)
+        {
+            _logger.LogWarning("Invalid country code format: {CountryCode} (must be 2 or 3 characters)",
+                countryCode);
+            return null;
+        }
+
+        // Query country currency mapping
+        var countryCurrency = await _context.CountryCurrencies
+            .AsNoTracking()
+            .Where(cc => isIso2 ? cc.CountryIso2 == normalizedCode : cc.CountryIso3 == normalizedCode)
+            .Where(cc => cc.IsPrimary) // Only primary currency for the country
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (countryCurrency == null)
+        {
+            _logger.LogWarning("No currency mapping found for country code: {CountryCode}", normalizedCode);
+            return null;
+        }
+
+        // Get the currency details
+        var currency = await _context.Currencies
+            .AsNoTracking()
+            .Where(c => c.Code == countryCurrency.CurrencyCode)
+            .Select(c => new CurrencyResponse
+            {
+                Id = c.Id,
+                Code = c.Code,
+                Symbol = c.Symbol,
+                Name = c.Name,
+                DecimalPlaces = c.DecimalPlaces,
+                IsActive = c.IsActive,
+                IsPrimary = c.IsPrimary,
+                CreatedAt = c.CreatedAt,
+                UpdatedAt = c.UpdatedAt
+            })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (currency == null)
+        {
+            _logger.LogError("Currency {CurrencyCode} not found for country {CountryCode}",
+                countryCurrency.CurrencyCode, normalizedCode);
+            return null;
+        }
+
+        // Cache the response (longer TTL for country mapping - 1 hour)
+        await _cacheService.SetAsync(
+            cacheKey,
+            currency,
+            TimeSpan.FromSeconds(CountryCurrencyCacheTtlSeconds),
+            cancellationToken);
+
+        _logger.LogInformation("Resolved country {CountryCode} to currency {CurrencyCode}",
+            normalizedCode, currency.Code);
+
+        return currency;
+    }
+
+    public async Task<CurrencyResponse?> GetByCodeAsync(
+        string code,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(code))
+        {
+            _logger.LogWarning("GetByCodeAsync called with null or empty code");
+            return null;
+        }
+
+        var normalizedCode = code.ToUpperInvariant();
+
+        var currency = await _context.Currencies
+            .AsNoTracking()
+            .Where(c => c.Code == normalizedCode)
+            .Select(c => new CurrencyResponse
+            {
+                Id = c.Id,
+                Code = c.Code,
+                Symbol = c.Symbol,
+                Name = c.Name,
+                DecimalPlaces = c.DecimalPlaces,
+                IsActive = c.IsActive,
+                IsPrimary = c.IsPrimary,
+                CreatedAt = c.CreatedAt,
+                UpdatedAt = c.UpdatedAt
+            })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return currency;
+    }
+
+    public async Task<CurrencyResponse> CreateAsync(
+        CreateCurrencyRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var normalizedCode = request.Code.ToUpperInvariant();
+
+        _logger.LogInformation("Creating currency: {Code}", normalizedCode);
+
+        // Check if currency already exists
+        var exists = await _context.Currencies
+            .AnyAsync(c => c.Code == normalizedCode, cancellationToken);
+
+        if (exists)
+        {
+            throw new InvalidOperationException($"Currency {normalizedCode} already exists");
         }
 
         var currency = new Currency
         {
-            ShortName = shortName,
-            LongName = request.LongName.Trim(),
-            CreatedDate = DateTime.UtcNow,
-            ModifiedDate = DateTime.UtcNow
+            Code = normalizedCode,
+            Name = request.Name,
+            Symbol = request.Symbol,
+            DecimalPlaces = request.DecimalPlaces,
+            IsActive = request.IsActive,
+            IsPrimary = false, // Primary currencies are managed separately
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
         };
 
         _context.Currencies.Add(currency);
-        await _context.SaveChangesAsync();
+        await _context.SaveChangesAsync(cancellationToken);
 
-        _logger.LogInformation("Created currency: {ShortName} - {LongName}", currency.ShortName, currency.LongName);
+        // Invalidate currency list cache
+        await InvalidateCurrencyListCacheAsync(cancellationToken);
 
-        // Clear relevant caches using tags
-        _cacheTagService.RemoveCacheKeysByTag("currency_list");
-        _cacheTagService.RemoveCacheKeysByTag("currency_codes");
+        _logger.LogInformation("Created currency: {Code}", normalizedCode);
 
-        return MapToDto(currency);
+        return new CurrencyResponse
+        {
+            Id = currency.Id,
+            Code = currency.Code,
+            Symbol = currency.Symbol,
+            Name = currency.Name,
+            DecimalPlaces = currency.DecimalPlaces,
+            IsActive = currency.IsActive,
+            IsPrimary = currency.IsPrimary,
+            CreatedAt = currency.CreatedAt,
+            UpdatedAt = currency.UpdatedAt
+        };
     }
 
-    public async Task<CurrencyDto?> UpdateAsync(int id, UpdateCurrencyRequest request)
+    public async Task<CurrencyResponse?> UpdateAsync(
+        string code,
+        UpdateCurrencyRequest request,
+        CancellationToken cancellationToken = default)
     {
-        var currency = await _context.Currencies.FindAsync(id);
-        
+        var normalizedCode = code.ToUpperInvariant();
+
+        _logger.LogInformation("Updating currency: {Code}", normalizedCode);
+
+        // Get currency with tracking for update
+        var currency = await _context.Currencies
+            .Where(c => c.Code == normalizedCode)
+            .FirstOrDefaultAsync(cancellationToken);
+
         if (currency == null)
         {
+            _logger.LogWarning("Currency not found: {Code}", normalizedCode);
             return null;
         }
 
-        var oldShortName = currency.ShortName;
-        
-        currency.ShortName = request.ShortName.ToUpperInvariant();
-        currency.LongName = request.LongName.Trim();
-        currency.ModifiedDate = DateTime.UtcNow;
+        // Note: Optimistic concurrency is handled via ETag/If-Match header in UpdateByIdAsync
+        // This method (UpdateAsync by code) doesn't enforce version checking
 
-        await _context.SaveChangesAsync();
+        // Apply updates (only non-null fields)
+        if (request.Name != null)
+            currency.Name = request.Name;
 
-        _logger.LogInformation("Updated currency ID {Id}: {ShortName} - {LongName}", 
-            id, currency.ShortName, currency.LongName);
+        if (request.Symbol != null)
+            currency.Symbol = request.Symbol;
 
-        // Clear relevant caches using tags
-        _cacheTagService.RemoveCacheKeysByTag("currency");
-        _cacheTagService.RemoveCacheKeysByTag($"currency_id_{id}");
-        _cacheTagService.RemoveCacheKeysByTag($"currency_code_{oldShortName}");
-        _cacheTagService.RemoveCacheKeysByTag("currency_list");
-        _cacheTagService.RemoveCacheKeysByTag("currency_codes");
+        if (request.DecimalPlaces.HasValue)
+            currency.DecimalPlaces = request.DecimalPlaces.Value;
 
-        return MapToDto(currency);
+        if (request.IsActive.HasValue)
+            currency.IsActive = request.IsActive.Value;
+
+        currency.UpdatedAt = DateTime.UtcNow;
+
+        await _context.SaveChangesAsync(cancellationToken);
+
+        // Invalidate caches
+        await InvalidateCurrencyListCacheAsync(cancellationToken);
+        await InvalidateCountryCacheForCurrencyAsync(normalizedCode, cancellationToken);
+
+        _logger.LogInformation("Updated currency: {Code}", normalizedCode);
+
+        return new CurrencyResponse
+        {
+            Id = currency.Id,
+            Code = currency.Code,
+            Symbol = currency.Symbol,
+            Name = currency.Name,
+            DecimalPlaces = currency.DecimalPlaces,
+            IsActive = currency.IsActive,
+            IsPrimary = currency.IsPrimary,
+            CreatedAt = currency.CreatedAt,
+            UpdatedAt = currency.UpdatedAt
+        };
     }
 
-    public async Task<bool> DeleteAsync(int id)
+    public async Task<bool> DeleteAsync(
+        string code,
+        CancellationToken cancellationToken = default)
     {
-        var currency = await _context.Currencies.FindAsync(id);
-        
+        var normalizedCode = code.ToUpperInvariant();
+
+        _logger.LogInformation("Deleting (soft) currency: {Code}", normalizedCode);
+
+        var currency = await _context.Currencies
+            .Where(c => c.Code == normalizedCode)
+            .FirstOrDefaultAsync(cancellationToken);
+
         if (currency == null)
         {
+            _logger.LogWarning("Currency not found: {Code}", normalizedCode);
             return false;
         }
 
-        var shortName = currency.ShortName;
-        
-        _context.Currencies.Remove(currency);
-        await _context.SaveChangesAsync();
+        // Soft delete
+        currency.IsActive = false;
+        currency.UpdatedAt = DateTime.UtcNow;
 
-        _logger.LogInformation("Deleted currency ID {Id}: {ShortName}", id, shortName);
+        await _context.SaveChangesAsync(cancellationToken);
 
-        // Clear relevant caches using tags
-        _cacheTagService.RemoveCacheKeysByTag("currency");
-        _cacheTagService.RemoveCacheKeysByTag($"currency_id_{id}");
-        _cacheTagService.RemoveCacheKeysByTag($"currency_code_{shortName}");
-        _cacheTagService.RemoveCacheKeysByTag("currency_list");
-        _cacheTagService.RemoveCacheKeysByTag("currency_codes");
+        // Invalidate caches
+        await InvalidateCurrencyListCacheAsync(cancellationToken);
+        await InvalidateCountryCacheForCurrencyAsync(normalizedCode, cancellationToken);
+
+        _logger.LogInformation("Deleted (soft) currency: {Code}", normalizedCode);
 
         return true;
     }
 
-    public async Task<IEnumerable<string>> GetCurrencyCodesAsync()
+    public async Task<CurrencyResponse?> GetByIdAsync(
+        Guid id,
+        CancellationToken cancellationToken = default)
     {
-        var cacheKey = "currency_codes_all";
-        
-        if (_cache.TryGetValue(cacheKey, out IEnumerable<string>? cachedCodes))
+        _logger.LogDebug("Getting currency by ID: {Id}", id);
+
+        var currency = await _context.Currencies
+            .AsNoTracking()
+            .Where(c => c.Id == id && c.IsActive)
+            .Select(c => new CurrencyResponse
+            {
+                Id = c.Id,
+                Code = c.Code,
+                Symbol = c.Symbol,
+                Name = c.Name,
+                DecimalPlaces = c.DecimalPlaces,
+                IsActive = c.IsActive,
+                IsPrimary = c.IsPrimary,
+                CreatedAt = c.CreatedAt,
+                UpdatedAt = c.UpdatedAt
+            })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return currency;
+    }
+
+    public async Task<CurrencyResponse?> UpdateByIdAsync(
+        Guid id,
+        UpdateCurrencyRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation("Updating currency by ID: {Id}", id);
+
+        // Get currency with tracking for update
+        var currency = await _context.Currencies
+            .Where(c => c.Id == id)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (currency == null)
         {
-            _logger.LogDebug("Cache hit for currency codes");
-            return cachedCodes!;
+            _logger.LogWarning("Currency not found with ID: {Id}", id);
+            return null;
         }
 
-        _logger.LogDebug("Cache miss for currency codes");
-        
-        var codes = await _context.Currencies
-            .AsNoTracking()
-            .OrderBy(c => c.ShortName)
-            .Select(c => c.ShortName)
-            .ToListAsync();
+        // Apply updates
+        if (!string.IsNullOrWhiteSpace(request.Symbol))
+            currency.Symbol = request.Symbol;
 
-        var cacheEntryOptions = new MemoryCacheEntryOptions
-        {
-            AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(_cacheOptions.CurrencyCacheDurationMinutes),
-            Size = codes.Count
-        };
-        
-        _cache.Set(cacheKey, codes, cacheEntryOptions);
-        _cacheTagService.AddCacheKeyToTag("currency", cacheKey);
-        _cacheTagService.AddCacheKeyToTag("currency_codes", cacheKey);
+        if (!string.IsNullOrWhiteSpace(request.Name))
+            currency.Name = request.Name;
 
-        return codes;
-    }
+        if (request.DecimalPlaces.HasValue)
+            currency.DecimalPlaces = request.DecimalPlaces.Value;
 
-    private static CurrencyDto MapToDto(Currency currency)
-    {
-        return new CurrencyDto
+        currency.UpdatedAt = DateTime.UtcNow;
+
+        await _context.SaveChangesAsync(cancellationToken);
+
+        // Invalidate caches
+        await InvalidateCurrencyListCacheAsync(cancellationToken);
+        await InvalidateCountryCacheForCurrencyAsync(currency.Code, cancellationToken);
+
+        _logger.LogInformation("Updated currency by ID: {Id} ({Code})", id, currency.Code);
+
+        return new CurrencyResponse
         {
             Id = currency.Id,
-            ShortName = currency.ShortName,
-            LongName = currency.LongName,
-            CreatedDate = currency.CreatedDate,
-            ModifiedDate = currency.ModifiedDate
+            Code = currency.Code,
+            Symbol = currency.Symbol,
+            Name = currency.Name,
+            DecimalPlaces = currency.DecimalPlaces,
+            IsActive = currency.IsActive,
+            IsPrimary = currency.IsPrimary,
+            CreatedAt = currency.CreatedAt,
+            UpdatedAt = currency.UpdatedAt
         };
     }
-}
 
-public class CacheOptions
-{
-    public int CurrencyCacheDurationMinutes { get; set; } = 60;
-    public int SearchCacheDurationMinutes { get; set; } = 30;
-    public int MaxCacheSize { get; set; } = 1000;
+    public async Task<bool> DeleteByIdAsync(
+        Guid id,
+        CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation("Deleting (soft) currency by ID: {Id}", id);
+
+        var currency = await _context.Currencies
+            .Where(c => c.Id == id)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (currency == null)
+        {
+            _logger.LogWarning("Currency not found with ID: {Id}", id);
+            return false;
+        }
+
+        // Check for dependencies (country mappings)
+        var hasCountryMappings = await _context.CountryCurrencies
+            .AnyAsync(cc => cc.CurrencyCode == currency.Code, cancellationToken);
+
+        if (hasCountryMappings)
+        {
+            _logger.LogWarning("Cannot delete currency {Code} (ID: {Id}) - has country mappings",
+                currency.Code, id);
+            throw new InvalidOperationException(
+                $"Cannot delete currency {currency.Code} as it has dependencies (country mappings). " +
+                "Remove country mappings first or deactivate the currency instead.");
+        }
+
+        // Soft delete
+        currency.IsActive = false;
+        currency.UpdatedAt = DateTime.UtcNow;
+
+        await _context.SaveChangesAsync(cancellationToken);
+
+        // Invalidate caches
+        await InvalidateCurrencyListCacheAsync(cancellationToken);
+        await InvalidateCountryCacheForCurrencyAsync(currency.Code, cancellationToken);
+
+        _logger.LogInformation("Deleted (soft) currency by ID: {Id} ({Code})", id, currency.Code);
+
+        return true;
+    }
+
+    /// <summary>
+    /// Invalidates all currency list cache keys
+    /// </summary>
+    private async Task InvalidateCurrencyListCacheAsync(CancellationToken cancellationToken)
+    {
+        // Use pattern-based cache invalidation
+        await _cacheService.RemoveByPatternAsync($"{CurrencyListCacheKeyPrefix}:*", cancellationToken);
+        _logger.LogDebug("Invalidated currency list cache");
+    }
+
+    /// <summary>
+    /// Invalidates country-to-currency cache for a specific currency
+    /// </summary>
+    private async Task InvalidateCountryCacheForCurrencyAsync(string currencyCode, CancellationToken cancellationToken)
+    {
+        // This would require knowing which countries use this currency
+        // For simplicity, we'll invalidate all country caches
+        await _cacheService.RemoveByPatternAsync($"{CountryCurrencyCacheKeyPrefix}:*", cancellationToken);
+        _logger.LogDebug("Invalidated country currency cache for {CurrencyCode}", currencyCode);
+    }
 }

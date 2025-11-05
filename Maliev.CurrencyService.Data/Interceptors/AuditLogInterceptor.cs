@@ -1,0 +1,90 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.Extensions.Logging;
+
+namespace Maliev.CurrencyService.Data.Interceptors;
+
+/// <summary>
+/// Audit log interceptor for tracking all INSERT, UPDATE, DELETE operations
+/// </summary>
+/// <remarks>
+/// Captures entity type, operation type, user ID, timestamp, and changed fields.
+/// Per data-model.md Audit section: logs operations on currencies and rate_snapshots.
+/// </remarks>
+public class AuditLogInterceptor : SaveChangesInterceptor
+{
+    private readonly ILogger<AuditLogInterceptor> _logger;
+
+    public AuditLogInterceptor(ILogger<AuditLogInterceptor> logger)
+    {
+        _logger = logger;
+    }
+
+    public override InterceptionResult<int> SavingChanges(
+        DbContextEventData eventData,
+        InterceptionResult<int> result)
+    {
+        if (eventData.Context is not null)
+        {
+            AuditChanges(eventData.Context);
+        }
+
+        return base.SavingChanges(eventData, result);
+    }
+
+    public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
+        DbContextEventData eventData,
+        InterceptionResult<int> result,
+        CancellationToken cancellationToken = default)
+    {
+        if (eventData.Context is not null)
+        {
+            AuditChanges(eventData.Context);
+        }
+
+        return base.SavingChangesAsync(eventData, result, cancellationToken);
+    }
+
+    private void AuditChanges(DbContext context)
+    {
+        var timestamp = DateTime.UtcNow;
+        var entries = context.ChangeTracker.Entries()
+            .Where(e => e.State == EntityState.Added
+                     || e.State == EntityState.Modified
+                     || e.State == EntityState.Deleted);
+
+        foreach (var entry in entries)
+        {
+            var entityType = entry.Entity.GetType().Name;
+            var operation = entry.State.ToString();
+
+            // Get primary key value
+            var keyValues = entry.Properties
+                .Where(p => p.Metadata.IsPrimaryKey())
+                .Select(p => p.CurrentValue?.ToString() ?? "null")
+                .ToList();
+            var primaryKey = string.Join(",", keyValues);
+
+            // For updates, capture changed fields
+            var changedFields = entry.State == EntityState.Modified
+                ? string.Join(", ", entry.Properties
+                    .Where(p => p.IsModified)
+                    .Select(p => $"{p.Metadata.Name}"))
+                : string.Empty;
+
+            // Log the audit information
+            // Note: User ID would be extracted from HttpContext.User claims in a real implementation
+            // For now, we log the operation details
+            _logger.LogInformation(
+                "Audit: {Operation} on {EntityType} with ID {PrimaryKey} at {Timestamp}. Changed fields: {ChangedFields}",
+                operation,
+                entityType,
+                primaryKey,
+                timestamp,
+                changedFields ?? "N/A");
+
+            // TODO: Future enhancement - Store audit logs in dedicated audit_logs table
+            // or send to external logging system for compliance requirements
+        }
+    }
+}

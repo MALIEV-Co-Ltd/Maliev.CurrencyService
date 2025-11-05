@@ -1,4 +1,4 @@
-using Maliev.CurrencyService.Data.DbContexts;
+using Maliev.CurrencyService.Data;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.EntityFrameworkCore;
 
@@ -6,9 +6,9 @@ namespace Maliev.CurrencyService.Api.HealthChecks;
 
 public class DatabaseHealthCheck : IHealthCheck
 {
-    private readonly CurrencyDbContext _context;
+    private readonly CurrencyServiceDbContext _context;
 
-    public DatabaseHealthCheck(CurrencyDbContext context)
+    public DatabaseHealthCheck(CurrencyServiceDbContext context)
     {
         _context = context;
     }

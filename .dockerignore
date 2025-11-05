@@ -89,3 +89,8 @@ docker-compose*.yml
 # Secrets
 secrets.yaml
 secrets.json
+
+# Speckit documentation (not needed in container)
+.specify/
+.claude/
+specs/

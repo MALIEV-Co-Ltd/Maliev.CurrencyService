@@ -1,14 +1,15 @@
 using Asp.Versioning;
 using Asp.Versioning.ApiExplorer;
+using FluentValidation;
+using Scalar.AspNetCore;
 using HealthChecks.UI.Client;
-using Maliev.CurrencyService.Api.Configurations;
 using Maliev.CurrencyService.Api.HealthChecks;
+using Maliev.CurrencyService.Api.Metrics;
 using Maliev.CurrencyService.Api.Middleware;
 using Maliev.CurrencyService.Api.Models;
 using Maliev.CurrencyService.Api.Services;
-using Maliev.CurrencyService.Api.Services.Background;
-using Maliev.CurrencyService.Api.Services.Clients;
-using Maliev.CurrencyService.Data.DbContexts;
+using Maliev.CurrencyService.Api.Services.External;
+using Maliev.CurrencyService.Data;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -16,8 +17,9 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
+using Prometheus;
 using Serilog;
-using Swashbuckle.AspNetCore.SwaggerGen;
+using StackExchange.Redis;
 using System.Text;
 using System.Threading.RateLimiting;
 
@@ -60,27 +62,66 @@ try
 
     // Add controllers
     builder.Services.AddControllers();
+    builder.Services.AddEndpointsApiExplorer();
 
-    // Configure Currency DbContext
+    // Add OpenAPI services (required for MapOpenApi)
+    builder.Services.AddOpenApi();
+
+    // Configure Currency Service DbContext with snake_case naming
     if (builder.Environment.IsEnvironment("Testing"))
     {
-        builder.Services.AddDbContext<CurrencyDbContext>(options =>
+        builder.Services.AddDbContext<CurrencyServiceDbContext>(options =>
             options.UseInMemoryDatabase("TestDb"));
     }
     else
     {
-        builder.Services.AddDbContext<CurrencyDbContext>(options =>
+        builder.Services.AddDbContext<CurrencyServiceDbContext>(options =>
         {
-            options.UseNpgsql(builder.Configuration.GetConnectionString("CurrencyDbContext"));
+            // Use ConnectionStrings__CurrencyDbContext from Google Secret Manager
+            var connectionString = builder.Configuration.GetConnectionString("CurrencyDbContext")
+                ?? Environment.GetEnvironmentVariable("ServiceDbContext");
+
+            options.UseNpgsql(connectionString)
+                .UseSnakeCaseNamingConvention(); // Apply snake_case naming per data-model.md
         });
     }
 
-    // Configure caching
-    var cacheOptions = new CacheOptions();
-    builder.Configuration.GetSection("Cache").Bind(cacheOptions);
-    builder.Services.AddSingleton(cacheOptions);
+    // Configure caching (simple configuration per research.md decision 3 CRITICAL section)
+    builder.Services.AddMemoryCache(); // Simple config without SizeLimit to avoid runtime exceptions
 
-    builder.Services.AddMemoryCache();
+    // Configure Redis distributed cache (T031)
+    builder.Services.Configure<RedisOptions>(builder.Configuration.GetSection(RedisOptions.SectionName));
+    var redisSection = builder.Configuration.GetSection(RedisOptions.SectionName);
+    if (redisSection.Exists())
+    {
+        var redisOptions = new RedisOptions { ConnectionString = "default" };
+        redisSection.Bind(redisOptions);
+
+        // Register IConnectionMultiplexer for Redis (used by RedisHealthCheck and caching)
+        builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
+        {
+            var configuration = ConfigurationOptions.Parse(redisOptions.ConnectionString);
+            configuration.ConnectTimeout = redisOptions.ConnectTimeout * 1000;
+            configuration.SyncTimeout = redisOptions.SyncTimeout;
+            configuration.AbortOnConnectFail = redisOptions.AbortOnConnectFail;
+            configuration.DefaultDatabase = redisOptions.Database;
+
+            return ConnectionMultiplexer.Connect(configuration);
+        });
+
+        // Register IDistributedCache using StackExchange.Redis
+        builder.Services.AddStackExchangeRedisCache(options =>
+        {
+            options.Configuration = redisOptions.ConnectionString;
+            options.InstanceName = redisOptions.InstanceName ?? "CurrencyService:";
+        });
+
+        Log.Information("Redis distributed cache configured at {ConnectionString}", redisOptions.ConnectionString);
+    }
+    else
+    {
+        Log.Warning("Redis not configured - service will run with in-memory cache only");
+    }
 
     // Configure rate limiting
     builder.Services.AddRateLimiter(options =>
@@ -103,6 +144,17 @@ try
     // Register services
     builder.Services.AddScoped<ICurrencyService, Maliev.CurrencyService.Api.Services.CurrencyService>();
     builder.Services.AddScoped<ICacheTagService, CacheTagService>();
+    builder.Services.AddScoped<IRateService, RateService>();
+    builder.Services.AddScoped<ISnapshotService, SnapshotService>();
+
+    // Register metrics singleton (Constitution Principle XI, FR-052)
+    builder.Services.AddSingleton<CurrencyServiceMetrics>();
+
+    // Register cache service (T033 - two-tier caching per research.md decision 3)
+    builder.Services.AddSingleton<ICacheService, RedisCacheService>();
+
+    // Register FluentValidation validators
+    builder.Services.AddValidatorsFromAssemblyContaining<Program>();
 
     // Configure exchange rate options
     builder.Services.Configure<ExchangeRateOptions>(builder.Configuration.GetSection(ExchangeRateOptions.SectionName));
@@ -110,36 +162,26 @@ try
         .Bind(builder.Configuration.GetSection(ExchangeRateOptions.SectionName))
         .ValidateDataAnnotations();
 
-    // Configure Swagger options
-    builder.Services.Configure<SwaggerOptions>(builder.Configuration.GetSection(SwaggerOptions.SectionName));
-    builder.Services.AddOptions<SwaggerOptions>()
-        .Bind(builder.Configuration.GetSection(SwaggerOptions.SectionName));
+    // Register exchange rate providers with typed HttpClients (T035-T036)
+    builder.Services.AddHttpClient<FawazahmedProvider>((serviceProvider, httpClient) =>
+    {
+        var exchangeRateOptions = serviceProvider.GetRequiredService<IOptions<ExchangeRateOptions>>().Value;
+        httpClient.Timeout = TimeSpan.FromSeconds(exchangeRateOptions.TimeoutSeconds);
+    });
+    builder.Services.AddHttpClient<FrankfurterProvider>((serviceProvider, httpClient) =>
+    {
+        var exchangeRateOptions = serviceProvider.GetRequiredService<IOptions<ExchangeRateOptions>>().Value;
+        httpClient.Timeout = TimeSpan.FromSeconds(exchangeRateOptions.TimeoutSeconds);
+    });
 
-    // Register exchange rate providers with typed HttpClients
-    builder.Services.AddHttpClient<FrankfurterApiClient>((serviceProvider, httpClient) =>
-    {
-        var exchangeRateOptions = serviceProvider.GetRequiredService<IOptions<ExchangeRateOptions>>().Value;
-        httpClient.BaseAddress = new Uri(exchangeRateOptions.FrankfurterApiUrl);
-        httpClient.Timeout = TimeSpan.FromSeconds(exchangeRateOptions.TimeoutSeconds);
-    });
-    builder.Services.AddHttpClient<FawazahmedApiClient>((serviceProvider, httpClient) =>
-    {
-        var exchangeRateOptions = serviceProvider.GetRequiredService<IOptions<ExchangeRateOptions>>().Value;
-        httpClient.BaseAddress = new Uri("https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/");
-        httpClient.Timeout = TimeSpan.FromSeconds(exchangeRateOptions.TimeoutSeconds);
-    });
-    builder.Services.AddScoped<IExchangeRateProvider, FrankfurterProvider>();
+    // Register providers for DI (T037)
     builder.Services.AddScoped<IExchangeRateProvider, FawazahmedProvider>();
+    builder.Services.AddScoped<IExchangeRateProvider, FrankfurterProvider>();
+    builder.Services.AddScoped<ProviderChain>();
 
-    // Register main exchange rate service
-    builder.Services.AddScoped<IExchangeRateService, ExchangeRateService>();
-
-    // Register data retention background service
-    builder.Services.AddHostedService<ExchangeRateDataRetentionService>();
-
-    // Configure Swagger
-    builder.Services.AddTransient<IConfigureOptions<SwaggerGenOptions>, ConfigureSwaggerOptions>();
-    builder.Services.AddSwaggerGen();
+    // Register background services
+    builder.Services.AddHostedService<Maliev.CurrencyService.Api.BackgroundServices.CacheWarmingService>();
+    builder.Services.AddHostedService<Maliev.CurrencyService.Api.BackgroundServices.SnapshotCleanupService>();
 
     // Configure CORS
     builder.Services.AddCors(options =>
@@ -169,10 +211,18 @@ try
                     var jwtOptions = new JwtOptions
                     {
                         Issuer = "default-issuer",
-                        Audience = "default-audience", 
-                        SecurityKey = "default-key"
+                        Audience = "default-audience",
+                        PublicKey = "default-key"
                     };
                     jwtSection.Bind(jwtOptions);
+
+                    // Use RSA public key validation from shared config (maliev-dev-shared-config)
+                    var publicKeyBytes = Convert.FromBase64String(jwtOptions.PublicKey);
+                    var publicKeyPem = Encoding.UTF8.GetString(publicKeyBytes);
+
+                    // Import RSA public key from PEM format
+                    var rsa = System.Security.Cryptography.RSA.Create();
+                    rsa.ImportFromPem(publicKeyPem);
 
                     options.TokenValidationParameters = new TokenValidationParameters
                     {
@@ -182,7 +232,7 @@ try
                         ValidateIssuerSigningKey = true,
                         ValidIssuer = jwtOptions.Issuer,
                         ValidAudience = jwtOptions.Audience,
-                        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtOptions.SecurityKey))
+                        IssuerSigningKey = new RsaSecurityKey(rsa)
                     };
                 });
         }
@@ -204,36 +254,39 @@ try
     });
 
     builder.Services.AddHealthChecks()
-        .AddDbContextCheck<CurrencyDbContext>("CurrencyDbContext", tags: new[] { "readiness" })
-        .AddCheck<DatabaseHealthCheck>("Database Health Check", tags: new[] { "readiness" })
-        .AddCheck("Liveness Check", () => HealthCheckResult.Healthy(), tags: new[] { "liveness" })
-        .AddPrivateMemoryHealthCheck(4_000_000_000L, "Private Memory Check", tags: new[] { "liveness", "readiness" }) // 4 GB
-        .AddWorkingSetHealthCheck(4_000_000_000L, "Working Set Check", tags: new[] { "liveness", "readiness" }); // 4 GB
+        .AddCheck<DatabaseHealthCheck>("database", tags: new[] { "readiness" })
+        .AddCheck<RedisHealthCheck>("cache", tags: new[] { "readiness" })
+        .AddCheck("liveness", () => HealthCheckResult.Healthy(), tags: new[] { "liveness" })
+        .AddPrivateMemoryHealthCheck(4_000_000_000L, "memory_private", tags: new[] { "liveness", "readiness" }) // 4 GB
+        .AddWorkingSetHealthCheck(4_000_000_000L, "memory_working_set", tags: new[] { "liveness", "readiness" }); // 4 GB
 
     var app = builder.Build();
 
     app.UseForwardedHeaders();
 
+    // Add security headers middleware early in pipeline (Constitution Principle VI)
+    app.UseSecurityHeaders();
+
     // Add correlation ID middleware early in pipeline
     app.UseCorrelationId();
 
+    // Add custom metrics middleware for HTTP request tracking (FR-052)
+    app.UseRequestMetrics();
+
     // Configure the HTTP request pipeline
-    app.UseSwagger(c => 
+    // OpenAPI specification generation using .NET 9 built-in support (used by Scalar)
+    app.MapOpenApi("/currencies/openapi/{documentName}.json");
+    app.MapScalarApiReference(options =>
     {
-        c.RouteTemplate = "currencies/swagger/{documentName}/swagger.json";
-    });
-    app.UseSwaggerUI(c =>
-    {
-        var provider = app.Services.GetRequiredService<IApiVersionDescriptionProvider>();
-        foreach (var description in provider.ApiVersionDescriptions)
-        {
-            c.SwaggerEndpoint($"/currencies/swagger/{description.GroupName}/swagger.json", description.GroupName.ToUpperInvariant());
-        }
-        c.RoutePrefix = "currencies/swagger";
+        options.WithEndpointPrefix("/currencies/scalar/{documentName}");
+        options.WithOpenApiRoutePattern("/currencies/openapi/{documentName}.json");
     });
 
     app.UseMiddleware<ExceptionHandlingMiddleware>();
     app.UseHttpsRedirection();
+
+    // Prometheus HTTP metrics middleware (FR-052)
+    app.UseHttpMetrics();
 
     app.UseRateLimiter();
     app.UseCors();
@@ -255,20 +308,23 @@ try
     app.MapHealthChecks("/currencies/liveness", new HealthCheckOptions
     {
         Predicate = healthCheck => healthCheck.Tags.Contains("liveness"),
-        ResponseWriter = UIResponseWriter.WriteHealthCheckUIResponse
+        ResponseWriter = Maliev.CurrencyService.Api.HealthChecks.HealthCheckResponseWriter.WriteResponse
     });
 
     app.MapHealthChecks("/currencies/readiness", new HealthCheckOptions
     {
         Predicate = healthCheck => healthCheck.Tags.Contains("readiness"),
-        ResponseWriter = UIResponseWriter.WriteHealthCheckUIResponse
+        ResponseWriter = Maliev.CurrencyService.Api.HealthChecks.HealthCheckResponseWriter.WriteResponse
     });
 
+    // Prometheus metrics endpoint (accessible at /currencies/metrics per FR-052)
+    app.MapMetrics("/currencies/metrics");
+    app.MapMetrics("/metrics"); // Also expose at /metrics for standard convention
 
     // Ensure database is created and seeded
     using (var scope = app.Services.CreateScope())
     {
-        var context = scope.ServiceProvider.GetRequiredService<CurrencyDbContext>();
+        var context = scope.ServiceProvider.GetRequiredService<CurrencyServiceDbContext>();
         try
         {
             if (context.Database.IsRelational())
@@ -302,8 +358,8 @@ finally
 public class JwtOptions
 {
     public const string SectionName = "Jwt";
-    
+
     public required string Issuer { get; set; }
     public required string Audience { get; set; }
-    public required string SecurityKey { get; set; }
+    public required string PublicKey { get; set; } // Base64-encoded RSA public key from shared config
 }

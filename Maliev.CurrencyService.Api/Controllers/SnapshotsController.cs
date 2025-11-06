@@ -51,7 +51,7 @@ public class SnapshotsController : ControllerBase
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
-    public async Task<IActionResult> ImportBatch(
+    public Task<IActionResult> ImportBatch(
         [FromBody] List<SnapshotEntryDto> snapshots,
         [FromQuery] bool dryRun = false,
         CancellationToken cancellationToken = default)
@@ -61,13 +61,13 @@ public class SnapshotsController : ControllerBase
             // Validate input
             if (snapshots == null || snapshots.Count == 0)
             {
-                return BadRequest(new ErrorResponse
+                return Task.FromResult<IActionResult>(BadRequest(new ErrorResponse
                 {
                     Error = "BadRequest",
                     Message = "Snapshot array cannot be empty",
                     Timestamp = DateTime.UtcNow,
                     CorrelationId = HttpContext.TraceIdentifier
-                });
+                }));
             }
 
             // Validate each snapshot entry
@@ -105,13 +105,13 @@ public class SnapshotsController : ControllerBase
                 };
 
                 Response.Headers["X-Correlation-ID"] = HttpContext.TraceIdentifier;
-                return Ok(report);
+                return Task.FromResult<IActionResult>(Ok(report));
             }
 
             // FR-028a: Reject entire batch on any validation error
             if (validationErrors.Count > 0)
             {
-                return BadRequest(new ErrorResponse
+                return Task.FromResult<IActionResult>(BadRequest(new ErrorResponse
                 {
                     Error = "BadRequest",
                     Message = "validation failed for snapshot batch",
@@ -121,7 +121,7 @@ public class SnapshotsController : ControllerBase
                     {
                         { "snapshots", validationErrors.ToArray() }
                     }
-                });
+                }));
             }
 
             // FR-027: Process asynchronously - generate batch ID and return immediately
@@ -142,19 +142,19 @@ public class SnapshotsController : ControllerBase
                 batchId, snapshots.Count);
 
             Response.Headers["X-Correlation-ID"] = HttpContext.TraceIdentifier;
-            return Accepted(result);
+            return Task.FromResult<IActionResult>(Accepted(result));
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error importing snapshot batch");
 
-            return StatusCode(StatusCodes.Status500InternalServerError, new ErrorResponse
+            return Task.FromResult<IActionResult>(StatusCode(StatusCodes.Status500InternalServerError, new ErrorResponse
             {
                 Error = "InternalServerError",
                 Message = "An error occurred while importing snapshot batch",
                 Timestamp = DateTime.UtcNow,
                 CorrelationId = HttpContext.TraceIdentifier
-            });
+            }));
         }
     }
 

@@ -138,11 +138,11 @@ public class FawazahmedProvider : IExchangeRateProvider
         return true;
     }
 
-    public async Task<IReadOnlySet<string>> GetSupportedCurrenciesAsync(CancellationToken cancellationToken = default)
+    public Task<IReadOnlySet<string>> GetSupportedCurrenciesAsync(CancellationToken cancellationToken = default)
     {
         // Fawazahmed supports 200+ currencies but doesn't provide a /currencies endpoint
         // Return empty set - actual support is determined at runtime via API calls
         _logger.LogDebug("GetSupportedCurrenciesAsync not implemented for Fawazahmed (supports 200+ currencies)");
-        return new HashSet<string>();
+        return Task.FromResult<IReadOnlySet<string>>(new HashSet<string>());
     }
 }

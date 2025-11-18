@@ -47,7 +47,7 @@ public class Currency
     [Column("updated_at")]
     public DateTime UpdatedAt { get; set; }
 
+    // Concurrency token (bytea column for row versioning)
     [Column("version")]
-    [Timestamp]
-    public byte[] Version { get; set; } = Array.Empty<byte>();
+    public byte[] Version { get; set; } = new byte[8];
 }

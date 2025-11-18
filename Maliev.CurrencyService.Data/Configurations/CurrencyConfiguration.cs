@@ -57,9 +57,11 @@ public class CurrencyConfiguration : IEntityTypeConfiguration<Currency>
             .IsRequired()
             .HasDefaultValueSql("NOW()");
 
-        // Optimistic concurrency via Version (row version)
+        // Version column (kept for migration compatibility, not used for concurrency)
+        // Application uses ETag-based optimistic concurrency at API layer
         builder.Property(c => c.Version)
-            .IsRowVersion()
+            .HasColumnName("version")
+            .HasColumnType("bytea")
             .HasDefaultValue(new byte[8]);
     }
 }

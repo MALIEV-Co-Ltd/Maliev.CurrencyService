@@ -86,7 +86,7 @@ public class UserStory5_CurrencyMetadataManagementTests : IClassFixture<Currency
         // Prepare update
         var updateRequest = new UpdateCurrencyRequest
         {
-            Symbol = original!.Symbol + " (Updated)",
+            Symbol = original!.Symbol + "*", // Add asterisk instead of long text (max 10 chars)
             Name = original.Name + " Updated",
             DecimalPlaces = original.DecimalPlaces
         };
@@ -111,7 +111,8 @@ public class UserStory5_CurrencyMetadataManagementTests : IClassFixture<Currency
 
         var updated = await response.Content.ReadFromJsonAsync<CurrencyDto>();
         updated.Should().NotBeNull();
-        updated!.Name.Should().Contain("Updated");
+        updated!.Symbol.Should().Contain("*", "symbol should be updated");
+        updated!.Name.Should().Contain("Updated", "name should be updated");
 
         // FR-006: Cache should be invalidated
         var cacheCheckResponse = await _client.GetAsync($"/currencies/v1/currencies/{currency.Id}");

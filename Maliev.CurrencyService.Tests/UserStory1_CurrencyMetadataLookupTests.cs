@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Testcontainers.PostgreSql;
 using Xunit;
 
 namespace Maliev.CurrencyService.Tests;
@@ -255,15 +256,30 @@ public record PagedResult<T>
 
 /// <summary>
 /// Shared test fixture for Currency Service integration tests
+/// Uses Testcontainers to spin up PostgreSQL automatically (Constitution Principle IV)
 /// </summary>
 public class CurrencyServiceTestFixture : IAsyncDisposable
 {
+    private readonly PostgreSqlContainer _postgresContainer;
     internal WebApplicationFactory<Program> Factory { get; private set; } = null!;
     public HttpClient Client { get; private set; } = null!;
     public string DatabaseName { get; } = $"TestDb_{Guid.NewGuid()}";
 
     public CurrencyServiceTestFixture()
     {
+        // Constitution Principle IV: PostgreSQL-only testing
+        // Use Testcontainers to automatically start PostgreSQL for tests
+        _postgresContainer = new PostgreSqlBuilder()
+            .WithImage("postgres:16-alpine")
+            .WithDatabase("currency_app_db")
+            .WithUsername("postgres")
+            .WithPassword("postgres123")
+            .WithCleanUp(true)
+            .Build();
+
+        // Start container synchronously in constructor
+        _postgresContainer.StartAsync().GetAwaiter().GetResult();
+
         Factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {
             builder.UseEnvironment("Testing");
@@ -271,12 +287,12 @@ public class CurrencyServiceTestFixture : IAsyncDisposable
             // Override connection string for tests (Constitution Principle IV: PostgreSQL-only)
             builder.ConfigureAppConfiguration((context, config) =>
             {
-                // Add connection string override as last configuration source so it takes precedence
+                // Add connection string override using Testcontainers connection string
                 config.Sources.Add(new Microsoft.Extensions.Configuration.Memory.MemoryConfigurationSource
                 {
                     InitialData = new Dictionary<string, string?>
                     {
-                        ["ConnectionStrings:CurrencyDbContext"] = "Host=localhost;Port=5432;Database=currency_app_db;Username=postgres;Password=postgres123;"
+                        ["ConnectionStrings:CurrencyDbContext"] = _postgresContainer.GetConnectionString()
                     }!
                 });
             });
@@ -376,5 +392,8 @@ public class CurrencyServiceTestFixture : IAsyncDisposable
         Client?.Dispose();
         if (Factory != null)
             await Factory.DisposeAsync();
+
+        // Stop and dispose Testcontainers PostgreSQL
+        await _postgresContainer.DisposeAsync();
     }
 }

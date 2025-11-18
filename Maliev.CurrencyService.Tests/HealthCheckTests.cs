@@ -3,29 +3,47 @@ using Maliev.CurrencyService.Api.HealthChecks;
 using Maliev.CurrencyService.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Testcontainers.PostgreSql;
 using Xunit;
 
 namespace Maliev.CurrencyService.Tests;
 
-public class HealthCheckTests : IDisposable
+public class HealthCheckTests : IAsyncLifetime
 {
-    private readonly CurrencyServiceDbContext _context;
-    private readonly DatabaseHealthCheck _healthCheck;
+    private readonly PostgreSqlContainer _postgresContainer;
+    private CurrencyServiceDbContext _context = null!;
+    private DatabaseHealthCheck _healthCheck = null!;
 
     public HealthCheckTests()
     {
-        // Constitution Principle IV: Use PostgreSQL for all tests (no InMemoryDatabase)
+        // Constitution Principle IV: PostgreSQL-only testing using Testcontainers
+        _postgresContainer = new PostgreSqlBuilder()
+            .WithImage("postgres:16-alpine")
+            .WithDatabase("currency_app_db")
+            .WithUsername("postgres")
+            .WithPassword("postgres123")
+            .WithCleanUp(true)
+            .Build();
+    }
+
+    public async Task InitializeAsync()
+    {
+        // Start PostgreSQL container
+        await _postgresContainer.StartAsync();
+
+        // Create DbContext with Testcontainers connection string
         var options = new DbContextOptionsBuilder<CurrencyServiceDbContext>()
-            .UseNpgsql("Host=localhost;Port=5432;Database=currency_app_db;Username=postgres;Password=postgres123;")
+            .UseNpgsql(_postgresContainer.GetConnectionString())
             .Options;
 
         _context = new CurrencyServiceDbContext(options);
         _healthCheck = new DatabaseHealthCheck(_context);
     }
 
-    public void Dispose()
+    public async Task DisposeAsync()
     {
-        _context.Dispose();
+        _context?.Dispose();
+        await _postgresContainer.DisposeAsync();
     }
 
     [Fact]

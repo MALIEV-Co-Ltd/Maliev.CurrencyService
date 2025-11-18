@@ -3,29 +3,29 @@
 <!--
 SYNC IMPACT REPORT
 ==================
-Version Change: 1.2.0 → 1.3.0 (Amendment: PostgreSQL-Only Testing Enforcement)
+Version Change: 1.2.0 → 1.3.0 (Amendment: Docker Best Practices Enforcement)
 Ratification Date: 2025-10-02
-Last Amendment: 2025-10-16
+Last Amendment: 2025-11-17
 
 NEW PRINCIPLE ADDED:
-- IV. PostgreSQL-Only Testing (NON-NEGOTIABLE)
+- X. Docker Best Practices (NON-NEGOTIABLE)
 
 UPDATES:
-- All existing principles renumbered (IV→V, V→VI, VI→VII, VII→VIII, VIII→IX, IX→X, X→XI)
-- Test-First Development (Principle III): Now explicitly complemented by PostgreSQL-only requirement
-- Development Workflow: Integration tests must use PostgreSQL in Docker containers
-- CI/CD Pipeline: Must provision PostgreSQL test databases
+- All existing principles renumbered (X→XI, XI→XII)
+- Docker configuration standardized across all services
+- Mandatory use of built-in 'app' user from Microsoft ASP.NET images
+- .dockerignore files required for all services
+- .NET 10 base images mandated
 
 TEMPLATE UPDATES REQUIRED:
-✅ spec-template.md — update "Testing Strategy" section to mandate PostgreSQL
-✅ plan-template.md — reference Principle IV compliance check
-✅ tasks-template.md — ensure all integration test tasks specify PostgreSQL setup
-✅ test-setup-template.md — add PostgreSQL Docker Compose configuration
+✅ argument.md — updated with Docker Best Practices section
+✅ All Dockerfiles — updated to use built-in app user and .NET 10 images
+✅ All services — .dockerignore files created
 
 FOLLOW-UP ITEMS:
-- Refactor all existing in-memory database tests to use PostgreSQL
-- Document PostgreSQL test database setup for local development and CI
-- Update CI/CD pipelines to provision PostgreSQL test containers
+- Verify CI/CD builds pass with new Docker configurations
+- Monitor image sizes after .dockerignore implementation
+- Ensure all services follow ownership optimization pattern
 -->
 
 ## Core Principles
@@ -45,7 +45,7 @@ Each microservice must be **self-contained**:
 
 ### II. Explicit Contracts
 
-* All APIs documented via **OpenAPI/Scalar**
+* All APIs documented via **OpenAPI/Swagger**
 * Data contracts versioned (MAJOR.MINOR)
 * Backward-compatible migrations mandatory
 
@@ -119,11 +119,59 @@ Each microservice must be **self-contained**:
 
 * Remove unused files, outdated docs, and generated artifacts
 * `.gitignore` must exclude temporary files
+* `.dockerignore` must exclude build artifacts, specs, and IDE files
 * Cleanup enforced pre-release
 
 ---
 
-### X. Simplicity & Maintainability
+### X. Docker Best Practices (NON-NEGOTIABLE)
+
+* **ALL services MUST use the built-in `app` user** from Microsoft's ASP.NET runtime images
+* **NO custom user creation** with `useradd`, `adduser`, or `addgroup` commands
+* Set ownership with `chown -R app:app /app /mnt/secrets` **BEFORE** the `USER app` directive
+* Create required directories (e.g., `/mnt/secrets` for Google Secret Manager) with proper ownership
+* Switch to non-root user with `USER app` **BEFORE** copying published application
+* Copy published application after switching to ensure correct ownership
+* Use `.dockerignore` to exclude build outputs, IDE files, specs, and CI/CD files
+* Multi-stage builds mandatory: SDK for build, ASP.NET runtime for final image
+* Use latest stable .NET base images (e.g., `mcr.microsoft.com/dotnet/sdk:9.0` and `mcr.microsoft.com/dotnet/aspnet:9.0`)
+* Health checks must validate service liveness endpoint
+* Install additional tools (like postgresql-client) ONLY when necessary
+* Optimize layer caching by copying solution/project files before source code
+* Set `ASPNETCORE_URLS=http://+:8080` and `ASPNETCORE_ENVIRONMENT=Production`
+* Expose port 8080 (standard for containerized .NET applications)
+
+**Dockerfile Template Pattern**:
+```dockerfile
+# Build stage
+FROM mcr.microsoft.com/dotnet/sdk:X.0 AS build
+WORKDIR /src
+COPY *.sln ./
+COPY ProjectName/*.csproj ProjectName/
+RUN dotnet restore
+COPY . .
+WORKDIR /src/ProjectName
+RUN dotnet publish -c Release -o /app/publish --no-restore /p:UseAppHost=false
+
+# Runtime stage
+FROM mcr.microsoft.com/dotnet/aspnet:X.0 AS runtime
+WORKDIR /app
+RUN mkdir -p /mnt/secrets && chown -R app:app /app /mnt/secrets
+USER app
+COPY --from=build /app/publish .
+EXPOSE 8080
+ENV ASPNETCORE_URLS=http://+:8080
+ENV ASPNETCORE_ENVIRONMENT=Production
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:8080/service/liveness || exit 1
+ENTRYPOINT ["dotnet", "ProjectName.dll"]
+```
+
+**Rationale:** Microsoft's built-in `app` user (UID 1654, GID 1654) provides security without complexity. Setting ownership before switching users and copying after switching ensures proper file permissions. Following Docker best practices ensures consistent, secure, and efficient container images across all services.
+
+---
+
+### XI. Simplicity & Maintainability
 
 * Apply YAGNI
 * Favor readable, stateless design
@@ -131,9 +179,9 @@ Each microservice must be **self-contained**:
 
 ---
 
-### XI. Business Metrics & Analytics (NON-NEGOTIABLE)
+### XII. Business Metrics & Analytics (NON-NEGOTIABLE)
 
-* Every service must expose **business-relevant metrics and analytics endpoints** for use by the company’s telemetry pipeline.
+* Every service must expose **business-relevant metrics and analytics endpoints** for use by the company's telemetry pipeline.
 * Metrics must quantify both **system health** and **business outcomes**, including (where applicable):
 
   * Number of processed jobs, quotes, or transactions
@@ -196,4 +244,4 @@ Each microservice must be **self-contained**:
 
 ---
 
-**Version:** 1.2.0 | **Ratified:** 2025-10-02 | **Last Amended:** 2025-10-09
+**Version:** 1.3.0 | **Ratified:** 2025-10-02 | **Last Amended:** 2025-11-17

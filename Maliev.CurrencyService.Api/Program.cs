@@ -1,8 +1,5 @@
 using Asp.Versioning;
-using Asp.Versioning.ApiExplorer;
 using FluentValidation;
-using Scalar.AspNetCore;
-using HealthChecks.UI.Client;
 using Maliev.CurrencyService.Api.HealthChecks;
 using Maliev.CurrencyService.Api.Metrics;
 using Maliev.CurrencyService.Api.Middleware;
@@ -18,6 +15,7 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Prometheus;
+using Scalar.AspNetCore;
 using Serilog;
 using StackExchange.Redis;
 using System.Text;
@@ -64,27 +62,105 @@ try
     builder.Services.AddControllers();
     builder.Services.AddEndpointsApiExplorer();
 
-    // Add OpenAPI services (required for MapOpenApi)
-    builder.Services.AddOpenApi();
+    // Add OpenAPI services with enhanced documentation (T125)
+    builder.Services.AddOpenApi(options =>
+    {
+        options.AddDocumentTransformer((document, context, cancellationToken) =>
+        {
+            document.Info = new()
+            {
+                Title = "MALIEV Currency Service API",
+                Version = "v1",
+                Description = """
+                    ## Overview
+                    Currency WebAPI Service providing exchange rates, currency metadata, and snapshot management.
+
+                    ## Features
+                    - **Currency Metadata**: Query currencies by code, country, or list all
+                    - **Live Exchange Rates**: Real-time rates with provider failover and transitive conversion
+                    - **Snapshot Queries**: Historical exchange rates for accounting and audit
+                    - **Batch Ingestion**: Admin endpoints for bulk snapshot uploads
+                    - **Currency Management**: Admin CRUD operations with optimistic concurrency
+
+                    ## Authentication
+                    Admin endpoints require JWT Bearer token with `Admin` role.
+                    Include in request header: `Authorization: Bearer <your-jwt-token>`
+
+                    ## Rate Limiting
+                    Public endpoints: 100 requests/minute per API key
+                    Admin endpoints: 50 requests/minute per user
+
+                    ## Caching
+                    - Currency metadata: 5 minutes TTL
+                    - Live rates: 5 minutes TTL (extended to 60 minutes on provider failure)
+                    - Snapshot rates: 60 minutes TTL (immutable data)
+
+                    ## Provider Failover
+                    1. Fawazahmed API (primary)
+                    2. Frankfurter API (fallback)
+                    3. Stale cache (last resort)
+                    """,
+                Contact = new()
+                {
+                    Name = "MALIEV Support",
+                    Email = "support@maliev.com",
+                    Url = new("https://github.com/MALIEV-Co-Ltd/Maliev.CurrencyService")
+                },
+                License = new()
+                {
+                    Name = "Proprietary",
+                    Url = new("https://maliev.com/license")
+                }
+            };
+
+            // Add server information
+            document.Servers = new[]
+            {
+                new Microsoft.OpenApi.Models.OpenApiServer
+                {
+                    Url = "http://localhost:5000",
+                    Description = "Development"
+                },
+                new Microsoft.OpenApi.Models.OpenApiServer
+                {
+                    Url = "https://staging.api.maliev.com/currencies",
+                    Description = "Staging"
+                },
+                new Microsoft.OpenApi.Models.OpenApiServer
+                {
+                    Url = "https://api.maliev.com/currencies",
+                    Description = "Production"
+                }
+            };
+
+            // Add security scheme
+            document.Components ??= new();
+            document.Components.SecuritySchemes = new Dictionary<string, Microsoft.OpenApi.Models.OpenApiSecurityScheme>
+            {
+                ["Bearer"] = new()
+                {
+                    Type = Microsoft.OpenApi.Models.SecuritySchemeType.Http,
+                    Scheme = "bearer",
+                    BearerFormat = "JWT",
+                    Description = "JWT Authorization header using the Bearer scheme. Example: \"Authorization: Bearer {token}\""
+                }
+            };
+
+            return Task.CompletedTask;
+        });
+    });
 
     // Configure Currency Service DbContext with snake_case naming
-    if (builder.Environment.IsEnvironment("Testing"))
+    // Constitution Principle IV: Always use PostgreSQL (no InMemoryDatabase)
+    builder.Services.AddDbContext<CurrencyServiceDbContext>(options =>
     {
-        builder.Services.AddDbContext<CurrencyServiceDbContext>(options =>
-            options.UseInMemoryDatabase("TestDb"));
-    }
-    else
-    {
-        builder.Services.AddDbContext<CurrencyServiceDbContext>(options =>
-        {
-            // Use ConnectionStrings__CurrencyDbContext from Google Secret Manager
-            var connectionString = builder.Configuration.GetConnectionString("CurrencyDbContext")
-                ?? Environment.GetEnvironmentVariable("ServiceDbContext");
+        // Use ConnectionStrings__CurrencyDbContext from Google Secret Manager
+        var connectionString = builder.Configuration.GetConnectionString("CurrencyDbContext")
+            ?? Environment.GetEnvironmentVariable("ServiceDbContext");
 
-            options.UseNpgsql(connectionString)
-                .UseSnakeCaseNamingConvention(); // Apply snake_case naming per data-model.md
-        });
-    }
+        options.UseNpgsql(connectionString)
+            .UseSnakeCaseNamingConvention(); // Apply snake_case naming per data-model.md
+    });
 
     // Configure caching (simple configuration per research.md decision 3 CRITICAL section)
     builder.Services.AddMemoryCache(); // Simple config without SizeLimit to avoid runtime exceptions
@@ -127,7 +203,7 @@ try
     builder.Services.AddRateLimiter(options =>
     {
         options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-        
+
         options.AddPolicy("CurrencyPolicy", context =>
             RateLimitPartition.GetSlidingWindowLimiter(
                 partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",

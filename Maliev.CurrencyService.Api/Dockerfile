@@ -1,43 +1,49 @@
-# Use the official .NET 9.0 runtime as the base image for running the app
-FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS base
-WORKDIR /app
-EXPOSE 8080
-EXPOSE 8081
+# Multi-stage Docker build for Maliev.CurrencyService.Api
+# Based on MALIEV Co. Ltd. standard .NET 9 microservice template
 
-# Use the .NET 9.0 SDK for building the application
+# Build stage
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
-ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
 
-# Copy project files and restore dependencies
-COPY ["Maliev.CurrencyService.Api/Maliev.CurrencyService.Api.csproj", "Maliev.CurrencyService.Api/"]
-COPY ["Maliev.CurrencyService.Data/Maliev.CurrencyService.Data.csproj", "Maliev.CurrencyService.Data/"]
-RUN dotnet restore "./Maliev.CurrencyService.Api/Maliev.CurrencyService.Api.csproj"
+# Copy solution and project files
+COPY Maliev.CurrencyService.sln ./
+COPY Maliev.CurrencyService.Api/Maliev.CurrencyService.Api.csproj Maliev.CurrencyService.Api/
+COPY Maliev.CurrencyService.Data/Maliev.CurrencyService.Data.csproj Maliev.CurrencyService.Data/
+COPY Maliev.CurrencyService.Tests/Maliev.CurrencyService.Tests.csproj Maliev.CurrencyService.Tests/
 
-# Copy the rest of the application code
+# Restore dependencies
+RUN dotnet restore Maliev.CurrencyService.sln
+
+# Copy all source code
 COPY . .
 
-# Build the application
-WORKDIR "/src/Maliev.CurrencyService.Api"
-RUN dotnet build "./Maliev.CurrencyService.Api.csproj" -c $BUILD_CONFIGURATION -o /app/build
+# Build and publish
+WORKDIR /src/Maliev.CurrencyService.Api
+RUN dotnet publish -c Release -o /app/publish --no-restore /p:UseAppHost=false
 
-# Publish the application
-FROM build AS publish
-ARG BUILD_CONFIGURATION=Release
-RUN dotnet publish "./Maliev.CurrencyService.Api.csproj" -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
-
-# Final stage: copy the published application to the runtime image
-FROM base AS final
+# Runtime stage
+FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS runtime
 WORKDIR /app
-COPY --from=publish /app/publish .
 
-# Create a non-root user for security
-RUN addgroup --group dotnet --gid 2000 \
-    && adduser --uid 1000 --gid 2000 --shell /bin/false --no-create-home --disabled-password dotnet
+# Create directory for Google Secret Manager secrets and ensure 'app' owns the workdir (app user already exists in ASP.NET runtime image)
+RUN mkdir -p /mnt/secrets && chown -R app:app /app /mnt/secrets
 
-# Set ownership and switch to non-root user
-RUN chown -R dotnet:dotnet /app
-USER dotnet
+# Switch to non-root user
+USER app
 
-# Set the entry point
+# Copy published application (now owned by app)
+COPY --from=build /app/publish .
+
+# Expose port
+EXPOSE 8080
+
+# Set ASP.NET Core environment
+ENV ASPNETCORE_URLS=http://+:8080
+ENV ASPNETCORE_ENVIRONMENT=Production
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:8080/currencies/liveness || exit 1
+
+# Entry point
 ENTRYPOINT ["dotnet", "Maliev.CurrencyService.Api.dll"]

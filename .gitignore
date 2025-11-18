@@ -329,8 +329,8 @@ MigrationBackup/
 
 # Secrets and configuration files
 secrets.yaml
-appsettings.Development.json
 appsettings.Local.json
+appsettings.*.local.json
 *.user
 
 # Logs
@@ -349,8 +349,20 @@ logs/
 currency-*.csv
 parse_currency_csv.py
 
-# Speckit documentation (keep in specs/ only)
-.specify/
-.claude/
-specs/
-!README.md
+# Environment-specific secrets (DO NOT COMMIT)
+*.secret.yaml
+secrets.yaml
+k8s/*-secret.yaml
+
+# Test results and coverage
+TestResults/
+CoverageReport/
+*.trx
+*.cobertura.xml
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+*~

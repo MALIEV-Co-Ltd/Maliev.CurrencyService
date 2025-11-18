@@ -5,14 +5,12 @@
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 WORKDIR /src
 
-# Copy solution and project files
-COPY Maliev.CurrencyService.sln ./
+# Copy project files (excluding tests)
 COPY Maliev.CurrencyService.Api/Maliev.CurrencyService.Api.csproj Maliev.CurrencyService.Api/
 COPY Maliev.CurrencyService.Data/Maliev.CurrencyService.Data.csproj Maliev.CurrencyService.Data/
-COPY Maliev.CurrencyService.Tests/Maliev.CurrencyService.Tests.csproj Maliev.CurrencyService.Tests/
 
 # Restore dependencies
-RUN dotnet restore Maliev.CurrencyService.sln
+RUN dotnet restore Maliev.CurrencyService.Api/Maliev.CurrencyService.Api.csproj
 
 # Copy all source code
 COPY . .

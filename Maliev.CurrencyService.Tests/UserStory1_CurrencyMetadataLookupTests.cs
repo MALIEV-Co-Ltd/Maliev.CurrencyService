@@ -7,6 +7,7 @@ using Maliev.CurrencyService.Data.Models;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
@@ -267,16 +268,25 @@ public class CurrencyServiceTestFixture : IAsyncDisposable
         {
             builder.UseEnvironment("Testing");
 
+            // Override connection string for tests (Constitution Principle IV: PostgreSQL-only)
+            builder.ConfigureAppConfiguration((context, config) =>
+            {
+                // Add connection string override as last configuration source so it takes precedence
+                config.Sources.Add(new Microsoft.Extensions.Configuration.Memory.MemoryConfigurationSource
+                {
+                    InitialData = new Dictionary<string, string?>
+                    {
+                        ["ConnectionStrings:CurrencyDbContext"] = "Host=localhost;Port=5432;Database=currency_app_db;Username=postgres;Password=postgres123;"
+                    }!
+                });
+            });
+
             builder.ConfigureServices(services =>
             {
-                // Remove the real database
-                var descriptor = services.SingleOrDefault(d => d.ServiceType == typeof(DbContextOptions<CurrencyServiceDbContext>));
-                if (descriptor != null)
-                {
-                    services.Remove(descriptor);
-                }
+                // Constitution Principle IV: Use PostgreSQL for all tests (no InMemoryDatabase)
+                // Program.cs will register PostgreSQL DbContext - do not override it
 
-                // Remove Redis cache service
+                // Remove Redis cache service and use in-memory cache for tests
                 var cacheDescriptor = services.SingleOrDefault(d => d.ServiceType.Name.Contains("ICacheService"));
                 if (cacheDescriptor != null)
                 {
@@ -289,12 +299,6 @@ public class CurrencyServiceTestFixture : IAsyncDisposable
                 {
                     services.Remove(redisDescriptor);
                 }
-
-                // Add in-memory database for testing
-                services.AddDbContext<CurrencyServiceDbContext>(options =>
-                {
-                    options.UseInMemoryDatabase(DatabaseName);
-                });
 
                 // Add in-memory cache only for tests (no Redis)
                 services.AddMemoryCache();

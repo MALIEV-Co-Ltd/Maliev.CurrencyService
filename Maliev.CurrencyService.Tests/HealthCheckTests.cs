@@ -14,8 +14,9 @@ public class HealthCheckTests : IDisposable
 
     public HealthCheckTests()
     {
+        // Constitution Principle IV: Use PostgreSQL for all tests (no InMemoryDatabase)
         var options = new DbContextOptionsBuilder<CurrencyServiceDbContext>()
-            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
+            .UseNpgsql("Host=localhost;Port=5432;Database=currency_app_db;Username=postgres;Password=postgres123;")
             .Options;
 
         _context = new CurrencyServiceDbContext(options);
@@ -31,6 +32,7 @@ public class HealthCheckTests : IDisposable
     public async Task CheckHealthAsync_WithHealthyDatabase_ShouldReturnHealthy()
     {
         // Arrange
+        // Ensure database schema exists for the health check to query tables
         await _context.Database.EnsureCreatedAsync();
         var context = new HealthCheckContext();
 

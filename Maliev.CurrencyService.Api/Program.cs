@@ -151,23 +151,16 @@ try
     });
 
     // Configure Currency Service DbContext with snake_case naming
-    if (builder.Environment.IsEnvironment("Testing"))
+    // Constitution Principle IV: Always use PostgreSQL (no InMemoryDatabase)
+    builder.Services.AddDbContext<CurrencyServiceDbContext>(options =>
     {
-        builder.Services.AddDbContext<CurrencyServiceDbContext>(options =>
-            options.UseInMemoryDatabase("TestDb"));
-    }
-    else
-    {
-        builder.Services.AddDbContext<CurrencyServiceDbContext>(options =>
-        {
-            // Use ConnectionStrings__CurrencyDbContext from Google Secret Manager
-            var connectionString = builder.Configuration.GetConnectionString("CurrencyDbContext")
-                ?? Environment.GetEnvironmentVariable("ServiceDbContext");
+        // Use ConnectionStrings__CurrencyDbContext from Google Secret Manager
+        var connectionString = builder.Configuration.GetConnectionString("CurrencyDbContext")
+            ?? Environment.GetEnvironmentVariable("ServiceDbContext");
 
-            options.UseNpgsql(connectionString)
-                .UseSnakeCaseNamingConvention(); // Apply snake_case naming per data-model.md
-        });
-    }
+        options.UseNpgsql(connectionString)
+            .UseSnakeCaseNamingConvention(); // Apply snake_case naming per data-model.md
+    });
 
     // Configure caching (simple configuration per research.md decision 3 CRITICAL section)
     builder.Services.AddMemoryCache(); // Simple config without SizeLimit to avoid runtime exceptions

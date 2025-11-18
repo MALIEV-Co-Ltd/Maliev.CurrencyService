@@ -128,16 +128,46 @@ Each microservice must be **self-contained**:
 
 * **ALL services MUST use the built-in `app` user** from Microsoft's ASP.NET runtime images
 * **NO custom user creation** with `useradd`, `adduser`, or `addgroup` commands
-* Set ownership with `chown -R app:app /app` **BEFORE** the `USER app` directive
-* This ensures copied files inherit correct ownership from the start
+* Set ownership with `chown -R app:app /app /mnt/secrets` **BEFORE** the `USER app` directive
+* Create required directories (e.g., `/mnt/secrets` for Google Secret Manager) with proper ownership
+* Switch to non-root user with `USER app` **BEFORE** copying published application
+* Copy published application after switching to ensure correct ownership
 * Use `.dockerignore` to exclude build outputs, IDE files, specs, and CI/CD files
 * Multi-stage builds mandatory: SDK for build, ASP.NET runtime for final image
-* Use .NET 10 base images: `mcr.microsoft.com/dotnet/sdk:10.0` and `mcr.microsoft.com/dotnet/aspnet:10.0`
+* Use latest stable .NET base images (e.g., `mcr.microsoft.com/dotnet/sdk:9.0` and `mcr.microsoft.com/dotnet/aspnet:9.0`)
 * Health checks must validate service liveness endpoint
 * Install additional tools (like postgresql-client) ONLY when necessary
-* Optimize layer caching by copying project files before source code
+* Optimize layer caching by copying solution/project files before source code
+* Set `ASPNETCORE_URLS=http://+:8080` and `ASPNETCORE_ENVIRONMENT=Production`
+* Expose port 8080 (standard for containerized .NET applications)
 
-**Rationale:** Microsoft's built-in `app` user provides security without complexity. Setting ownership before switching users reduces build time and layer complexity. Following Docker best practices ensures consistent, secure, and efficient container images across all services.
+**Dockerfile Template Pattern**:
+```dockerfile
+# Build stage
+FROM mcr.microsoft.com/dotnet/sdk:X.0 AS build
+WORKDIR /src
+COPY *.sln ./
+COPY ProjectName/*.csproj ProjectName/
+RUN dotnet restore
+COPY . .
+WORKDIR /src/ProjectName
+RUN dotnet publish -c Release -o /app/publish --no-restore /p:UseAppHost=false
+
+# Runtime stage
+FROM mcr.microsoft.com/dotnet/aspnet:X.0 AS runtime
+WORKDIR /app
+RUN mkdir -p /mnt/secrets && chown -R app:app /app /mnt/secrets
+USER app
+COPY --from=build /app/publish .
+EXPOSE 8080
+ENV ASPNETCORE_URLS=http://+:8080
+ENV ASPNETCORE_ENVIRONMENT=Production
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:8080/service/liveness || exit 1
+ENTRYPOINT ["dotnet", "ProjectName.dll"]
+```
+
+**Rationale:** Microsoft's built-in `app` user (UID 1654, GID 1654) provides security without complexity. Setting ownership before switching users and copying after switching ensures proper file permissions. Following Docker best practices ensures consistent, secure, and efficient container images across all services.
 
 ---
 

@@ -336,6 +336,9 @@ try
         .AddPrivateMemoryHealthCheck(4_000_000_000L, "memory_private", tags: new[] { "liveness", "readiness" }) // 4 GB
         .AddWorkingSetHealthCheck(4_000_000_000L, "memory_working_set", tags: new[] { "liveness", "readiness" }); // 4 GB
 
+    // Add service defaults for .NET Aspire
+    builder.AddServiceDefaults();
+
     var app = builder.Build();
 
     app.UseForwardedHeaders();

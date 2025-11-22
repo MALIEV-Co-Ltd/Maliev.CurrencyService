@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.4
 # Multi-stage Docker build for Maliev.CurrencyService.Api
 # Based on MALIEV Co. Ltd. standard .NET 9 microservice template
 
@@ -10,7 +11,11 @@ COPY Maliev.CurrencyService.Api/Maliev.CurrencyService.Api.csproj Maliev.Currenc
 COPY Maliev.CurrencyService.Data/Maliev.CurrencyService.Data.csproj Maliev.CurrencyService.Data/
 
 # Restore dependencies
-RUN dotnet restore Maliev.CurrencyService.Api/Maliev.CurrencyService.Api.csproj
+RUN --mount=type=secret,id=nuget_username \
+    --mount=type=secret,id=nuget_password \
+    NUGET_USERNAME=$(cat /run/secrets/nuget_username) \
+    NUGET_PASSWORD=$(cat /run/secrets/nuget_password) \
+    dotnet restore Maliev.CurrencyService.Api/Maliev.CurrencyService.Api.csproj
 
 # Copy all source code
 COPY . .

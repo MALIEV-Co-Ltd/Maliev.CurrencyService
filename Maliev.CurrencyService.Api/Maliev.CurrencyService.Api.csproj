@@ -43,7 +43,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Maliev.CurrencyService.Data\Maliev.CurrencyService.Data.csproj" />
-    <ProjectReference Include="..\..\Maliev.Aspire\Maliev.Aspire.ServiceDefaults\Maliev.Aspire.ServiceDefaults.csproj" />
+    <PackageReference Include="Maliev.Aspire.ServiceDefaults" Version="1.0.*" />
   </ItemGroup>
 
 </Project>

@@ -6,7 +6,8 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
-# Copy project files (excluding tests)
+# Copy project files and nuget.config (excluding tests)
+COPY nuget.config ./
 COPY Maliev.CurrencyService.Api/Maliev.CurrencyService.Api.csproj Maliev.CurrencyService.Api/
 COPY Maliev.CurrencyService.Data/Maliev.CurrencyService.Data.csproj Maliev.CurrencyService.Data/
 

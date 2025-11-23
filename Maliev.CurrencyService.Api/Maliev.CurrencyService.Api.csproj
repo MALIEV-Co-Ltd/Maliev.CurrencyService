@@ -6,6 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);1591</NoWarn>
+    <UserSecretsId>maliev-currencyservice-api</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
@@ -32,6 +33,10 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Maliev.CurrencyService.Data\Maliev.CurrencyService.Data.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Maliev.Aspire.ServiceDefaults" Version="1.0.*" />
   </ItemGroup>
 
 </Project>

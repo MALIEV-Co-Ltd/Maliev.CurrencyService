@@ -135,13 +135,30 @@ try
             .UseSnakeCaseNamingConvention(); // Apply snake_case naming per data-model.md
     });
 
+    // Add service defaults for .NET Aspire
+    builder.AddServiceDefaults();
+
     var app = builder.Build();
 
     // Configure the HTTP request pipeline.
     if (!app.Environment.IsProduction())
     {
-        app.MapOpenApi();
-        app.MapScalarApiReference();
+        // Map OpenAPI at /currencies/openapi/v1.json
+        app.MapOpenApi("/currencies/openapi/{documentName}.json");
+
+        // Map Scalar at /currencies/scalar/v1 path
+        app.MapScalarApiReference("/currencies/scalar/v1", options =>
+        {
+            options
+                .WithTitle("MALIEV Currency Service API")
+                .WithTheme(ScalarTheme.Saturn)
+                .WithDefaultHttpClient(ScalarTarget.CSharp, ScalarClient.HttpClient)
+                .WithOpenApiRoutePattern("/currencies/openapi/{documentName}.json");
+        });
+
+        // Redirect root to Scalar
+        app.MapGet("/", () => Results.Redirect("/currencies/scalar/v1")).ExcludeFromDescription();
+        app.MapGet("/currencies", () => Results.Redirect("/currencies/scalar/v1")).ExcludeFromDescription();
     }
 
     app.UseSerilogRequestLogging();

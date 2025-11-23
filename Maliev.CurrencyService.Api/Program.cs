@@ -70,7 +70,7 @@ try
     builder.Services.AddHealthChecks()
         .AddCheck<DatabaseHealthCheck>("database", tags: new[] { "readiness" })
         .AddCheck<RedisHealthCheck>("redis", tags: new[] { "readiness" })
-        .AddCheck("self", () => HealthCheckResult.Healthy(), tags: new[] { "liveness" });
+        ;
 
     // Add Rate Limiting
     builder.Services.AddRateLimiter(options =>

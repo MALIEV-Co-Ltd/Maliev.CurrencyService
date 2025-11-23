@@ -11,7 +11,7 @@ namespace Maliev.CurrencyService.Api.Services.External;
 /// </summary>
 /// <remarks>
 /// Per research.md decision 1: Fallback provider with ECB (European Central Bank) rates.
-/// Base URL: https://api.frankfurter.app/latest?from={from}&to={to}
+/// Base URL: https://api.frankfurter.app/latest?from={from}&amp;to={to}
 /// Daily ECB rates, limited to 30-40 major fiat currencies.
 /// </remarks>
 public class FrankfurterProvider : IExchangeRateProvider

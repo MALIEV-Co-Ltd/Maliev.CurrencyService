@@ -20,6 +20,7 @@ using Serilog;
 using StackExchange.Redis;
 using System.Text;
 using System.Threading.RateLimiting;
+using NetEscapades.Configuration.Yaml;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -61,94 +62,66 @@ try
     // Add controllers
     builder.Services.AddControllers();
     builder.Services.AddEndpointsApiExplorer();
+    
+    // Add FluentValidation validators
+    builder.Services.AddValidatorsFromAssemblyContaining<Program>();
 
-    // Add OpenAPI services with enhanced documentation (T125)
-    builder.Services.AddOpenApi(options =>
+    // Add Health Checks
+    builder.Services.AddHealthChecks()
+        .AddCheck<DatabaseHealthCheck>("database", tags: new[] { "readiness" })
+        .AddCheck<RedisHealthCheck>("redis", tags: new[] { "readiness" })
+        .AddCheck("self", () => HealthCheckResult.Healthy(), tags: new[] { "liveness" });
+
+    // Add Rate Limiting
+    builder.Services.AddRateLimiter(options =>
     {
-        options.AddDocumentTransformer((document, context, cancellationToken) =>
-        {
-            document.Info = new()
-            {
-                Title = "MALIEV Currency Service API",
-                Version = "v1",
-                Description = """
-                    ## Overview
-                    Currency WebAPI Service providing exchange rates, currency metadata, and snapshot management.
-
-                    ## Features
-                    - **Currency Metadata**: Query currencies by code, country, or list all
-                    - **Live Exchange Rates**: Real-time rates with provider failover and transitive conversion
-                    - **Snapshot Queries**: Historical exchange rates for accounting and audit
-                    - **Batch Ingestion**: Admin endpoints for bulk snapshot uploads
-                    - **Currency Management**: Admin CRUD operations with optimistic concurrency
-
-                    ## Authentication
-                    Admin endpoints require JWT Bearer token with `Admin` role.
-                    Include in request header: `Authorization: Bearer <your-jwt-token>`
-
-                    ## Rate Limiting
-                    Public endpoints: 100 requests/minute per API key
-                    Admin endpoints: 50 requests/minute per user
-
-                    ## Caching
-                    - Currency metadata: 5 minutes TTL
-                    - Live rates: 5 minutes TTL (extended to 60 minutes on provider failure)
-                    - Snapshot rates: 60 minutes TTL (immutable data)
-
-                    ## Provider Failover
-                    1. Fawazahmed API (primary)
-                    2. Frankfurter API (fallback)
-                    3. Stale cache (last resort)
-                    """,
-                Contact = new()
+        options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
+            RateLimitPartition.GetFixedWindowLimiter(
+                partitionKey: httpContext.User.Identity?.Name ?? httpContext.Request.Headers.Host.ToString(),
+                factory: partition => new FixedWindowRateLimiterOptions
                 {
-                    Name = "MALIEV Support",
-                    Email = "support@maliev.com",
-                    Url = new("https://github.com/MALIEV-Co-Ltd/Maliev.CurrencyService")
-                },
-                License = new()
-                {
-                    Name = "Proprietary",
-                    Url = new("https://maliev.com/license")
-                }
-            };
-
-            // Add server information
-            document.Servers = new[]
-            {
-                new Microsoft.OpenApi.Models.OpenApiServer
-                {
-                    Url = "http://localhost:5000",
-                    Description = "Development"
-                },
-                new Microsoft.OpenApi.Models.OpenApiServer
-                {
-                    Url = "https://staging.api.maliev.com/currencies",
-                    Description = "Staging"
-                },
-                new Microsoft.OpenApi.Models.OpenApiServer
-                {
-                    Url = "https://api.maliev.com/currencies",
-                    Description = "Production"
-                }
-            };
-
-            // Add security scheme
-            document.Components ??= new();
-            document.Components.SecuritySchemes = new Dictionary<string, Microsoft.OpenApi.Models.OpenApiSecurityScheme>
-            {
-                ["Bearer"] = new()
-                {
-                    Type = Microsoft.OpenApi.Models.SecuritySchemeType.Http,
-                    Scheme = "bearer",
-                    BearerFormat = "JWT",
-                    Description = "JWT Authorization header using the Bearer scheme. Example: \"Authorization: Bearer {token}\""
-                }
-            };
-
-            return Task.CompletedTask;
-        });
+                    AutoReplenishment = true,
+                    PermitLimit = 1000,
+                    Window = TimeSpan.FromMinutes(1)
+                }));
     });
+
+    // Add OpenAPI services
+    builder.Services.AddOpenApi();
+
+    // Add Metrics
+    builder.Services.AddSingleton<CurrencyServiceMetrics>();
+
+    // Add Cache Service
+    var redisConnectionString = builder.Configuration.GetConnectionString("Redis");
+    if (!string.IsNullOrEmpty(redisConnectionString))
+    {
+        builder.Services.AddStackExchangeRedisCache(options =>
+        {
+            options.Configuration = redisConnectionString;
+        });
+        builder.Services.AddSingleton<ICacheService, RedisCacheService>();
+    }
+    else
+    {
+        builder.Services.AddMemoryCache();
+        builder.Services.AddSingleton<ICacheService, InMemoryCacheService>();
+    }
+
+    // Add Domain Services
+    builder.Services.AddScoped<ICurrencyService, CurrencyService>();
+    builder.Services.AddScoped<ISnapshotService, SnapshotService>();
+    builder.Services.AddScoped<IRateService, RateService>();
+
+    // Add External Providers
+    builder.Services.AddHttpClient<FawazahmedProvider>().AddStandardResilienceHandler();
+    builder.Services.AddHttpClient<FrankfurterProvider>().AddStandardResilienceHandler();
+    
+    // Register them as IExchangeRateProvider by resolving the typed client
+    builder.Services.AddScoped<IExchangeRateProvider>(sp => sp.GetRequiredService<FawazahmedProvider>());
+    builder.Services.AddScoped<IExchangeRateProvider>(sp => sp.GetRequiredService<FrankfurterProvider>());
+    
+    builder.Services.AddScoped<ProviderChain>();
 
     // Configure Currency Service DbContext with snake_case naming
     // Constitution Principle IV: Always use PostgreSQL (no InMemoryDatabase)
@@ -160,6 +133,18 @@ try
 
         options.UseNpgsql(connectionString)
             .UseSnakeCaseNamingConvention(); // Apply snake_case naming per data-model.md
+    });
+
+    var app = builder.Build();
+
+    // Configure the HTTP request pipeline.
+    if (!app.Environment.IsProduction())
+    {
+        app.MapOpenApi();
+        app.MapScalarApiReference();
+    }
+
+    app.UseSerilogRequestLogging();
 
     app.UseRateLimiter();
     app.UseCors();
@@ -213,6 +198,7 @@ try
         catch (Exception ex)
         {
             Log.Error(ex, "An error occurred while initializing the database");
+            Console.WriteLine($"Database initialization error: {ex}");
         }
     }
 
@@ -236,3 +222,4 @@ public class JwtOptions
     public required string Audience { get; set; }
     public required string PublicKey { get; set; } // Base64-encoded RSA public key from shared config
 }
+public partial class Program { }

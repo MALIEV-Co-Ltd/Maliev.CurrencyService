@@ -325,6 +325,11 @@ public class CurrencyServiceTestFixture : IAsyncDisposable
                     .AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, TestAuthenticationHandler>(
                         "TestScheme", options => { });
                 services.AddAuthorization();
+                
+                // Explicitly add HealthChecks to ensure they are registered in the test environment
+                // Explicitly add HealthChecks and ensure a passing liveness check for tests
+                services.AddHealthChecks()
+                    .AddCheck("test_liveness", () => Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Healthy(), tags: new[] { "liveness" });
             });
         });
 

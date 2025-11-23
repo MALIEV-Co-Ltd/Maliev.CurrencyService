@@ -7,9 +7,9 @@ namespace Maliev.CurrencyService.Api.Services.External;
 /// Provider chain with fallback and transitive rate calculation
 /// </summary>
 /// <remarks>
-/// Per research.md decisions 1 & 2:
-/// - Tries Fawazahmed (primary) → Frankfurter (fallback)
-/// - If both fail, attempts transitive calculation via USD → EUR → GBP
+/// Per research.md decisions 1 and 2:
+/// - Tries Fawazahmed (primary), Frankfurter (fallback)
+/// - If both fail, attempts transitive calculation via USD, EUR, GBP
 /// - Tracks fallback metrics for monitoring
 /// </remarks>
 public class ProviderChain

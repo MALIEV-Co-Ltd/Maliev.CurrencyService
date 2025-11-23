@@ -3,7 +3,7 @@
 # Based on MALIEV Co. Ltd. standard .NET 9 microservice template
 
 # Build stage
-FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
 # Copy project files (excluding tests)
@@ -12,10 +12,10 @@ COPY Maliev.CurrencyService.Data/Maliev.CurrencyService.Data.csproj Maliev.Curre
 
 # Restore dependencies
 RUN --mount=type=secret,id=nuget_username \
-    --mount=type=secret,id=nuget_password \
-    NUGET_USERNAME=$(cat /run/secrets/nuget_username) \
-    NUGET_PASSWORD=$(cat /run/secrets/nuget_password) \
-    dotnet restore Maliev.CurrencyService.Api/Maliev.CurrencyService.Api.csproj
+  --mount=type=secret,id=nuget_password \
+  NUGET_USERNAME=$(cat /run/secrets/nuget_username) \
+  NUGET_PASSWORD=$(cat /run/secrets/nuget_password) \
+  dotnet restore Maliev.CurrencyService.Api/Maliev.CurrencyService.Api.csproj
 
 # Copy all source code
 COPY . .
@@ -25,7 +25,7 @@ WORKDIR /src/Maliev.CurrencyService.Api
 RUN dotnet publish -c Release -o /app/publish --no-restore /p:UseAppHost=false
 
 # Runtime stage
-FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS runtime
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
 
 # Create directory for Google Secret Manager secrets and ensure 'app' owns the workdir (app user already exists in ASP.NET runtime image)

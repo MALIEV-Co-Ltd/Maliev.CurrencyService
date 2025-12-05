@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Json;
-using FluentAssertions;
 using Xunit;
 
 namespace Maliev.CurrencyService.Tests;
@@ -36,21 +35,19 @@ public class UserStory2_LiveExchangeRateRetrievalTests : IClassFixture<CurrencyS
         stopwatch.Stop();
 
         // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
-        stopwatch.ElapsedMilliseconds.Should().BeLessThan(200,
-            "FR-008: system must return exchange rate within 200ms for live requests");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.True(stopwatch.ElapsedMilliseconds < 200);
 
         var rate = await response.Content.ReadFromJsonAsync<ExchangeRateDto>();
-        rate.Should().NotBeNull();
-        rate!.FromCurrency.Should().Be(fromCurrency);
-        rate.ToCurrency.Should().Be(toCurrency);
-        rate.Rate.Should().BeGreaterThan(0, "exchange rate must be positive");
-        rate.Source.Should().NotBeNullOrEmpty("FR-013: must return provider source");
-        rate.Timestamp.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromMinutes(5),
-            "FR-014: must return timestamp indicating when rate was fetched");
+        Assert.NotNull(rate);
+        Assert.Equal(fromCurrency, rate!.FromCurrency);
+        Assert.Equal(toCurrency, rate.ToCurrency);
+        Assert.True(rate.Rate > 0);
+        Assert.False(string.IsNullOrEmpty(rate.Source));
+        Assert.True((DateTime.UtcNow - rate.Timestamp).Duration() < TimeSpan.FromMinutes(5));
 
         // FR-010: Should be from primary provider (Fawazahmed) or secondary (Frankfurter)
-        rate.Source.Should().Match(s => s.Contains("Fawazahmed") || s.Contains("Frankfurter"));
+        Assert.True(rate.Source.Contains("Fawazahmed") || rate.Source.Contains("Frankfurter"));
     }
 
     #endregion
@@ -67,15 +64,14 @@ public class UserStory2_LiveExchangeRateRetrievalTests : IClassFixture<CurrencyS
         var response = await _client.GetAsync("/currencies/v1/rates?from=USD&to=GBP&mode=live");
 
         // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.OK,
-            "FR-041: system must attempt providers in configured order until valid rate is found");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         var rate = await response.Content.ReadFromJsonAsync<ExchangeRateDto>();
-        rate.Should().NotBeNull();
-        rate!.Source.Should().NotBeNullOrEmpty("FR-013: must document provider source");
+        Assert.NotNull(rate);
+        Assert.False(string.IsNullOrEmpty(rate!.Source));
 
         // FR-044: System must handle provider timeout gracefully
-        rate.Rate.Should().BeGreaterThan(0);
+        Assert.True(rate.Rate > 0);
     }
 
     #endregion
@@ -95,23 +91,20 @@ public class UserStory2_LiveExchangeRateRetrievalTests : IClassFixture<CurrencyS
         if (response.StatusCode == HttpStatusCode.OK)
         {
             var rate = await response.Content.ReadFromJsonAsync<ExchangeRateDto>();
-            rate.Should().NotBeNull();
-            rate!.Rate.Should().BeGreaterThan(0,
-                "FR-012: system must compute transitive exchange rates when direct pair is unavailable");
+            Assert.NotNull(rate);
+            Assert.True(rate!.Rate > 0);
 
             // If transitive calculation was used, it should be indicated in metadata
             if (rate.IsTransitive)
             {
-                rate.IntermediaryCurrency.Should().NotBeNullOrEmpty(
-                    "FR-012: must indicate intermediary currency used (USD default)");
-                rate.CalculationDetails.Should().NotBeNullOrEmpty(
-                    "FR-012: must include calculation details for transitive rates");
+                Assert.False(string.IsNullOrEmpty(rate.IntermediaryCurrency));
+                Assert.False(string.IsNullOrEmpty(rate.CalculationDetails));
             }
         }
         else
         {
             // If neither direct nor transitive rate is available, should return appropriate error
-            response.StatusCode.Should().BeOneOf(HttpStatusCode.NotFound, HttpStatusCode.ServiceUnavailable);
+            Assert.Contains(response.StatusCode, new[] { HttpStatusCode.NotFound, HttpStatusCode.ServiceUnavailable });
         }
     }
 
@@ -124,7 +117,7 @@ public class UserStory2_LiveExchangeRateRetrievalTests : IClassFixture<CurrencyS
     {
         // Arrange - First request to populate cache
         var initialResponse = await _client.GetAsync("/currencies/v1/rates?from=USD&to=THB&mode=live");
-        initialResponse.StatusCode.Should().Be(HttpStatusCode.OK, "initial request should succeed");
+        Assert.Equal(HttpStatusCode.OK, initialResponse.StatusCode);
 
         // For this test to fully work, we'd need to simulate provider unavailability
         // Here we verify the contract exists
@@ -136,19 +129,19 @@ public class UserStory2_LiveExchangeRateRetrievalTests : IClassFixture<CurrencyS
         if (response.StatusCode == HttpStatusCode.OK)
         {
             var rate = await response.Content.ReadFromJsonAsync<ExchangeRateDto>();
-            rate.Should().NotBeNull();
+            Assert.NotNull(rate);
 
             // FR-018 & FR-055: If serving from cache during provider unavailability,
             // must include staleness indicator header
             if (response.Headers.Contains("X-Rate-Stale") || response.Headers.Contains("Warning"))
             {
-                rate!.IsStale.Should().BeTrue("staleness should be indicated in response body too");
+                Assert.True(rate!.IsStale);
             }
         }
         else
         {
             // FR-055: If no cache available, return 503
-            response.StatusCode.Should().Be(HttpStatusCode.ServiceUnavailable);
+            Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
         }
     }
 
@@ -161,7 +154,7 @@ public class UserStory2_LiveExchangeRateRetrievalTests : IClassFixture<CurrencyS
     {
         // Arrange - First request to populate cache
         var warmupResponse = await _client.GetAsync("/currencies/v1/rates?from=USD&to=EUR&mode=live");
-        warmupResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        Assert.Equal(HttpStatusCode.OK, warmupResponse.StatusCode);
 
         // Wait a moment to ensure cache is populated
         await Task.Delay(100);
@@ -172,13 +165,12 @@ public class UserStory2_LiveExchangeRateRetrievalTests : IClassFixture<CurrencyS
         stopwatch.Stop();
 
         // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
-        stopwatch.ElapsedMilliseconds.Should().BeLessThan(50,
-            "FR-033 & SC-002: cached rate query must be under 50ms");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.True(stopwatch.ElapsedMilliseconds < 50);
 
         var rate = await response.Content.ReadFromJsonAsync<ExchangeRateDto>();
-        rate.Should().NotBeNull();
-        rate!.Rate.Should().BeGreaterThan(0);
+        Assert.NotNull(rate);
+        Assert.True(rate!.Rate > 0);
 
         // FR-019: Verify caching is working (can check via cache headers or metrics)
         // FR-021: TTL should be applied (60-300 seconds default)
@@ -210,13 +202,13 @@ public class UserStory2_LiveExchangeRateRetrievalTests : IClassFixture<CurrencyS
         var results = await Task.WhenAll(tasks);
 
         // Assert - SC-002 & SC-003: p95 under 50ms, handles 1000 concurrent requests
-        results.Should().OnlyContain(r => r.Item1 == HttpStatusCode.OK);
+        Assert.All(results, r => Assert.Equal(HttpStatusCode.OK, r.Item1));
 
         var responseTimes = results.Select(r => r.Item2).OrderBy(t => t).ToList();
         var p95Index = (int)Math.Ceiling(responseTimes.Count * 0.95) - 1;
         var p95Time = responseTimes[p95Index];
 
-        p95Time.Should().BeLessThan(50, "SC-002: 95th percentile for cached rate queries must be under 50ms");
+        Assert.True(p95Time < 50);
     }
 
     #endregion
@@ -228,10 +220,10 @@ public class UserStory2_LiveExchangeRateRetrievalTests : IClassFixture<CurrencyS
     {
         // Arrange - First request to get ETag
         var initialResponse = await _client.GetAsync("/currencies/v1/rates?from=USD&to=EUR&mode=live");
-        initialResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        Assert.Equal(HttpStatusCode.OK, initialResponse.StatusCode);
 
         var etag = initialResponse.Headers.ETag?.Tag;
-        etag.Should().NotBeNullOrEmpty("FR-015: system must generate ETag for exchange rate responses");
+        Assert.False(string.IsNullOrEmpty(etag));
 
         // Act - Request with If-None-Match
         var request = new HttpRequestMessage(HttpMethod.Get, "/currencies/v1/rates?from=USD&to=EUR&mode=live");
@@ -248,14 +240,14 @@ public class UserStory2_LiveExchangeRateRetrievalTests : IClassFixture<CurrencyS
             var contentLength = response.Content.Headers.ContentLength;
             if (contentLength.HasValue)
             {
-                contentLength.Value.Should().BeLessThan(1, "304 response should have no body");
+                Assert.True(contentLength.Value < 1);
             }
         }
         else
         {
             // Content changed, should return 200 with new ETag
-            response.StatusCode.Should().Be(HttpStatusCode.OK);
-            response.Headers.ETag.Should().NotBeNull();
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.NotNull(response.Headers.ETag);
         }
     }
 
@@ -264,10 +256,10 @@ public class UserStory2_LiveExchangeRateRetrievalTests : IClassFixture<CurrencyS
     {
         // Arrange
         var initialResponse = await _client.GetAsync("/currencies/v1/rates?from=USD&to=GBP&mode=live");
-        initialResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        Assert.Equal(HttpStatusCode.OK, initialResponse.StatusCode);
 
         var lastModified = initialResponse.Content.Headers.LastModified;
-        lastModified.Should().NotBeNull("FR-016: system must support Last-Modified headers");
+        Assert.NotNull(lastModified);
 
         // Act - Request with If-Modified-Since
         var request = new HttpRequestMessage(HttpMethod.Get, "/currencies/v1/rates?from=USD&to=GBP&mode=live");
@@ -276,7 +268,7 @@ public class UserStory2_LiveExchangeRateRetrievalTests : IClassFixture<CurrencyS
         var response = await _client.SendAsync(request);
 
         // Assert - FR-017: System must honor If-Modified-Since headers
-        response.StatusCode.Should().BeOneOf(HttpStatusCode.OK, HttpStatusCode.NotModified);
+        Assert.Contains(response.StatusCode, new[] { HttpStatusCode.OK, HttpStatusCode.NotModified });
     }
 
     #endregion
@@ -296,11 +288,10 @@ public class UserStory2_LiveExchangeRateRetrievalTests : IClassFixture<CurrencyS
         var response = await _client.GetAsync($"/currencies/v1/rates?from={fromCurrency}&to={toCurrency}&mode=live");
 
         // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.BadRequest,
-            $"FR-048: system must validate and sanitize input - {reason}");
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
 
         var errorContent = await response.Content.ReadAsStringAsync();
-        errorContent.Should().NotBeNullOrEmpty("error message should be provided");
+        Assert.False(string.IsNullOrEmpty(errorContent));
     }
 
     #endregion

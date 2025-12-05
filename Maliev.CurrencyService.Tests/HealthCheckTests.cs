@@ -1,4 +1,3 @@
-using FluentAssertions;
 using Maliev.CurrencyService.Api.HealthChecks;
 using Maliev.CurrencyService.Data;
 using Microsoft.EntityFrameworkCore;
@@ -58,8 +57,8 @@ public class HealthCheckTests : IAsyncLifetime
         var result = await _healthCheck.CheckHealthAsync(context, CancellationToken.None);
 
         // Assert
-        result.Status.Should().Be(HealthStatus.Healthy);
-        result.Description.Should().StartWith("Database is healthy with");
+        Assert.Equal(HealthStatus.Healthy, result.Status);
+        Assert.StartsWith("Database is healthy with", result.Description);
     }
 
     [Fact]
@@ -78,9 +77,9 @@ public class HealthCheckTests : IAsyncLifetime
         var result = await invalidHealthCheck.CheckHealthAsync(context, CancellationToken.None);
 
         // Assert
-        result.Status.Should().Be(HealthStatus.Unhealthy);
-        result.Description.Should().StartWith("Database health check failed:");
-        result.Exception.Should().NotBeNull();
+        Assert.Equal(HealthStatus.Unhealthy, result.Status);
+        Assert.StartsWith("Database health check failed:", result.Description);
+        Assert.NotNull(result.Exception);
     }
 
     // Note: Cancellation test removed as in-memory database doesn't properly respect cancellation tokens

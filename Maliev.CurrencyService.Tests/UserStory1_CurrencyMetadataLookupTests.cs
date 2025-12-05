@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Json;
-using FluentAssertions;
 using Maliev.CurrencyService.Data;
 using Maliev.CurrencyService.Data.Models;
 using Microsoft.AspNetCore.Hosting;
@@ -47,15 +46,15 @@ public class UserStory1_CurrencyMetadataLookupTests : IClassFixture<CurrencyServ
         stopwatch.Stop();
 
         // Assert - SC-001: p95 response time under 50ms for cached lookups
-        response.StatusCode.Should().Be(HttpStatusCode.OK, "valid country code should return 200");
-        stopwatch.ElapsedMilliseconds.Should().BeLessThan(50, "FR-033: response time must be under 50ms for cached lookups");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.True(stopwatch.ElapsedMilliseconds < 50);
 
         var currency = await response.Content.ReadFromJsonAsync<CurrencyDto>();
-        currency.Should().NotBeNull();
-        currency!.Code.Should().Be(expectedCurrencyCode, "FR-003: system must resolve currency by ISO2 country code");
-        currency.Symbol.Should().NotBeNullOrEmpty("FR-001: currency metadata must include symbol");
-        currency.Name.Should().NotBeNullOrEmpty("FR-001: currency metadata must include name");
-        currency.DecimalPlaces.Should().BeGreaterThanOrEqualTo(0, "FR-001: currency metadata must include decimal places");
+        Assert.NotNull(currency);
+        Assert.Equal(expectedCurrencyCode, currency!.Code);
+        Assert.False(string.IsNullOrEmpty(currency.Symbol));
+        Assert.False(string.IsNullOrEmpty(currency.Name));
+        Assert.True(currency.DecimalPlaces >= 0);
     }
 
     #endregion
@@ -74,11 +73,11 @@ public class UserStory1_CurrencyMetadataLookupTests : IClassFixture<CurrencyServ
         var response = await _client.GetAsync($"/currencies/v1/countries/{countryCode}/currency");
 
         // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         var currency = await response.Content.ReadFromJsonAsync<CurrencyDto>();
-        currency.Should().NotBeNull();
-        currency!.Code.Should().Be(expectedCurrencyCode, "FR-004: system must resolve currency by ISO3 country code");
+        Assert.NotNull(currency);
+        Assert.Equal(expectedCurrencyCode, currency!.Code);
     }
 
     #endregion
@@ -96,10 +95,10 @@ public class UserStory1_CurrencyMetadataLookupTests : IClassFixture<CurrencyServ
         var response = await _client.GetAsync($"/currencies/v1/countries/{invalidCode}/currency");
 
         // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.NotFound, "FR-059: clear error messages for failure scenarios");
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
 
         var errorContent = await response.Content.ReadAsStringAsync();
-        errorContent.Should().Contain("country", "error message should indicate country code issue");
+        Assert.Contains("country", errorContent);
     }
 
     #endregion
@@ -117,12 +116,11 @@ public class UserStory1_CurrencyMetadataLookupTests : IClassFixture<CurrencyServ
         var response = await _client.GetAsync($"/currencies/v1/countries/{countryCode}/currency");
 
         // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         var currency = await response.Content.ReadFromJsonAsync<CurrencyDto>();
-        currency.Should().NotBeNull();
-        currency!.Code.Should().Be(expectedPrimaryCurrency,
-            "FR-007a: for countries with multiple currencies, system must return only the designated primary currency");
+        Assert.NotNull(currency);
+        Assert.Equal(expectedPrimaryCurrency, currency!.Code);
     }
 
     #endregion
@@ -136,22 +134,22 @@ public class UserStory1_CurrencyMetadataLookupTests : IClassFixture<CurrencyServ
         var response = await _client.GetAsync("/currencies/v1/currencies");
 
         // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         var pagedResult = await response.Content.ReadFromJsonAsync<PagedResult<CurrencyDto>>();
-        pagedResult.Should().NotBeNull("FR-002: system must provide endpoint to list all available currencies");
-        pagedResult!.Items.Should().NotBeEmpty();
-        pagedResult.TotalCount.Should().BeGreaterThan(0);
-        pagedResult.Page.Should().BeGreaterThan(0);
-        pagedResult.PageSize.Should().BeGreaterThan(0);
+        Assert.NotNull(pagedResult);
+        Assert.NotEmpty(pagedResult!.Items);
+        Assert.True(pagedResult.TotalCount > 0);
+        Assert.True(pagedResult.Page > 0);
+        Assert.True(pagedResult.PageSize > 0);
 
         // Verify each currency has required metadata (FR-001)
         foreach (var currency in pagedResult.Items)
         {
-            currency.Code.Should().NotBeNullOrEmpty();
-            currency.Symbol.Should().NotBeNullOrEmpty();
-            currency.Name.Should().NotBeNullOrEmpty();
-            currency.DecimalPlaces.Should().BeGreaterThanOrEqualTo(0);
+            Assert.False(string.IsNullOrEmpty(currency.Code));
+            Assert.False(string.IsNullOrEmpty(currency.Symbol));
+            Assert.False(string.IsNullOrEmpty(currency.Name));
+            Assert.True(currency.DecimalPlaces >= 0);
         }
     }
 
@@ -162,13 +160,13 @@ public class UserStory1_CurrencyMetadataLookupTests : IClassFixture<CurrencyServ
         var response = await _client.GetAsync("/currencies/v1/currencies?page=1&pageSize=10");
 
         // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         var pagedResult = await response.Content.ReadFromJsonAsync<PagedResult<CurrencyDto>>();
-        pagedResult.Should().NotBeNull();
-        pagedResult!.Page.Should().Be(1);
-        pagedResult.PageSize.Should().Be(10);
-        pagedResult.Items.Count().Should().BeLessThanOrEqualTo(10);
+        Assert.NotNull(pagedResult);
+        Assert.Equal(1, pagedResult!.Page);
+        Assert.Equal(10, pagedResult.PageSize);
+        Assert.True(pagedResult.Items.Count() <= 10);
     }
 
     #endregion
@@ -182,14 +180,14 @@ public class UserStory1_CurrencyMetadataLookupTests : IClassFixture<CurrencyServ
         var response = await _client.GetAsync("/currencies/v1/currencies");
 
         // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         var pagedResult = await response.Content.ReadFromJsonAsync<PagedResult<CurrencyDto>>();
-        pagedResult.Should().NotBeNull();
+        Assert.NotNull(pagedResult);
 
         var thb = pagedResult!.Items.FirstOrDefault(c => c.Code == "THB");
-        thb.Should().NotBeNull("FR-007: system must treat THB as the application primary currency");
-        thb!.IsPrimary.Should().BeTrue("THB should be marked as primary currency");
+        Assert.NotNull(thb);
+        Assert.True(thb!.IsPrimary);
     }
 
     #endregion
@@ -218,13 +216,13 @@ public class UserStory1_CurrencyMetadataLookupTests : IClassFixture<CurrencyServ
         var results = await Task.WhenAll(tasks);
 
         // Assert - FR-033 & SC-001: p95 under 50ms
-        results.Should().OnlyContain(r => r.Item1 == HttpStatusCode.OK, "all requests should succeed");
+        Assert.All(results, r => Assert.Equal(HttpStatusCode.OK, r.Item1));
 
         var responseTimes = results.Select(r => r.Item2).OrderBy(t => t).ToList();
         var p95Index = (int)Math.Ceiling(responseTimes.Count * 0.95) - 1;
         var p95Time = responseTimes[p95Index];
 
-        p95Time.Should().BeLessThan(50, "SC-001: 95th percentile response time must be under 50ms");
+        Assert.True(p95Time < 50);
     }
 
     #endregion
@@ -284,23 +282,15 @@ public class CurrencyServiceTestFixture : IAsyncDisposable
         {
             builder.UseEnvironment("Testing");
 
-            // Override connection string for tests (Constitution Principle IV: PostgreSQL-only)
-            builder.ConfigureAppConfiguration((context, config) =>
-            {
-                // Add connection string override using Testcontainers connection string
-                config.Sources.Add(new Microsoft.Extensions.Configuration.Memory.MemoryConfigurationSource
-                {
-                    InitialData = new Dictionary<string, string?>
-                    {
-                        ["ConnectionStrings:CurrencyDbContext"] = _postgresContainer.GetConnectionString()
-                    }!
-                });
-            });
-
             builder.ConfigureServices(services =>
             {
                 // Constitution Principle IV: Use PostgreSQL for all tests (no InMemoryDatabase)
-                // Program.cs will register PostgreSQL DbContext - do not override it
+                // Note: AddPostgresDbContext skips registration in Testing environment,
+                // so we must manually register DbContext here with Testcontainers connection string
+                services.AddDbContext<CurrencyServiceDbContext>(options =>
+                {
+                    options.UseNpgsql(_postgresContainer.GetConnectionString());
+                });
 
                 // Remove Redis cache service and use in-memory cache for tests
                 var cacheDescriptor = services.SingleOrDefault(d => d.ServiceType.Name.Contains("ICacheService"));

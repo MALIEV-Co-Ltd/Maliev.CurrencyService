@@ -1,6 +1,5 @@
 using System.Net;
 using System.Net.Http.Json;
-using FluentAssertions;
 using Xunit;
 
 namespace Maliev.CurrencyService.Tests;
@@ -34,19 +33,17 @@ public class UserStory3_SnapshotExchangeRateQueryTests : IClassFixture<CurrencyS
         if (response.StatusCode == HttpStatusCode.OK)
         {
             var rate = await response.Content.ReadFromJsonAsync<SnapshotRateDto>();
-            rate.Should().NotBeNull();
-            rate!.FromCurrency.Should().Be("USD");
-            rate.ToCurrency.Should().Be("THB");
-            rate.Rate.Should().BeGreaterThan(0);
-            rate.SnapshotDate.Date.Should().Be(testDate.Date,
-                "FR-009: snapshot query must return rate for specified date");
-            rate.IsSnapshot.Should().BeTrue("response should indicate this is snapshot data, not live");
+            Assert.NotNull(rate);
+            Assert.Equal("USD", rate!.FromCurrency);
+            Assert.Equal("THB", rate.ToCurrency);
+            Assert.True(rate.Rate > 0);
+            Assert.Equal(testDate.Date, rate.SnapshotDate.Date);
+            Assert.True(rate.IsSnapshot);
         }
         else
         {
             // If snapshot doesn't exist for this date, should return 404
-            response.StatusCode.Should().Be(HttpStatusCode.NotFound,
-                "FR-009: if no snapshot exists for requested date, return 404");
+            Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         }
     }
 
@@ -64,11 +61,10 @@ public class UserStory3_SnapshotExchangeRateQueryTests : IClassFixture<CurrencyS
         var response = await _client.GetAsync($"/currencies/v1/rates?from=USD&to=THB&mode=snapshot&date={nonExistentDate:yyyy-MM-dd}");
 
         // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.NotFound,
-            "FR-009: system must return 404 error indicating no snapshot available for that date");
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
 
         var errorContent = await response.Content.ReadAsStringAsync();
-        errorContent.Should().Contain("snapshot", "error message should indicate snapshot issue");
+        Assert.Contains("snapshot", errorContent);
     }
 
     [Theory]
@@ -81,8 +77,7 @@ public class UserStory3_SnapshotExchangeRateQueryTests : IClassFixture<CurrencyS
         var response = await _client.GetAsync($"/currencies/v1/rates?from=USD&to=THB&mode=snapshot&date={invalidDate}");
 
         // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.BadRequest,
-            "FR-048: system must validate and sanitize date input");
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     #endregion
@@ -103,7 +98,7 @@ public class UserStory3_SnapshotExchangeRateQueryTests : IClassFixture<CurrencyS
         }
 
         var etag = initialResponse.Headers.ETag?.Tag;
-        etag.Should().NotBeNullOrEmpty("FR-015: snapshots must support ETag");
+        Assert.False(string.IsNullOrEmpty(etag));
 
         // Act - Request with If-None-Match
         var request = new HttpRequestMessage(HttpMethod.Get,
@@ -113,8 +108,7 @@ public class UserStory3_SnapshotExchangeRateQueryTests : IClassFixture<CurrencyS
         var response = await _client.SendAsync(request);
 
         // Assert - FR-017: If snapshot hasn't changed, return 304
-        response.StatusCode.Should().Be(HttpStatusCode.NotModified,
-            "snapshot data shouldn't change, so ETag should match");
+        Assert.Equal(HttpStatusCode.NotModified, response.StatusCode);
     }
 
     #endregion
@@ -135,7 +129,7 @@ public class UserStory3_SnapshotExchangeRateQueryTests : IClassFixture<CurrencyS
         }
 
         var lastModified = initialResponse.Content.Headers.LastModified;
-        lastModified.Should().NotBeNull("FR-016: snapshots must support Last-Modified header");
+        Assert.NotNull(lastModified);
 
         // Act - Request with If-Modified-Since
         var request = new HttpRequestMessage(HttpMethod.Get,
@@ -145,8 +139,7 @@ public class UserStory3_SnapshotExchangeRateQueryTests : IClassFixture<CurrencyS
         var response = await _client.SendAsync(request);
 
         // Assert - FR-017: Snapshot hasn't been updated since that time
-        response.StatusCode.Should().Be(HttpStatusCode.NotModified,
-            "snapshot data is immutable, so should return 304");
+        Assert.Equal(HttpStatusCode.NotModified, response.StatusCode);
     }
 
     #endregion
@@ -160,11 +153,10 @@ public class UserStory3_SnapshotExchangeRateQueryTests : IClassFixture<CurrencyS
         var response = await _client.GetAsync("/currencies/v1/rates?from=USD&to=THB&mode=snapshot");
 
         // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.BadRequest,
-            "FR-009: mode=snapshot requires date parameter");
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
 
         var errorContent = await response.Content.ReadAsStringAsync();
-        errorContent.Should().Contain("date", "error should indicate missing date parameter");
+        Assert.Contains("date", errorContent);
     }
 
     [Fact]
@@ -176,13 +168,13 @@ public class UserStory3_SnapshotExchangeRateQueryTests : IClassFixture<CurrencyS
         // Assert
         // System can either ignore the date parameter for live mode, or return error
         // Both behaviors are acceptable as long as it's consistent
-        response.StatusCode.Should().BeOneOf(HttpStatusCode.OK, HttpStatusCode.BadRequest);
+        Assert.Contains(response.StatusCode, new[] { HttpStatusCode.OK, HttpStatusCode.BadRequest });
 
         if (response.StatusCode == HttpStatusCode.OK)
         {
             var rate = await response.Content.ReadFromJsonAsync<ExchangeRateDto>();
-            rate.Should().NotBeNull();
-            rate!.IsSnapshot.Should().BeFalse("live mode should not return snapshot data");
+            Assert.NotNull(rate);
+            Assert.False(rate!.IsSnapshot);
         }
     }
 
@@ -201,7 +193,7 @@ public class UserStory3_SnapshotExchangeRateQueryTests : IClassFixture<CurrencyS
 
         // Assert
         // FR-031: Old snapshots should be purged - snapshots older than retention window should not be accessible
-        response.StatusCode.Should().BeOneOf(HttpStatusCode.NotFound, HttpStatusCode.Gone);
+        Assert.Contains(response.StatusCode, new[] { HttpStatusCode.NotFound, HttpStatusCode.Gone });
     }
 
     #endregion
@@ -224,9 +216,8 @@ public class UserStory3_SnapshotExchangeRateQueryTests : IClassFixture<CurrencyS
         if (response.StatusCode == HttpStatusCode.OK)
         {
             var rate = await response.Content.ReadFromJsonAsync<SnapshotRateDto>();
-            rate.Should().NotBeNull();
-            rate!.Timestamp.Kind.Should().Be(DateTimeKind.Utc,
-                "edge case: all timestamps stored and returned in UTC");
+            Assert.NotNull(rate);
+            Assert.Equal(DateTimeKind.Utc, rate!.Timestamp.Kind);
         }
     }
 

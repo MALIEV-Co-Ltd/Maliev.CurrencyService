@@ -1,6 +1,5 @@
 using System.Net;
 using System.Net.Http.Json;
-using FluentAssertions;
 using Xunit;
 
 namespace Maliev.CurrencyService.Tests;
@@ -40,13 +39,11 @@ public class EdgeCaseTests : IClassFixture<CurrencyServiceTestFixture>
         if (response.StatusCode == HttpStatusCode.ServiceUnavailable)
         {
             // Edge case answer: 503 with retry-after
-            response.Headers.RetryAfter.Should().NotBeNull(
-                "Edge Case 1: Must include retry-after header when providers unavailable");
+            Assert.NotNull(response.Headers.RetryAfter);
 
             var error = await response.Content.ReadFromJsonAsync<ErrorResponse>();
-            error.Should().NotBeNull();
-            error!.Message.Should().Contain("unavailable",
-                "Edge Case 1: Must provide clear error message indicating temporary unavailability");
+            Assert.NotNull(error);
+            Assert.Contains("unavailable", error!.Message);
         }
     }
 
@@ -67,21 +64,19 @@ public class EdgeCaseTests : IClassFixture<CurrencyServiceTestFixture>
         if (response.StatusCode == HttpStatusCode.OK)
         {
             var rate = await response.Content.ReadFromJsonAsync<ExchangeRateDto>();
-            rate.Should().NotBeNull();
+            Assert.NotNull(rate);
 
             if (rate!.IsTransitive)
             {
                 // Edge Case 2: If USD unavailable, should try EUR or GBP
-                rate.IntermediaryCurrency.Should().Match(c =>
-                    c == "USD" || c == "EUR" || c == "GBP",
-                    "Edge Case 2: Should attempt alternative intermediary currencies (EUR, GBP) if USD unavailable");
+                Assert.True(rate.IntermediaryCurrency == "USD" || rate.IntermediaryCurrency == "EUR" || rate.IntermediaryCurrency == "GBP");
             }
         }
         else if (response.StatusCode == HttpStatusCode.NotFound || response.StatusCode == HttpStatusCode.ServiceUnavailable)
         {
             // Edge Case 2: If no path exists, return error
             var error = await response.Content.ReadAsStringAsync();
-            error.Should().NotBeNullOrEmpty("should provide error message when no conversion path exists");
+            Assert.False(string.IsNullOrEmpty(error));
         }
     }
 
@@ -110,12 +105,11 @@ public class EdgeCaseTests : IClassFixture<CurrencyServiceTestFixture>
 
             if (hasWarning)
             {
-                hasWarning.Should().BeTrue(
-                    "Edge Case 3: Should include warning header indicating currency is deprecated");
+                Assert.True(hasWarning);
             }
 
             var rate = await response.Content.ReadFromJsonAsync<ExchangeRateDto>();
-            rate.Should().NotBeNull("Edge Case 3: Should return rate if snapshot data exists");
+            Assert.NotNull(rate);
         }
     }
 
@@ -148,17 +142,14 @@ public class EdgeCaseTests : IClassFixture<CurrencyServiceTestFixture>
         // Edge Case 4: FR-047 - Rate limiting at 100 req/min per IP
         if (rateLimitedCount > 0)
         {
-            rateLimitedCount.Should().BeGreaterThan(0,
-                "Edge Case 4: System should apply rate limiting when volume exceeds limits");
+            Assert.True(rateLimitedCount > 0);
 
             var rateLimitedResponse = responses.First(r => r.StatusCode == HttpStatusCode.TooManyRequests);
-            rateLimitedResponse.Headers.RetryAfter.Should().NotBeNull(
-                "Edge Case 4: Rate limited response should include Retry-After header");
+            Assert.NotNull(rateLimitedResponse.Headers.RetryAfter);
         }
 
         // Most requests should succeed due to caching
-        successCount.Should().BeGreaterThan(0,
-            "Edge Case 4: Aggressive caching should allow most requests to succeed");
+        Assert.True(successCount > 0);
 
         // Some responses might be from stale cache
         foreach (var response in responses.Where(r => r.StatusCode == HttpStatusCode.OK))
@@ -167,8 +158,7 @@ public class EdgeCaseTests : IClassFixture<CurrencyServiceTestFixture>
             {
                 // Edge Case 4: Stale cache served with headers
                 var rate = await response.Content.ReadFromJsonAsync<ExchangeRateDto>();
-                rate!.IsStale.Should().BeTrue(
-                    "Edge Case 4: If serving stale cache, should indicate staleness");
+                Assert.True(rate!.IsStale);
             }
         }
     }
@@ -190,8 +180,7 @@ public class EdgeCaseTests : IClassFixture<CurrencyServiceTestFixture>
         var response = await _client.GetAsync("/currencies/liveness");
 
         // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.OK,
-            "Edge Case 5: Cache warming failures should not block service startup");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         // Check if partial cache warming occurred
         var metricsResponse = await _client.GetAsync("/metrics");
@@ -199,7 +188,7 @@ public class EdgeCaseTests : IClassFixture<CurrencyServiceTestFixture>
         {
             var metrics = await metricsResponse.Content.ReadAsStringAsync();
             // Edge Case 5: Partial failures should be logged but not prevent startup
-            metrics.Should().NotBeNullOrEmpty();
+            Assert.False(string.IsNullOrEmpty(metrics));
         }
     }
 
@@ -227,15 +216,14 @@ public class EdgeCaseTests : IClassFixture<CurrencyServiceTestFixture>
         var responses = await Task.WhenAll(task1, task2);
 
         // Assert - Edge Case 6: Both should be queued
-        responses[0].StatusCode.Should().BeOneOf(HttpStatusCode.Accepted, HttpStatusCode.OK);
-        responses[1].StatusCode.Should().BeOneOf(HttpStatusCode.Accepted, HttpStatusCode.OK);
+        Assert.Contains(responses[0].StatusCode, new[] { HttpStatusCode.Accepted, HttpStatusCode.OK });
+        Assert.Contains(responses[1].StatusCode, new[] { HttpStatusCode.Accepted, HttpStatusCode.OK });
 
         // Verify they have different batch IDs (not processed as one)
         var result1 = await responses[0].Content.ReadFromJsonAsync<SnapshotIngestionResult>();
         var result2 = await responses[1].Content.ReadFromJsonAsync<SnapshotIngestionResult>();
 
-        result1!.BatchId.Should().NotBe(result2!.BatchId,
-            "Edge Case 6: Concurrent submissions should be queued separately");
+        Assert.NotEqual(result2!.BatchId, result1!.BatchId);
     }
 
     #endregion
@@ -268,8 +256,7 @@ public class EdgeCaseTests : IClassFixture<CurrencyServiceTestFixture>
         if (response.StatusCode == HttpStatusCode.BadRequest)
         {
             var error = await response.Content.ReadAsStringAsync();
-            error.Should().Contain("validation",
-                "Edge Case 7: System must reject entire batch for data consistency");
+            Assert.Contains("validation", error);
         }
         else if (response.StatusCode == HttpStatusCode.Accepted)
         {
@@ -280,8 +267,7 @@ public class EdgeCaseTests : IClassFixture<CurrencyServiceTestFixture>
             var statusResponse = await _client.GetAsync($"/currencies/v1/admin/snapshots/{result!.BatchId}/status");
             var status = await statusResponse.Content.ReadFromJsonAsync<SnapshotIngestionStatus>();
 
-            status!.Status.Should().Be("Failed",
-                "Edge Case 7: Partially valid batch must be rejected entirely");
+            Assert.Equal("Failed", status!.Status);
         }
     }
 
@@ -305,21 +291,18 @@ public class EdgeCaseTests : IClassFixture<CurrencyServiceTestFixture>
         if (response.StatusCode == HttpStatusCode.OK)
         {
             var rate = await response.Content.ReadFromJsonAsync<SnapshotRateDto>();
-            rate.Should().NotBeNull();
+            Assert.NotNull(rate);
 
             // Edge Case 8: All timestamps in UTC
-            rate!.Timestamp.Kind.Should().Be(DateTimeKind.Utc,
-                "Edge Case 8: All timestamps must be stored and returned in UTC");
+            Assert.Equal(DateTimeKind.Utc, rate!.Timestamp.Kind);
 
-            rate.SnapshotDate.Kind.Should().Be(DateTimeKind.Utc,
-                "Edge Case 8: Date-based queries use UTC date boundaries");
+            Assert.Equal(DateTimeKind.Utc, rate.SnapshotDate.Kind);
         }
 
         // Check Last-Modified header
         if (response.Content.Headers.LastModified.HasValue)
         {
-            response.Content.Headers.LastModified.Value.Offset.Should().Be(TimeSpan.Zero,
-                "Edge Case 8: Last-Modified header should use UTC");
+            Assert.Equal(TimeSpan.Zero, response.Content.Headers.LastModified.Value.Offset);
         }
     }
 
@@ -355,16 +338,14 @@ public class EdgeCaseTests : IClassFixture<CurrencyServiceTestFixture>
 
         // Assert - SC-003
         var successCount = results.Count(r => r.Item1 == HttpStatusCode.OK);
-        successCount.Should().Be(concurrentRequests,
-            "SC-003: System must successfully serve 1000 concurrent read requests");
+        Assert.Equal(concurrentRequests, successCount);
 
         var responseTimes = results.Select(r => r.Item2).ToList();
         var avgTime = responseTimes.Average();
         var p99Index = (int)Math.Ceiling(responseTimes.Count * 0.99) - 1;
         var p99Time = responseTimes.OrderBy(t => t).ElementAt(p99Index);
 
-        p99Time.Should().BeLessThan(200,
-            "SC-006: p99 response time should be under 200ms even under load");
+        Assert.True(p99Time < 200);
     }
 
     #endregion
@@ -386,12 +367,11 @@ public class EdgeCaseTests : IClassFixture<CurrencyServiceTestFixture>
         var response = await _client.GetAsync($"/currencies/v1/countries/{countryCode}/currency");
 
         // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         var currency = await response.Content.ReadFromJsonAsync<CurrencyDto>();
-        currency.Should().NotBeNull();
-        currency!.Code.Should().Be(expectedCurrency,
-            "SC-011: Country resolution must return correct currency");
+        Assert.NotNull(currency);
+        Assert.Equal(expectedCurrency, currency!.Code);
     }
 
     [Fact]
@@ -416,13 +396,11 @@ public class EdgeCaseTests : IClassFixture<CurrencyServiceTestFixture>
         if (responses.Count > 1)
         {
             var firstRate = responses[0].Rate;
-            responses.Skip(1).Should().OnlyContain(r => r.Rate == firstRate,
-                "SC-012: Transitive conversions must produce deterministic results");
+            Assert.All(responses.Skip(1), r => Assert.Equal(firstRate, r.Rate));
 
             // Precision to at least 6 decimal places
             var rateString = firstRate.ToString("F6");
-            rateString.Should().NotBeNullOrEmpty(
-                "SC-012: Precision to at least 6 decimal places");
+            Assert.False(string.IsNullOrEmpty(rateString));
         }
     }
 
@@ -433,10 +411,10 @@ public class EdgeCaseTests : IClassFixture<CurrencyServiceTestFixture>
 
         // Arrange - First request to get ETag
         var firstResponse = await _client.GetAsync("/currencies/v1/rates?from=USD&to=EUR&mode=live");
-        firstResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        Assert.Equal(HttpStatusCode.OK, firstResponse.StatusCode);
 
         var etag = firstResponse.Headers.ETag?.Tag;
-        etag.Should().NotBeNullOrEmpty("SC-013: ETags must be supported");
+        Assert.False(string.IsNullOrEmpty(etag));
 
         var firstSize = firstResponse.Content.Headers.ContentLength ?? 0;
 
@@ -452,8 +430,7 @@ public class EdgeCaseTests : IClassFixture<CurrencyServiceTestFixture>
             var secondSize = response.Content.Headers.ContentLength ?? 0;
             var bandwidthReduction = ((double)(firstSize - secondSize) / firstSize) * 100;
 
-            bandwidthReduction.Should().BeGreaterThanOrEqualTo(40,
-                "SC-013: ETag usage should reduce bandwidth by at least 40%");
+            Assert.True(bandwidthReduction >= 40);
         }
     }
 

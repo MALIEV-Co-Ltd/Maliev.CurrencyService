@@ -2,7 +2,6 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
-using FluentAssertions;
 using Xunit;
 
 namespace Maliev.CurrencyService.Tests;
@@ -43,13 +42,13 @@ public class UserStory4_SnapshotBatchIngestionTests : IClassFixture<CurrencyServ
         var response = await _client.PostAsync("/currencies/v1/admin/snapshots/ingest", content);
 
         // Assert
-        response.StatusCode.Should().BeOneOf(HttpStatusCode.Accepted, HttpStatusCode.OK);
+        Assert.Contains(response.StatusCode, new[] { HttpStatusCode.Accepted, HttpStatusCode.OK });
 
         var result = await response.Content.ReadFromJsonAsync<SnapshotIngestionResult>();
-        result.Should().NotBeNull("FR-027: system must process snapshot ingestion asynchronously via background jobs");
-        result!.BatchId.Should().NotBeEmpty("system should return batch ID for tracking");
-        result.Status.Should().BeOneOf("Queued", "Processing", "Completed");
-        result.RecordCount.Should().Be(4, "should report number of records in batch");
+        Assert.NotNull(result); // FR-027: system must process snapshot ingestion asynchronously via background jobs
+        Assert.False(string.IsNullOrEmpty(result!.BatchId)); // system should return batch ID for tracking
+        Assert.Contains(result.Status, new[] { "Queued", "Processing", "Completed" });
+        Assert.Equal(4, result.RecordCount); // should report number of records in batch
     }
 
     #endregion
@@ -75,15 +74,14 @@ public class UserStory4_SnapshotBatchIngestionTests : IClassFixture<CurrencyServ
         var response = await _client.PostAsync("/currencies/v1/admin/snapshots/ingest?dryRun=true", content);
 
         // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.OK,
-            "FR-028: dry-run should validate and return report without applying changes");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode); // FR-028: dry-run should validate and return report without applying changes
 
         var result = await response.Content.ReadFromJsonAsync<ValidationReport>();
-        result.Should().NotBeNull();
-        result!.IsValid.Should().BeTrue("valid batch should pass validation");
-        result.ValidationErrors.Should().BeEmpty();
-        result.RecordCount.Should().Be(2);
-        result.IsDryRun.Should().BeTrue("should indicate this was a dry run");
+        Assert.NotNull(result);
+        Assert.True(result!.IsValid); // valid batch should pass validation
+        Assert.Empty(result.ValidationErrors);
+        Assert.Equal(2, result.RecordCount);
+        Assert.True(result.IsDryRun); // should indicate this was a dry run
     }
 
     [Fact]
@@ -106,14 +104,13 @@ public class UserStory4_SnapshotBatchIngestionTests : IClassFixture<CurrencyServ
         var response = await _client.PostAsync("/currencies/v1/admin/snapshots/ingest?dryRun=true", content);
 
         // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.OK, "dry-run should return validation report");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode); // dry-run should return validation report
 
         var result = await response.Content.ReadFromJsonAsync<ValidationReport>();
-        result.Should().NotBeNull();
-        result!.IsValid.Should().BeFalse("invalid batch should fail validation");
-        result.ValidationErrors.Should().NotBeEmpty("should contain detailed error report");
-        result.ValidationErrors.Should().Contain(e => e.Contains("INVALID") || e.Contains("currency"),
-            "should report invalid currency code");
+        Assert.NotNull(result);
+        Assert.False(result!.IsValid); // invalid batch should fail validation
+        Assert.NotEmpty(result.ValidationErrors); // should contain detailed error report
+        Assert.Contains(result.ValidationErrors, e => e.Contains("INVALID") || e.Contains("currency")); // should report invalid currency code
     }
 
     #endregion
@@ -125,7 +122,7 @@ public class UserStory4_SnapshotBatchIngestionTests : IClassFixture<CurrencyServ
     {
         // Arrange - First, get a live rate to populate cache
         var warmupResponse = await _client.GetAsync("/currencies/v1/rates?from=USD&to=THB&mode=live");
-        warmupResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        Assert.Equal(HttpStatusCode.OK, warmupResponse.StatusCode);
 
         // Submit snapshot batch
         var snapshotBatch = new[]
@@ -160,8 +157,8 @@ public class UserStory4_SnapshotBatchIngestionTests : IClassFixture<CurrencyServ
         }
 
         // Assert
-        status.Should().NotBeNull();
-        status!.Status.Should().Be("Completed", "FR-027: processing should complete successfully");
+        Assert.NotNull(status);
+        Assert.Equal("Completed", status!.Status); // FR-027: processing should complete successfully
 
         // FR-023 & FR-030: Cache should be invalidated atomically
         // Query the same rate again - should get fresh data
@@ -169,7 +166,7 @@ public class UserStory4_SnapshotBatchIngestionTests : IClassFixture<CurrencyServ
         if (freshResponse.StatusCode == HttpStatusCode.OK)
         {
             var freshRate = await freshResponse.Content.ReadFromJsonAsync<SnapshotRateDto>();
-            freshRate.Should().NotBeNull();
+            Assert.NotNull(freshRate);
             // SC-010: 99.9% cache invalidation success rate
         }
     }
@@ -203,7 +200,7 @@ public class UserStory4_SnapshotBatchIngestionTests : IClassFixture<CurrencyServ
         if (response.StatusCode == HttpStatusCode.BadRequest)
         {
             var error = await response.Content.ReadAsStringAsync();
-            error.Should().Contain("validation", "should indicate validation failure");
+            Assert.Contains("validation", error); // should indicate validation failure
         }
         else if (response.StatusCode == HttpStatusCode.Accepted)
         {
@@ -215,8 +212,8 @@ public class UserStory4_SnapshotBatchIngestionTests : IClassFixture<CurrencyServ
             var statusResponse = await _client.GetAsync($"/currencies/v1/admin/snapshots/{result!.BatchId}/status");
             var status = await statusResponse.Content.ReadFromJsonAsync<SnapshotIngestionStatus>();
 
-            status!.Status.Should().Be("Failed", "FR-028a: batch with invalid data should be rejected");
-            status.ErrorMessage.Should().NotBeNullOrEmpty("should provide detailed error report");
+            Assert.Equal("Failed", status!.Status); // FR-028a: batch with invalid data should be rejected
+            Assert.False(string.IsNullOrEmpty(status.ErrorMessage)); // should provide detailed error report
         }
     }
 
@@ -237,7 +234,7 @@ public class UserStory4_SnapshotBatchIngestionTests : IClassFixture<CurrencyServ
         var response = await _client.GetAsync($"/currencies/v1/rates?from=USD&to=EUR&mode=snapshot&date={oldDate:yyyy-MM-dd}");
 
         // Assert - FR-031: snapshots older than retention window should be purged
-        response.StatusCode.Should().BeOneOf(HttpStatusCode.NotFound, HttpStatusCode.Gone);
+        Assert.Contains(response.StatusCode, new[] { HttpStatusCode.NotFound, HttpStatusCode.Gone });
     }
 
     #endregion
@@ -262,10 +259,10 @@ public class UserStory4_SnapshotBatchIngestionTests : IClassFixture<CurrencyServ
         var response = await _client.PostAsync("/currencies/v1/admin/snapshots/ingest", content);
 
         // Assert
-        response.StatusCode.Should().BeOneOf(HttpStatusCode.Accepted, HttpStatusCode.OK);
+        Assert.Contains(response.StatusCode, new[] { HttpStatusCode.Accepted, HttpStatusCode.OK });
 
         var result = await response.Content.ReadFromJsonAsync<SnapshotIngestionResult>();
-        result.Should().NotBeNull();
+        Assert.NotNull(result);
 
         // FR-032: System must log snapshot ingestion operations with timestamp, source, and record counts
         // Verify via audit endpoint if available
@@ -273,10 +270,10 @@ public class UserStory4_SnapshotBatchIngestionTests : IClassFixture<CurrencyServ
         if (auditResponse.StatusCode == HttpStatusCode.OK)
         {
             var auditLog = await auditResponse.Content.ReadFromJsonAsync<SnapshotAuditLog>();
-            auditLog.Should().NotBeNull();
-            auditLog!.BatchId.Should().Be(result.BatchId);
-            auditLog.Timestamp.Should().BeCloseTo(DateTime.UtcNow, TimeSpan.FromMinutes(5));
-            auditLog.RecordCount.Should().Be(1);
+            Assert.NotNull(auditLog);
+            Assert.Equal(result.BatchId, auditLog!.BatchId);
+            Assert.InRange(auditLog.Timestamp, DateTime.UtcNow.AddMinutes(-5), DateTime.UtcNow.AddMinutes(5));
+            Assert.Equal(1, auditLog.RecordCount);
         }
     }
 
@@ -304,13 +301,13 @@ public class UserStory4_SnapshotBatchIngestionTests : IClassFixture<CurrencyServ
         var responses = await Task.WhenAll(task1, task2);
 
         // Assert - Both should be accepted and queued
-        responses[0].StatusCode.Should().BeOneOf(HttpStatusCode.Accepted, HttpStatusCode.OK);
-        responses[1].StatusCode.Should().BeOneOf(HttpStatusCode.Accepted, HttpStatusCode.OK);
+        Assert.Contains(responses[0].StatusCode, new[] { HttpStatusCode.Accepted, HttpStatusCode.OK });
+        Assert.Contains(responses[1].StatusCode, new[] { HttpStatusCode.Accepted, HttpStatusCode.OK });
 
         var result1 = await responses[0].Content.ReadFromJsonAsync<SnapshotIngestionResult>();
         var result2 = await responses[1].Content.ReadFromJsonAsync<SnapshotIngestionResult>();
 
-        result1!.BatchId.Should().NotBe(result2!.BatchId, "concurrent submissions should get different batch IDs");
+        Assert.NotEqual(result1!.BatchId, result2!.BatchId); // concurrent submissions should get different batch IDs
         // Both should be queued; processing happens serially
     }
 
@@ -332,8 +329,7 @@ public class UserStory4_SnapshotBatchIngestionTests : IClassFixture<CurrencyServ
         var response = await unauthClient.PostAsync("/currencies/v1/admin/snapshots/ingest", content);
 
         // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized,
-            "FR-046: system must enforce RBAC for admin endpoints");
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode); // FR-046: system must enforce RBAC for admin endpoints
     }
 
     #endregion
@@ -364,8 +360,7 @@ public class UserStory4_SnapshotBatchIngestionTests : IClassFixture<CurrencyServ
         // Assert - Data should not be visible until processing completes
         if (result!.Status == "Queued" || result.Status == "Processing")
         {
-            immediateQueryResponse.StatusCode.Should().Be(HttpStatusCode.NotFound,
-                "FR-029: staged data should not be visible until committed");
+            Assert.Equal(HttpStatusCode.NotFound, immediateQueryResponse.StatusCode); // FR-029: staged data should not be visible until committed
         }
     }
 
@@ -413,10 +408,9 @@ public class UserStory4_SnapshotBatchIngestionTests : IClassFixture<CurrencyServ
         stopwatch.Stop();
 
         // Assert
-        status.Should().NotBeNull();
-        status!.Status.Should().Be("Completed");
-        stopwatch.Elapsed.TotalSeconds.Should().BeLessThan(60,
-            "SC-007: 10,000 record batch must complete within 60 seconds");
+        Assert.NotNull(status);
+        Assert.Equal("Completed", status!.Status);
+        Assert.True(stopwatch.Elapsed.TotalSeconds < 60); // SC-007: 10,000 record batch must complete within 60 seconds
     }
 
     #endregion

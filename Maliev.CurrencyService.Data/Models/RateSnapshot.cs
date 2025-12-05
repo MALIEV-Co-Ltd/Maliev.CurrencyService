@@ -10,14 +10,15 @@ namespace Maliev.CurrencyService.Data.Models;
 /// <remarks>
 /// Stores point-in-time exchange rates for compliance and reporting (FR-009).
 /// Snapshots are grouped by batch_id for bulk import operations.
-/// Table: rate_snapshots (snake_case via EFCore.NamingConventions)
+/// Table and column names use snake_case via explicit [Table] and [Column] attributes.
+/// Indexes are configured in RateSnapshotConfiguration.
 /// </remarks>
 [Table("rate_snapshots")]
-[Index(nameof(FromCurrency), nameof(ToCurrency), nameof(SnapshotDate), IsUnique = true)]
-[Index(nameof(BatchId))]
-[Index(nameof(SnapshotDate))]
 public class RateSnapshot
 {
+    /// <summary>
+    /// Unique identifier for the rate snapshot entry.
+    /// </summary>
     [Key]
     [Column("id")]
     public Guid Id { get; set; }

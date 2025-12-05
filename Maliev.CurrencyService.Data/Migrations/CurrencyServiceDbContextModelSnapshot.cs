@@ -17,7 +17,7 @@ namespace Maliev.CurrencyService.Data.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "9.0.0")
+                .HasAnnotation("ProductVersion", "10.0.0")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -62,8 +62,7 @@ namespace Maliev.CurrencyService.Data.Migrations
                         .HasDefaultValue(true)
                         .HasColumnName("is_primary");
 
-                    b.HasKey("Id")
-                        .HasName("pk_country_currencies");
+                    b.HasKey("Id");
 
                     b.HasIndex("CurrencyCode")
                         .HasDatabaseName("ix_country_currencies_currency_code");
@@ -75,14 +74,6 @@ namespace Maliev.CurrencyService.Data.Migrations
                     b.HasIndex("CountryIso3", "CurrencyCode")
                         .IsUnique()
                         .HasDatabaseName("ix_country_iso3_currency");
-
-                    b.HasIndex(new[] { "CountryIso2", "CurrencyCode" }, "ix_country_iso2_currency")
-                        .IsUnique()
-                        .HasDatabaseName("ix_country_currencies_country_iso2_currency_code");
-
-                    b.HasIndex(new[] { "CountryIso3", "CurrencyCode" }, "ix_country_iso3_currency")
-                        .IsUnique()
-                        .HasDatabaseName("ix_country_currencies_country_iso3_currency_code");
 
                     b.ToTable("country_currencies", (string)null);
                 });
@@ -144,15 +135,13 @@ namespace Maliev.CurrencyService.Data.Migrations
                         .HasDefaultValueSql("NOW()");
 
                     b.Property<byte[]>("Version")
-                        .IsConcurrencyToken()
                         .IsRequired()
-                        .ValueGeneratedOnAddOrUpdate()
+                        .ValueGeneratedOnAdd()
                         .HasColumnType("bytea")
                         .HasDefaultValue(new byte[] { 0, 0, 0, 0, 0, 0, 0, 0 })
                         .HasColumnName("version");
 
-                    b.HasKey("Id")
-                        .HasName("pk_currencies");
+                    b.HasKey("Id");
 
                     b.HasAlternateKey("Code")
                         .HasName("ak_currencies_code");
@@ -231,8 +220,7 @@ namespace Maliev.CurrencyService.Data.Migrations
                         .HasColumnName("updated_at")
                         .HasDefaultValueSql("NOW()");
 
-                    b.HasKey("Id")
-                        .HasName("pk_exchange_rates");
+                    b.HasKey("Id");
 
                     b.HasIndex("ExpiresAt")
                         .HasDatabaseName("ix_exchange_rates_expires_at");
@@ -292,8 +280,7 @@ namespace Maliev.CurrencyService.Data.Migrations
                         .HasColumnType("character varying(3)")
                         .HasColumnName("to_currency");
 
-                    b.HasKey("Id")
-                        .HasName("pk_rate_snapshots");
+                    b.HasKey("Id");
 
                     b.HasIndex("BatchId")
                         .HasDatabaseName("ix_rate_snapshots_batch_id");
@@ -361,8 +348,7 @@ namespace Maliev.CurrencyService.Data.Migrations
                         .HasColumnType("text")
                         .HasColumnName("validation_error");
 
-                    b.HasKey("Id")
-                        .HasName("pk_staged_snapshots");
+                    b.HasKey("Id");
 
                     b.HasIndex("BatchId")
                         .HasDatabaseName("ix_staged_snapshots_batch_id");
@@ -380,8 +366,7 @@ namespace Maliev.CurrencyService.Data.Migrations
                         .HasForeignKey("CurrencyCode")
                         .HasPrincipalKey("Code")
                         .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_country_currencies_currencies_currency_code");
+                        .IsRequired();
 
                     b.Navigation("Currency");
                 });

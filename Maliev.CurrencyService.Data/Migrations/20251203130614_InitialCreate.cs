@@ -24,11 +24,11 @@ namespace Maliev.CurrencyService.Data.Migrations
                     is_primary = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
                     created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "NOW()"),
                     updated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "NOW()"),
-                    version = table.Column<byte[]>(type: "bytea", rowVersion: true, nullable: false, defaultValue: new byte[] { 0, 0, 0, 0, 0, 0, 0, 0 })
+                    version = table.Column<byte[]>(type: "bytea", nullable: false, defaultValue: new byte[] { 0, 0, 0, 0, 0, 0, 0, 0 })
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("pk_currencies", x => x.id);
+                    table.PrimaryKey("PK_currencies", x => x.id);
                     table.UniqueConstraint("ak_currencies_code", x => x.code);
                 });
 
@@ -50,7 +50,7 @@ namespace Maliev.CurrencyService.Data.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("pk_exchange_rates", x => x.id);
+                    table.PrimaryKey("PK_exchange_rates", x => x.id);
                 });
 
             migrationBuilder.CreateTable(
@@ -68,7 +68,7 @@ namespace Maliev.CurrencyService.Data.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("pk_rate_snapshots", x => x.id);
+                    table.PrimaryKey("PK_rate_snapshots", x => x.id);
                 });
 
             migrationBuilder.CreateTable(
@@ -87,7 +87,7 @@ namespace Maliev.CurrencyService.Data.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("pk_staged_snapshots", x => x.id);
+                    table.PrimaryKey("PK_staged_snapshots", x => x.id);
                 });
 
             migrationBuilder.CreateTable(
@@ -103,26 +103,14 @@ namespace Maliev.CurrencyService.Data.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("pk_country_currencies", x => x.id);
+                    table.PrimaryKey("PK_country_currencies", x => x.id);
                     table.ForeignKey(
-                        name: "fk_country_currencies_currencies_currency_code",
+                        name: "FK_country_currencies_currencies_currency_code",
                         column: x => x.currency_code,
                         principalTable: "currencies",
                         principalColumn: "code",
                         onDelete: ReferentialAction.Restrict);
                 });
-
-            migrationBuilder.CreateIndex(
-                name: "ix_country_currencies_country_iso2_currency_code",
-                table: "country_currencies",
-                columns: new[] { "country_iso2", "currency_code" },
-                unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "ix_country_currencies_country_iso3_currency_code",
-                table: "country_currencies",
-                columns: new[] { "country_iso3", "currency_code" },
-                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "ix_country_currencies_currency_code",

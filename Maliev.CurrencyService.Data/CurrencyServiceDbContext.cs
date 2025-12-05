@@ -13,16 +13,35 @@ namespace Maliev.CurrencyService.Data;
 /// </remarks>
 public class CurrencyServiceDbContext : DbContext
 {
+    /// <summary>
+    /// Initializes a new instance of the <see cref="CurrencyServiceDbContext"/> class.
+    /// </summary>
+    /// <param name="options">The options for this context.</param>
     public CurrencyServiceDbContext(DbContextOptions<CurrencyServiceDbContext> options)
         : base(options)
     {
     }
 
     // Core entities per data-model.md
+    /// <summary>
+    /// Gets or sets the collection of currencies.
+    /// </summary>
     public DbSet<Currency> Currencies => Set<Currency>();
+    /// <summary>
+    /// Gets or sets the collection of country-currency mappings.
+    /// </summary>
     public DbSet<CountryCurrency> CountryCurrencies => Set<CountryCurrency>();
+    /// <summary>
+    /// Gets or sets the collection of exchange rates.
+    /// </summary>
     public DbSet<ExchangeRate> ExchangeRates => Set<ExchangeRate>();
+    /// <summary>
+    /// Gets or sets the collection of rate snapshots.
+    /// </summary>
     public DbSet<RateSnapshot> RateSnapshots => Set<RateSnapshot>();
+    /// <summary>
+    /// Gets or sets the collection of staged snapshots.
+    /// </summary>
     public DbSet<StagedSnapshot> StagedSnapshots => Set<StagedSnapshot>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)

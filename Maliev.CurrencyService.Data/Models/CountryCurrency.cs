@@ -10,13 +10,15 @@ namespace Maliev.CurrencyService.Data.Models;
 /// <remarks>
 /// Maps ISO 3166-1 country codes to their primary currency.
 /// Supports both alpha-2 (TH, US) and alpha-3 (THA, USA) codes.
-/// Table: country_currencies (snake_case via EFCore.NamingConventions)
+/// Table and column names use snake_case via explicit [Table] and [Column] attributes.
+/// Indexes are configured in CountryCurrencyConfiguration.
 /// </remarks>
 [Table("country_currencies")]
-[Index(nameof(CountryIso2), nameof(CurrencyCode), IsUnique = true, Name = "ix_country_iso2_currency")]
-[Index(nameof(CountryIso3), nameof(CurrencyCode), IsUnique = true, Name = "ix_country_iso3_currency")]
 public class CountryCurrency
 {
+    /// <summary>
+    /// Unique identifier for the country-currency mapping.
+    /// </summary>
     [Key]
     [Column("id")]
     public Guid Id { get; set; }

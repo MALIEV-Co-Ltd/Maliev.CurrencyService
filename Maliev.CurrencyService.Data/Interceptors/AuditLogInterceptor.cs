@@ -15,11 +15,21 @@ public class AuditLogInterceptor : SaveChangesInterceptor
 {
     private readonly ILogger<AuditLogInterceptor> _logger;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="AuditLogInterceptor"/> class.
+    /// </summary>
+    /// <param name="logger">The logger for the interceptor.</param>
     public AuditLogInterceptor(ILogger<AuditLogInterceptor> logger)
     {
         _logger = logger;
     }
 
+    /// <summary>
+    /// Intercepts the <see cref="DbContext.SaveChanges()"/> method before it is executed.
+    /// </summary>
+    /// <param name="eventData">The event data.</param>
+    /// <param name="result">The result of the operation.</param>
+    /// <returns>The <see cref="InterceptionResult{Int32}"/>.</returns>
     public override InterceptionResult<int> SavingChanges(
         DbContextEventData eventData,
         InterceptionResult<int> result)
@@ -32,6 +42,13 @@ public class AuditLogInterceptor : SaveChangesInterceptor
         return base.SavingChanges(eventData, result);
     }
 
+    /// <summary>
+    /// Intercepts the <see cref="DbContext.SaveChangesAsync(CancellationToken)"/> method before it is executed.
+    /// </summary>
+    /// <param name="eventData">The event data.</param>
+    /// <param name="result">The result of the operation.</param>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    /// <returns>A <see cref="ValueTask{TResult}"/> representing the asynchronous operation.</returns>
     public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
         DbContextEventData eventData,
         InterceptionResult<int> result,

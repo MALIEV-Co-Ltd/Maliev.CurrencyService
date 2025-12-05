@@ -14,6 +14,11 @@ namespace Maliev.CurrencyService.Data;
 /// </remarks>
 public class CurrencyServiceDbContextFactory : IDesignTimeDbContextFactory<CurrencyServiceDbContext>
 {
+    /// <summary>
+    /// Creates a new instance of a design-time context.
+    /// </summary>
+    /// <param name="args">Command line arguments.</param>
+    /// <returns>A new <see cref="CurrencyServiceDbContext"/> instance.</returns>
     public CurrencyServiceDbContext CreateDbContext(string[] args)
     {
         var optionsBuilder = new DbContextOptionsBuilder<CurrencyServiceDbContext>();
@@ -27,13 +32,8 @@ public class CurrencyServiceDbContextFactory : IDesignTimeDbContextFactory<Curre
         optionsBuilder.UseNpgsql(connectionString, npgsqlOptions =>
         {
             npgsqlOptions.MigrationsAssembly(typeof(CurrencyServiceDbContext).Assembly.GetName().Name);
-
-            // Use snake_case naming convention for PostgreSQL per data-model.md
             npgsqlOptions.UseQuerySplittingBehavior(QuerySplittingBehavior.SplitQuery);
         });
-
-        // Apply snake_case naming convention
-        optionsBuilder.UseSnakeCaseNamingConvention();
 
         // Enable sensitive data logging for development only
         if (Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") == "Development")

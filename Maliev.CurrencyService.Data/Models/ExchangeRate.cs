@@ -10,13 +10,15 @@ namespace Maliev.CurrencyService.Data.Models;
 /// <remarks>
 /// Stores cached exchange rates with provider tracking and expiration.
 /// Supports transitive rates calculated via intermediary currencies.
-/// Table: exchange_rates (snake_case via EFCore.NamingConventions)
+/// Table and column names use snake_case via explicit [Table] and [Column] attributes.
+/// Indexes are configured in ExchangeRateConfiguration.
 /// </remarks>
 [Table("exchange_rates")]
-[Index(nameof(FromCurrency), nameof(ToCurrency), nameof(FetchedAt), IsUnique = true)]
-[Index(nameof(ExpiresAt))]
 public class ExchangeRate
 {
+    /// <summary>
+    /// Unique identifier for the exchange rate entry.
+    /// </summary>
     [Key]
     [Column("id")]
     public Guid Id { get; set; }

@@ -9,11 +9,19 @@ namespace Maliev.CurrencyService.Data.Configurations;
 /// </summary>
 public class CurrencyConfiguration : IEntityTypeConfiguration<Currency>
 {
+    /// <summary>
+    /// Configures the entity of type <typeparamref name="TEntity" />.
+    /// </summary>
+    /// <param name="builder">The builder to be used to configure the entity type.</param>
     public void Configure(EntityTypeBuilder<Currency> builder)
     {
         // Table and primary key (already configured via attributes, but explicit for clarity)
         builder.ToTable("currencies");
         builder.HasKey(c => c.Id);
+
+        // Alternate key for Code (allows foreign keys to reference Code instead of Id)
+        builder.HasAlternateKey(c => c.Code)
+            .HasName("ak_currencies_code");
 
         // Indexes
         builder.HasIndex(c => c.Code)

@@ -9,6 +9,10 @@ namespace Maliev.CurrencyService.Data.Configurations;
 /// </summary>
 public class ExchangeRateConfiguration : IEntityTypeConfiguration<ExchangeRate>
 {
+    /// <summary>
+    /// Configures the entity of type <typeparamref name="TEntity" />.
+    /// </summary>
+    /// <param name="builder">The builder to be used to configure the entity type.</param>
     public void Configure(EntityTypeBuilder<ExchangeRate> builder)
     {
         // Table and primary key

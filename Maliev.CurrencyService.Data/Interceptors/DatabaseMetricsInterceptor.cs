@@ -18,11 +18,23 @@ public class DatabaseMetricsInterceptor : DbCommandInterceptor
 {
     private readonly ILogger<DatabaseMetricsInterceptor> _logger;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="DatabaseMetricsInterceptor"/> class.
+    /// </summary>
+    /// <param name="logger">The logger for the interceptor.</param>
     public DatabaseMetricsInterceptor(ILogger<DatabaseMetricsInterceptor> logger)
     {
         _logger = logger;
     }
 
+    /// <summary>
+    /// Intercepts the execution of a <see cref="DbCommand"/> that is expected to return a <see cref="DbDataReader"/> asynchronously.
+    /// </summary>
+    /// <param name="command">The command being executed.</param>
+    /// <param name="eventData">Contextual data associated with a command being executed.</param>
+    /// <param name="result">The result of the command execution.</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/> to observe while waiting for the task to complete.</param>
+    /// <returns>A <see cref="ValueTask{DbDataReader}"/> representing the asynchronous interception.</returns>
     public override ValueTask<DbDataReader> ReaderExecutedAsync(
         DbCommand command,
         CommandExecutedEventData eventData,
@@ -33,6 +45,13 @@ public class DatabaseMetricsInterceptor : DbCommandInterceptor
         return base.ReaderExecutedAsync(command, eventData, result, cancellationToken);
     }
 
+    /// <summary>
+    /// Intercepts the execution of a <see cref="DbCommand"/> that is expected to return a <see cref="DbDataReader"/>.
+    /// </summary>
+    /// <param name="command">The command being executed.</param>
+    /// <param name="eventData">Contextual data associated with a command being executed.</param>
+    /// <param name="result">The result of the command execution.</param>
+    /// <returns>The <see cref="DbDataReader"/> result.</returns>
     public override DbDataReader ReaderExecuted(
         DbCommand command,
         CommandExecutedEventData eventData,
@@ -42,6 +61,14 @@ public class DatabaseMetricsInterceptor : DbCommandInterceptor
         return base.ReaderExecuted(command, eventData, result);
     }
 
+    /// <summary>
+    /// Intercepts the execution of a <see cref="DbCommand"/> that is expected to not return a result asynchronously.
+    /// </summary>
+    /// <param name="command">The command being executed.</param>
+    /// <param name="eventData">Contextual data associated with a command being executed.</param>
+    /// <param name="result">The result of the command execution.</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/> to observe while waiting for the task to complete.</param>
+    /// <returns>A <see cref="ValueTask{Int32}"/> representing the asynchronous interception.</returns>
     public override ValueTask<int> NonQueryExecutedAsync(
         DbCommand command,
         CommandExecutedEventData eventData,
@@ -52,6 +79,13 @@ public class DatabaseMetricsInterceptor : DbCommandInterceptor
         return base.NonQueryExecutedAsync(command, eventData, result, cancellationToken);
     }
 
+    /// <summary>
+    /// Intercepts the execution of a <see cref="DbCommand"/> that is expected to not return a result.
+    /// </summary>
+    /// <param name="command">The command being executed.</param>
+    /// <param name="eventData">Contextual data associated with a command being executed.</param>
+    /// <param name="result">The result of the command execution.</param>
+    /// <returns>The integer result.</returns>
     public override int NonQueryExecuted(
         DbCommand command,
         CommandExecutedEventData eventData,
@@ -61,6 +95,11 @@ public class DatabaseMetricsInterceptor : DbCommandInterceptor
         return base.NonQueryExecuted(command, eventData, result);
     }
 
+    /// <summary>
+    /// Intercepts the failure of a <see cref="DbCommand"/> execution.
+    /// </summary>
+    /// <param name="command">The command being executed.</param>
+    /// <param name="eventData">Contextual data associated with a command execution failure.</param>
     public override void CommandFailed(
         DbCommand command,
         CommandErrorEventData eventData)
@@ -75,6 +114,13 @@ public class DatabaseMetricsInterceptor : DbCommandInterceptor
         base.CommandFailed(command, eventData);
     }
 
+    /// <summary>
+    /// Intercepts the asynchronous failure of a <see cref="DbCommand"/> execution.
+    /// </summary>
+    /// <param name="command">The command being executed.</param>
+    /// <param name="eventData">Contextual data associated with a command execution failure.</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/> to observe while waiting for the task to complete.</param>
+    /// <returns>A <see cref="Task"/> representing the asynchronous interception.</returns>
     public override Task CommandFailedAsync(
         DbCommand command,
         CommandErrorEventData eventData,

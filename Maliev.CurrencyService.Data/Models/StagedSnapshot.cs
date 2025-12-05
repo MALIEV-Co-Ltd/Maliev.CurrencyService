@@ -10,13 +10,15 @@ namespace Maliev.CurrencyService.Data.Models;
 /// <remarks>
 /// Temporary staging area for snapshot batch ingestion (FR-028, FR-029).
 /// Lifecycle: Pending → Validated/Rejected → Committed/Deleted
-/// Table: staged_snapshots (snake_case via EFCore.NamingConventions)
+/// Table and column names use snake_case via explicit [Table] and [Column] attributes.
+/// Indexes are configured in StagedSnapshotConfiguration.
 /// </remarks>
 [Table("staged_snapshots")]
-[Index(nameof(BatchId))]
-[Index(nameof(Status))]
 public class StagedSnapshot
 {
+    /// <summary>
+    /// Unique identifier for the staged snapshot entry.
+    /// </summary>
     [Key]
     [Column("id")]
     public Guid Id { get; set; }

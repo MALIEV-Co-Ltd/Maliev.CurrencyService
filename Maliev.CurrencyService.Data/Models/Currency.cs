@@ -8,7 +8,7 @@ namespace Maliev.CurrencyService.Data.Models;
 /// </summary>
 /// <remarks>
 /// Stores ISO 4217 currency codes with formatting information.
-/// Table: currencies (snake_case via EFCore.NamingConventions)
+/// Table and column names use snake_case via explicit [Table] and [Column] attributes.
 /// </remarks>
 [Table("currencies")]
 public class Currency

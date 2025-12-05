@@ -8,6 +8,12 @@ namespace Maliev.CurrencyService.Api.HealthChecks;
 /// </summary>
 public static class HealthCheckResponseWriter
 {
+    /// <summary>
+    /// Writes the health check response as a detailed JSON object.
+    /// </summary>
+    /// <param name="context">The <see cref="HttpContext"/> for the request.</param>
+    /// <param name="report">The <see cref="HealthReport"/> containing the health check results.</param>
+    /// <returns>A <see cref="Task"/> that represents the asynchronous write operation.</returns>
     public static Task WriteResponse(HttpContext context, HealthReport report)
     {
         context.Response.ContentType = "application/json";

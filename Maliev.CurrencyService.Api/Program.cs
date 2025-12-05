@@ -1,242 +1,152 @@
-using Asp.Versioning;
-using FluentValidation;
 using Maliev.CurrencyService.Api.HealthChecks;
 using Maliev.CurrencyService.Api.Metrics;
-using Maliev.CurrencyService.Api.Middleware;
-using Maliev.CurrencyService.Api.Models;
 using Maliev.CurrencyService.Api.Services;
 using Maliev.CurrencyService.Api.Services.External;
 using Maliev.CurrencyService.Data;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.AspNetCore.Diagnostics.HealthChecks;
-using Microsoft.AspNetCore.HttpOverrides;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Diagnostics.HealthChecks;
-using Microsoft.Extensions.Options;
-using Microsoft.IdentityModel.Tokens;
-using Prometheus;
-using Scalar.AspNetCore;
-using Serilog;
-using StackExchange.Redis;
-using System.Text;
 using System.Threading.RateLimiting;
-using NetEscapades.Configuration.Yaml;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Configure Serilog
-Log.Logger = new LoggerConfiguration()
-    .ReadFrom.Configuration(builder.Configuration)
-    .CreateLogger();
+// --- Secrets & Configuration ---
+builder.AddGoogleSecretManagerVolume(); // Load secrets from /mnt/secrets if available
 
-builder.Host.UseSerilog();
+// --- Infrastructure & Observability ---
+builder.AddServiceDefaults(); // OpenTelemetry, health checks, resilience
+builder.AddServiceMeters("currency-service"); // Register service meters for OpenTelemetry business metrics
 
-try
+builder.AddPostgresDbContext<CurrencyServiceDbContext>(connectionStringName: "CurrencyDbContext"); // PostgreSQL with retry logic
+
+// Add Memory Cache (always needed - used by both cache implementations)
+builder.Services.AddMemoryCache();
+
+// Add Cache Service (two-tier with Redis or in-memory only)
+var redisConnectionString = builder.Configuration.GetConnectionString("Redis");
+if (!string.IsNullOrEmpty(redisConnectionString))
 {
-    Log.Information("Starting Maliev Currency Service");
-
-    // Load secrets.yaml with configurable path
-    var secretsPath = builder.Configuration.GetValue<string>("Secrets:Path", "secrets.yaml");
-    builder.Configuration.AddYamlFile(secretsPath, optional: true, reloadOnChange: true);
-
-    // Load secrets from mounted Kubernetes secrets
-    var kubernetesSecretsPath = builder.Configuration.GetValue<string>("Secrets:KubernetesPath", "/mnt/secrets");
-    if (Directory.Exists(kubernetesSecretsPath))
+    builder.Services.AddStackExchangeRedisCache(options =>
     {
-        builder.Configuration.AddKeyPerFile(directoryPath: kubernetesSecretsPath, optional: true);
-    }
-
-    // API Versioning
-    builder.Services.AddApiVersioning(options =>
-    {
-        options.DefaultApiVersion = new ApiVersion(1, 0);
-        options.AssumeDefaultVersionWhenUnspecified = true;
-        options.ReportApiVersions = true;
-        options.ApiVersionReader = new UrlSegmentApiVersionReader();
-    }).AddApiExplorer(options =>
-    {
-        options.GroupNameFormat = "'v'VVV";
-        options.SubstituteApiVersionInUrl = true;
+        options.Configuration = redisConnectionString;
     });
+    builder.Services.AddSingleton<ICacheService, RedisCacheService>();
+}
+else
+{
+    builder.Services.AddSingleton<ICacheService, InMemoryCacheService>();
+}
 
-    // Add controllers
-    builder.Services.AddControllers();
+// --- API Configuration ---
+builder.AddDefaultCors(); // CORS from CORS:AllowedOrigins config
+builder.AddDefaultApiVersioning(); // API versioning with URL segment reader
+
+// JWT Authentication (tests override via PostConfigureAll with dynamic RSA keys)
+builder.AddJwtAuthentication();
+
+// Add OpenAPI (must be in Program.cs for XML comments to work via source generator)
+if (!builder.Environment.IsProduction())
+{
     builder.Services.AddEndpointsApiExplorer();
-    
-    // Add FluentValidation validators
-    builder.Services.AddValidatorsFromAssemblyContaining<Program>();
-
-    // Add Health Checks
-    builder.Services.AddHealthChecks()
-        .AddCheck<DatabaseHealthCheck>("database", tags: new[] { "readiness" })
-        .AddCheck<RedisHealthCheck>("redis", tags: new[] { "readiness" })
-        ;
-
-    // Add Rate Limiting
-    builder.Services.AddRateLimiter(options =>
+    builder.Services.AddOpenApi("v1", options =>
     {
-        options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
-            RateLimitPartition.GetFixedWindowLimiter(
-                partitionKey: httpContext.User.Identity?.Name ?? httpContext.Request.Headers.Host.ToString(),
-                factory: partition => new FixedWindowRateLimiterOptions
-                {
-                    AutoReplenishment = true,
-                    PermitLimit = 1000,
-                    Window = TimeSpan.FromMinutes(1)
-                }));
-    });
-
-    // Add OpenAPI services
-    builder.Services.AddOpenApi();
-
-    // Add Metrics
-    builder.Services.AddSingleton<CurrencyServiceMetrics>();
-
-    // Add Cache Service
-    var redisConnectionString = builder.Configuration.GetConnectionString("Redis");
-    if (!string.IsNullOrEmpty(redisConnectionString))
-    {
-        builder.Services.AddStackExchangeRedisCache(options =>
+        options.AddDocumentTransformer((document, context, cancellationToken) =>
         {
-            options.Configuration = redisConnectionString;
+            document.Info.Title = "MALIEV Currency Service API";
+            document.Info.Version = "v1";
+            document.Info.Description = "Currency and exchange rate service. Provides ISO 4217 currency metadata, country-to-currency resolution, exchange rate snapshots with historical tracking, and administrative endpoints for currency management with optimistic concurrency control.";
+            return Task.CompletedTask;
         });
-        builder.Services.AddSingleton<ICacheService, RedisCacheService>();
-    }
-    else
-    {
-        builder.Services.AddMemoryCache();
-        builder.Services.AddSingleton<ICacheService, InMemoryCacheService>();
-    }
-
-    // Add Domain Services
-    builder.Services.AddScoped<ICurrencyService, CurrencyService>();
-    builder.Services.AddScoped<ISnapshotService, SnapshotService>();
-    builder.Services.AddScoped<IRateService, RateService>();
-
-    // Add External Providers
-    builder.Services.AddHttpClient<FawazahmedProvider>().AddStandardResilienceHandler();
-    builder.Services.AddHttpClient<FrankfurterProvider>().AddStandardResilienceHandler();
-    
-    // Register them as IExchangeRateProvider by resolving the typed client
-    builder.Services.AddScoped<IExchangeRateProvider>(sp => sp.GetRequiredService<FawazahmedProvider>());
-    builder.Services.AddScoped<IExchangeRateProvider>(sp => sp.GetRequiredService<FrankfurterProvider>());
-    
-    builder.Services.AddScoped<ProviderChain>();
-
-    // Configure Currency Service DbContext with snake_case naming
-    // Constitution Principle IV: Always use PostgreSQL (no InMemoryDatabase)
-    builder.Services.AddDbContext<CurrencyServiceDbContext>(options =>
-    {
-        // Use ConnectionStrings__CurrencyDbContext from Google Secret Manager
-        var connectionString = builder.Configuration.GetConnectionString("CurrencyDbContext")
-            ?? Environment.GetEnvironmentVariable("ServiceDbContext");
-
-        options.UseNpgsql(connectionString)
-            .UseSnakeCaseNamingConvention(); // Apply snake_case naming per data-model.md
     });
+}
 
-    // Add service defaults for .NET Aspire
-    builder.AddServiceDefaults();
+// Add Health Checks
+builder.Services.AddHealthChecks()
+    .AddCheck<DatabaseHealthCheck>("database", tags: new[] { "db", "readiness" });
 
-    var app = builder.Build();
-
-    // Configure the HTTP request pipeline.
-    if (!app.Environment.IsProduction())
-    {
-        // Map OpenAPI at /currencies/openapi/v1.json
-        app.MapOpenApi("/currencies/openapi/{documentName}.json");
-
-        // Map Scalar at /currencies/scalar/v1 path
-        app.MapScalarApiReference("/currencies/scalar/v1", options =>
-        {
-            options
-                .WithTitle("MALIEV Currency Service API")
-                .WithTheme(ScalarTheme.Saturn)
-                .WithDefaultHttpClient(ScalarTarget.CSharp, ScalarClient.HttpClient)
-                .WithOpenApiRoutePattern("/currencies/openapi/{documentName}.json");
-        });
-
-        // Redirect root to Scalar
-        app.MapGet("/", () => Results.Redirect("/currencies/scalar/v1")).ExcludeFromDescription();
-        app.MapGet("/currencies", () => Results.Redirect("/currencies/scalar/v1")).ExcludeFromDescription();
-    }
-
-    app.UseSerilogRequestLogging();
-
-    app.UseRateLimiter();
-    app.UseCors();
-
-    // JWT Authentication & Authorization (only if configured and not in Testing environment)
-    if (!app.Environment.IsEnvironment("Testing"))
-    {
-        var jwtSection = app.Configuration.GetSection(JwtOptions.SectionName);
-        if (jwtSection.Exists())
-        {
-            app.UseAuthentication();
-            app.UseAuthorization();
-        }
-    }
-
-    app.MapControllers();
-
-    // Health check endpoints
-    app.MapHealthChecks("/currencies/liveness", new HealthCheckOptions
-    {
-        Predicate = healthCheck => healthCheck.Tags.Contains("liveness"),
-        ResponseWriter = Maliev.CurrencyService.Api.HealthChecks.HealthCheckResponseWriter.WriteResponse
-    });
-
-    app.MapHealthChecks("/currencies/readiness", new HealthCheckOptions
-    {
-        Predicate = healthCheck => healthCheck.Tags.Contains("readiness"),
-        ResponseWriter = Maliev.CurrencyService.Api.HealthChecks.HealthCheckResponseWriter.WriteResponse
-    });
-
-    // Prometheus metrics endpoint (accessible at /currencies/metrics per FR-052)
-    app.MapMetrics("/currencies/metrics");
-    app.MapMetrics("/metrics"); // Also expose at /metrics for standard convention
-
-    // Ensure database is created and seeded
-    using (var scope = app.Services.CreateScope())
-    {
-        var context = scope.ServiceProvider.GetRequiredService<CurrencyServiceDbContext>();
-        try
-        {
-            if (context.Database.IsRelational())
+// Add Rate Limiting
+builder.Services.AddRateLimiter(options =>
+{
+    options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.User.Identity?.Name ?? httpContext.Request.Headers.Host.ToString(),
+            factory: partition => new FixedWindowRateLimiterOptions
             {
-                context.Database.Migrate();
-            }
-            else
-            {
-                context.Database.EnsureCreated();
-            }
-            Log.Information("Database initialization completed");
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "An error occurred while initializing the database");
-            Console.WriteLine($"Database initialization error: {ex}");
-        }
+                AutoReplenishment = true,
+                PermitLimit = 1000,
+                Window = TimeSpan.FromMinutes(1)
+            }));
+});
+
+// Add Metrics
+builder.Services.AddSingleton<CurrencyServiceMetrics>();
+
+// Add Domain Services
+builder.Services.AddScoped<ICurrencyService, CurrencyService>();
+builder.Services.AddScoped<ISnapshotService, SnapshotService>();
+builder.Services.AddScoped<IRateService, RateService>();
+
+// Add External Providers
+builder.Services.AddHttpClient<FawazahmedProvider>().AddStandardResilienceHandler();
+builder.Services.AddHttpClient<FrankfurterProvider>().AddStandardResilienceHandler();
+
+// Register them as IExchangeRateProvider by resolving the typed client
+builder.Services.AddScoped<IExchangeRateProvider>(sp => sp.GetRequiredService<FawazahmedProvider>());
+builder.Services.AddScoped<IExchangeRateProvider>(sp => sp.GetRequiredService<FrankfurterProvider>());
+
+builder.Services.AddScoped<ProviderChain>();
+
+builder.Services.AddControllers();
+
+var app = builder.Build();
+
+// Force instantiation of metrics service to ensure OpenTelemetry meters are created
+var metricsService = app.Services.GetRequiredService<CurrencyServiceMetrics>();
+
+var logger = app.Services.GetRequiredService<ILogger<Program>>();
+
+// Run database migrations on startup (skip in Testing environment)
+if (!app.Environment.IsEnvironment("Testing"))
+{
+    try
+    {
+        await app.MigrateDatabaseAsync<CurrencyServiceDbContext>();
     }
-
-    Log.Information("Maliev Currency Service started successfully");
-    app.Run();
-}
-catch (Exception ex)
-{
-    Log.Fatal(ex, "Application terminated unexpectedly");
-}
-finally
-{
-    Log.CloseAndFlush();
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Database migration failed - application may not function correctly");
+        // Don't throw - allow app to start for debugging
+    }
 }
 
-public class JwtOptions
+// Log startup configuration
+if (!string.IsNullOrEmpty(redisConnectionString))
 {
-    public const string SectionName = "Jwt";
-
-    public required string Issuer { get; set; }
-    public required string Audience { get; set; }
-    public required string PublicKey { get; set; } // Base64-encoded RSA public key from shared config
+    logger.LogInformation("Redis distributed cache configured");
 }
+else
+{
+    logger.LogInformation("Using in-memory cache");
+}
+
+app.UseHttpsRedirection();
+app.UseRateLimiter();
+app.UseCors();
+
+// JWT Authentication & Authorization
+app.UseAuthentication();
+app.UseAuthorization();
+
+// Map endpoints after middleware
+app.MapControllers();
+
+// Map Aspire default endpoints (/health, /alive, /metrics)
+app.MapDefaultEndpoints(servicePrefix: "currencies");
+
+// Map OpenAPI and Scalar documentation (dev/staging only)
+app.MapApiDocumentation(servicePrefix: "currencies");
+
+logger.LogInformation("CurrencyService started successfully");
+await app.RunAsync();
+
+/// <summary>
+/// Main entry point for the Maliev Currency Service API.
+/// </summary>
 public partial class Program { }

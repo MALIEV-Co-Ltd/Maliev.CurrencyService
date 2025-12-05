@@ -14,6 +14,12 @@ public class InMemoryCacheService : ICacheService
     private readonly CurrencyServiceMetrics _metrics;
     private readonly ConcurrentDictionary<string, byte> _keys = new();
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="InMemoryCacheService"/> class.
+    /// </summary>
+    /// <param name="cache">The in-memory cache instance.</param>
+    /// <param name="logger">The logger for this service.</param>
+    /// <param name="metrics">The metrics service.</param>
     public InMemoryCacheService(
         IMemoryCache cache,
         ILogger<InMemoryCacheService> logger,
@@ -24,6 +30,13 @@ public class InMemoryCacheService : ICacheService
         _metrics = metrics;
     }
 
+    /// <summary>
+    /// Asynchronously retrieves a value from the in-memory cache.
+    /// </summary>
+    /// <typeparam name="T">The type of the cached value.</typeparam>
+    /// <param name="key">The cache key.</param>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    /// <returns>A <see cref="Task"/> representing the asynchronous operation, yielding the cached value or null if not found.</returns>
     public Task<T?> GetAsync<T>(string key, CancellationToken cancellationToken = default) where T : class
     {
         _logger.LogDebug("Getting from in-memory cache: {Key}", key);
@@ -31,20 +44,29 @@ public class InMemoryCacheService : ICacheService
 
         if (value != null)
         {
-            _metrics.CacheHits.Inc();
-            _metrics.CacheRequests.WithLabels("hit").Inc();
+            _metrics.RecordCacheHit();
+            _metrics.RecordCacheRequest("hit");
             _logger.LogDebug("In-memory cache hit for key: {Key}", key);
         }
         else
         {
-            _metrics.CacheMisses.Inc();
-            _metrics.CacheRequests.WithLabels("miss").Inc();
+            _metrics.RecordCacheMiss();
+            _metrics.RecordCacheRequest("miss");
             _logger.LogDebug("In-memory cache miss for key: {Key}", key);
         }
 
         return Task.FromResult(value);
     }
 
+    /// <summary>
+    /// Asynchronously sets a value in the in-memory cache with a specified time-to-live (TTL).
+    /// </summary>
+    /// <typeparam name="T">The type of the value to cache.</typeparam>
+    /// <param name="key">The cache key.</param>
+    /// <param name="value">The value to cache.</param>
+    /// <param name="ttl">The time-to-live for the cached value.</param>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     public Task SetAsync<T>(string key, T value, TimeSpan ttl, CancellationToken cancellationToken = default) where T : class
     {
         _logger.LogDebug("Setting in-memory cache: {Key}, TTL: {TTL}", key, ttl);
@@ -53,6 +75,12 @@ public class InMemoryCacheService : ICacheService
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    /// Asynchronously removes a value from the in-memory cache.
+    /// </summary>
+    /// <param name="key">The cache key to remove.</param>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     public Task RemoveAsync(string key, CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Removing from in-memory cache: {Key}", key);
@@ -61,6 +89,12 @@ public class InMemoryCacheService : ICacheService
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    /// Asynchronously removes multiple values from the in-memory cache based on a pattern.
+    /// </summary>
+    /// <param name="pattern">The key pattern (e.g., "rate:USD:*").</param>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     public Task RemoveByPatternAsync(string pattern, CancellationToken cancellationToken = default)
     {
         // Convert glob pattern to regex (simple implementation for * wildcard)
@@ -80,6 +114,12 @@ public class InMemoryCacheService : ICacheService
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    /// Asynchronously checks if a key exists in the in-memory cache.
+    /// </summary>
+    /// <param name="key">The cache key to check.</param>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    /// <returns>A <see cref="Task"/> representing the asynchronous operation, yielding true if the key exists, otherwise false.</returns>
     public Task<bool> ExistsAsync(string key, CancellationToken cancellationToken = default)
     {
         var exists = _cache.TryGetValue(key, out _);

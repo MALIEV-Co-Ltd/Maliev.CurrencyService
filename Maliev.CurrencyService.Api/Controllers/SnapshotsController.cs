@@ -1,5 +1,4 @@
 using Asp.Versioning;
-using FluentValidation;
 using Maliev.CurrencyService.Api.Models.Common;
 using Maliev.CurrencyService.Api.Models.Snapshots;
 using Maliev.CurrencyService.Api.Services;
@@ -25,6 +24,11 @@ public class SnapshotsController : ControllerBase
     private readonly ISnapshotService _snapshotService;
     private readonly ILogger<SnapshotsController> _logger;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="SnapshotsController"/> class.
+    /// </summary>
+    /// <param name="snapshotService">The snapshot service.</param>
+    /// <param name="logger">The logger.</param>
     public SnapshotsController(
         ISnapshotService snapshotService,
         ILogger<SnapshotsController> logger)

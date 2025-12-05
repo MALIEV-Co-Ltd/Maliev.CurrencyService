@@ -21,6 +21,12 @@ public class ProviderChain
     // Intermediary currencies for transitive calculation (per research.md decision 2)
     private static readonly string[] IntermediaryFallback = { "USD", "EUR", "GBP" };
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ProviderChain"/> class.
+    /// </summary>
+    /// <param name="providers">A collection of exchange rate providers.</param>
+    /// <param name="logger">The logger for this service.</param>
+    /// <param name="metrics">The metrics service.</param>
     public ProviderChain(
         IEnumerable<IExchangeRateProvider> providers,
         ILogger<ProviderChain> logger,
@@ -53,7 +59,7 @@ public class ProviderChain
                 // Track fallback if we had to skip a provider
                 if (previousProvider != null)
                 {
-                    _metrics.ProviderFallbacks.WithLabels(previousProvider, provider.ProviderName).Inc();
+                    _metrics.RecordProviderFallback(previousProvider, provider.ProviderName);
                     _logger.LogWarning("Provider fallback: {From} → {To} ({FromProvider} failed, using {ToProvider})",
                         previousProvider, provider.ProviderName, fromCurrency, toCurrency);
                 }

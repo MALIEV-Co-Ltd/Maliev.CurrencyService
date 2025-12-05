@@ -26,6 +26,12 @@ public class CacheWarmingService : BackgroundService
         "EUR:GBP", "EUR:JPY", "GBP:JPY", "USD:CNY", "EUR:CNY"
     };
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="CacheWarmingService"/> class.
+    /// </summary>
+    /// <param name="serviceProvider">The service provider to create scoped services.</param>
+    /// <param name="logger">The logger for this service.</param>
+    /// <param name="metrics">The application metrics.</param>
     public CacheWarmingService(
         IServiceProvider serviceProvider,
         ILogger<CacheWarmingService> logger,
@@ -36,10 +42,15 @@ public class CacheWarmingService : BackgroundService
         _metrics = metrics;
     }
 
+    /// <summary>
+    /// Executes the cache warming logic.
+    /// </summary>
+    /// <param name="stoppingToken">A cancellation token to stop the service.</param>
+    /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         _logger.LogInformation("Cache warming started for {Count} top currency pairs", TopPairs.Length);
-        _metrics.BackgroundJobExecutions.WithLabels("cache_warming").Inc();
+        _metrics.RecordBackgroundJobExecution("cache_warming");
 
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
 
@@ -118,11 +129,11 @@ public class CacheWarmingService : BackgroundService
                 "Cache warming completed: {Success} successful, {Failures} failed, {Elapsed}ms total",
                 successCount, failureCount, stopwatch.ElapsedMilliseconds);
 
-            _metrics.BackgroundJobDuration.WithLabels("cache_warming").Observe(stopwatch.Elapsed.TotalSeconds);
+            _metrics.RecordBackgroundJobDuration("cache_warming", stopwatch.Elapsed.TotalSeconds);
 
             if (failureCount > 0)
             {
-                _metrics.BackgroundJobFailures.WithLabels("cache_warming", "partial_failure").Inc();
+                _metrics.RecordBackgroundJobFailure("cache_warming", "partial_failure");
             }
         }
         catch (OperationCanceledException)
@@ -130,14 +141,14 @@ public class CacheWarmingService : BackgroundService
             // Expected during application shutdown
             stopwatch.Stop();
             _logger.LogInformation("Cache warming cancelled during startup, elapsed: {Elapsed}ms", stopwatch.ElapsedMilliseconds);
-            _metrics.BackgroundJobDuration.WithLabels("cache_warming").Observe(stopwatch.Elapsed.TotalSeconds);
+            _metrics.RecordBackgroundJobDuration("cache_warming", stopwatch.Elapsed.TotalSeconds);
         }
         catch (Exception ex)
         {
             stopwatch.Stop();
             _logger.LogError(ex, "Cache warming failed completely");
-            _metrics.BackgroundJobFailures.WithLabels("cache_warming", "complete_failure").Inc();
-            _metrics.BackgroundJobDuration.WithLabels("cache_warming").Observe(stopwatch.Elapsed.TotalSeconds);
+            _metrics.RecordBackgroundJobFailure("cache_warming", "complete_failure");
+            _metrics.RecordBackgroundJobDuration("cache_warming", stopwatch.Elapsed.TotalSeconds);
         }
     }
 }

@@ -7,7 +7,7 @@
       },
       "dotnetRunMessages": true,
       "launchBrowser": true,
-      "launchUrl": "currencies/scalar/v1",
+      "launchUrl": "currencies/scalar",
       "applicationUrl": "http://localhost:5100"
     },
     "https": {
@@ -17,7 +17,7 @@
       },
       "dotnetRunMessages": true,
       "launchBrowser": true,
-      "launchUrl": "currencies/scalar/v1",
+      "launchUrl": "currencies/scalar",
       "applicationUrl": "https://localhost:7100;http://localhost:5100"
     },
     "Container (Dockerfile)": {

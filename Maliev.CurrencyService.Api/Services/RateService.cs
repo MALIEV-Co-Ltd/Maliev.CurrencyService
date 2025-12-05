@@ -26,6 +26,14 @@ public class RateService : IRateService
     private const int FreshCacheTtlSeconds = 300; // 5 minutes
     private const int StaleWindowSeconds = 60; // 60 seconds past expiration
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="RateService"/> class.
+    /// </summary>
+    /// <param name="providerChain">The provider chain for fetching exchange rates.</param>
+    /// <param name="cacheService">The cache service.</param>
+    /// <param name="context">The database context.</param>
+    /// <param name="logger">The logger.</param>
+    /// <param name="metrics">The metrics service.</param>
     public RateService(
         ProviderChain providerChain,
         ICacheService cacheService,
@@ -40,6 +48,13 @@ public class RateService : IRateService
         _metrics = metrics;
     }
 
+    /// <summary>
+    /// Gets live exchange rate for a currency pair using a stale-while-revalidate pattern.
+    /// </summary>
+    /// <param name="fromCurrency">Source currency code (ISO 4217).</param>
+    /// <param name="toCurrency">Target currency code (ISO 4217).</param>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    /// <returns>An <see cref="ExchangeRateResponse"/> if found, otherwise null.</returns>
     public async Task<ExchangeRateResponse?> GetLiveRateAsync(
         string fromCurrency,
         string toCurrency,
@@ -161,7 +176,7 @@ public class RateService : IRateService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error fetching rate for {From}:{To}", from, to);
-            _metrics.ProviderErrors.WithLabels("ProviderChain", "fetch_error").Inc();
+            _metrics.RecordProviderError("ProviderChain", "fetch_error");
             return null;
         }
     }
@@ -176,7 +191,7 @@ public class RateService : IRateService
         CancellationToken cancellationToken)
     {
         _logger.LogInformation("Background refresh started for {From}:{To}", from, to);
-        _metrics.BackgroundJobExecutions.WithLabels("rate_refresh").Inc();
+        _metrics.RecordBackgroundJobExecution("rate_refresh");
 
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
 
@@ -193,18 +208,18 @@ public class RateService : IRateService
             else
             {
                 _logger.LogWarning("Background refresh failed - no rate available for {From}:{To}", from, to);
-                _metrics.BackgroundJobFailures.WithLabels("rate_refresh", "no_rate").Inc();
+                _metrics.RecordBackgroundJobFailure("rate_refresh", "no_rate");
             }
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Background refresh error for {From}:{To}", from, to);
-            _metrics.BackgroundJobFailures.WithLabels("rate_refresh", "exception").Inc();
+            _metrics.RecordBackgroundJobFailure("rate_refresh", "exception");
         }
         finally
         {
             stopwatch.Stop();
-            _metrics.BackgroundJobDuration.WithLabels("rate_refresh").Observe(stopwatch.Elapsed.TotalSeconds);
+            _metrics.RecordBackgroundJobDuration("rate_refresh", stopwatch.Elapsed.TotalSeconds);
         }
     }
 
@@ -236,6 +251,14 @@ public class RateService : IRateService
         }
     }
 
+    /// <summary>
+    /// Gets historical snapshot exchange rate for a currency pair on a specific date.
+    /// </summary>
+    /// <param name="fromCurrency">Source currency code (ISO 4217).</param>
+    /// <param name="toCurrency">Target currency code (ISO 4217).</param>
+    /// <param name="date">The specific date for the snapshot (YYYY-MM-DD).</param>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    /// <returns>An <see cref="ExchangeRateResponse"/> if found for the specified date, otherwise null.</returns>
     public async Task<ExchangeRateResponse?> GetSnapshotRateAsync(
         string fromCurrency,
         string toCurrency,

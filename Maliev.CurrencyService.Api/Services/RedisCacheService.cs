@@ -22,6 +22,14 @@ public class RedisCacheService : ICacheService
     private readonly CurrencyServiceMetrics _metrics;
     private readonly JsonSerializerOptions _jsonOptions;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="RedisCacheService"/> class.
+    /// </summary>
+    /// <param name="memoryCache">The in-memory cache instance.</param>
+    /// <param name="logger">The logger for this service.</param>
+    /// <param name="metrics">The metrics service.</param>
+    /// <param name="distributedCache">The distributed cache instance (optional, for Redis).</param>
+    /// <param name="redis">The Redis connection multiplexer (optional, for direct Redis commands).</param>
     public RedisCacheService(
         IMemoryCache memoryCache,
         ILogger<RedisCacheService> logger,
@@ -41,13 +49,20 @@ public class RedisCacheService : ICacheService
         };
     }
 
+    /// <summary>
+    /// Asynchronously retrieves a value from the two-tier cache (in-memory first, then Redis).
+    /// </summary>
+    /// <typeparam name="T">The type of the cached value.</typeparam>
+    /// <param name="key">The cache key.</param>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    /// <returns>A <see cref="Task"/> representing the asynchronous operation, yielding the cached value or null if not found.</returns>
     public async Task<T?> GetAsync<T>(string key, CancellationToken cancellationToken = default) where T : class
     {
         // Check in-process cache first (sub-5ms)
         if (_memoryCache.TryGetValue(key, out T? value))
         {
-            _metrics.CacheHits.Inc();
-            _metrics.CacheRequests.WithLabels("hit").Inc();
+            _metrics.RecordCacheHit();
+            _metrics.RecordCacheRequest("hit");
             _logger.LogDebug("In-process cache hit for key: {Key}", key);
             return value;
         }
@@ -71,8 +86,8 @@ public class RedisCacheService : ICacheService
                         };
                         _memoryCache.Set(key, redisValue, options);
 
-                        _metrics.CacheHits.Inc();
-                        _metrics.CacheRequests.WithLabels("hit").Inc();
+                        _metrics.RecordCacheHit();
+                        _metrics.RecordCacheRequest("hit");
                         _logger.LogDebug("Redis cache hit for key: {Key}", key);
                         return redisValue;
                     }
@@ -85,12 +100,21 @@ public class RedisCacheService : ICacheService
         }
 
         // Cache miss
-        _metrics.CacheMisses.Inc();
-        _metrics.CacheRequests.WithLabels("miss").Inc();
+        _metrics.RecordCacheMiss();
+        _metrics.RecordCacheRequest("miss");
         _logger.LogDebug("Cache miss for key: {Key}", key);
         return null;
     }
 
+    /// <summary>
+    /// Asynchronously sets a value in the two-tier cache (both in-process and Redis).
+    /// </summary>
+    /// <typeparam name="T">The type of the value to cache.</typeparam>
+    /// <param name="key">The cache key.</param>
+    /// <param name="value">The value to cache.</param>
+    /// <param name="ttl">The time-to-live for the cached value.</param>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     public async Task SetAsync<T>(string key, T value, TimeSpan ttl, CancellationToken cancellationToken = default) where T : class
     {
         // Set in-process cache (use shorter TTL for in-process, max 60s)
@@ -123,6 +147,12 @@ public class RedisCacheService : ICacheService
         }
     }
 
+    /// <summary>
+    /// Asynchronously removes a value from the two-tier cache (both in-process and Redis).
+    /// </summary>
+    /// <param name="key">The cache key to remove.</param>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     public async Task RemoveAsync(string key, CancellationToken cancellationToken = default)
     {
         // Remove from in-process cache
@@ -148,12 +178,18 @@ public class RedisCacheService : ICacheService
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "Failed to remove from Redis cache after 3 retries: {Key}", key);
-                    _metrics.CacheInvalidationFailures.Inc();
+                    _metrics.RecordCacheInvalidationFailure();
                 }
             }
         }
     }
 
+    /// <summary>
+    /// Asynchronously removes multiple values from the cache by pattern (in-process is not directly supported, Redis via SCAN + DEL).
+    /// </summary>
+    /// <param name="pattern">The key pattern (e.g., "rate:USD:*").</param>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     public async Task RemoveByPatternAsync(string pattern, CancellationToken cancellationToken = default)
     {
         // For in-process cache, we cannot easily remove by pattern without iterating all keys
@@ -178,11 +214,17 @@ public class RedisCacheService : ICacheService
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to remove keys by pattern {Pattern} from Redis", pattern);
-                _metrics.CacheInvalidationFailures.Inc();
+                _metrics.RecordCacheInvalidationFailure();
             }
         }
     }
 
+    /// <summary>
+    /// Asynchronously checks if a key exists in the two-tier cache (in-memory first, then Redis).
+    /// </summary>
+    /// <param name="key">The cache key to check.</param>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    /// <returns>A <see cref="Task"/> representing the asynchronous operation, yielding true if the key exists, otherwise false.</returns>
     public async Task<bool> ExistsAsync(string key, CancellationToken cancellationToken = default)
     {
         // Check in-process cache first

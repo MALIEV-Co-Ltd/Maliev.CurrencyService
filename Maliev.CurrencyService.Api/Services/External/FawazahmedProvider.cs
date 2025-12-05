@@ -21,8 +21,17 @@ public class FawazahmedProvider : IExchangeRateProvider
     private readonly ILogger<FawazahmedProvider> _logger;
     private readonly CurrencyServiceMetrics _metrics;
 
+    /// <summary>
+    /// Gets the name of the exchange rate provider.
+    /// </summary>
     public string ProviderName => "Fawazahmed";
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="FawazahmedProvider"/> class.
+    /// </summary>
+    /// <param name="httpClient">The HTTP client instance.</param>
+    /// <param name="logger">The logger for this provider.</param>
+    /// <param name="metrics">The metrics service.</param>
     public FawazahmedProvider(
         HttpClient httpClient,
         ILogger<FawazahmedProvider> logger,
@@ -33,6 +42,13 @@ public class FawazahmedProvider : IExchangeRateProvider
         _metrics = metrics;
     }
 
+    /// <summary>
+    /// Asynchronously retrieves the exchange rate between two currencies from the Fawazahmed API.
+    /// </summary>
+    /// <param name="fromCurrency">The source currency code (e.g., "USD").</param>
+    /// <param name="toCurrency">The target currency code (e.g., "EUR").</param>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    /// <returns>An <see cref="ExchangeRate"/> object if the rate is found, otherwise null.</returns>
     public async Task<ExchangeRate?> GetRateAsync(string fromCurrency, string toCurrency, CancellationToken cancellationToken = default)
     {
         var stopwatch = Stopwatch.StartNew();
@@ -41,7 +57,7 @@ public class FawazahmedProvider : IExchangeRateProvider
 
         try
         {
-            _metrics.ProviderRequests.WithLabels(ProviderName, $"{fromCurrency}:{toCurrency}").Inc();
+            _metrics.RecordProviderRequest(ProviderName, $"{fromCurrency}:{toCurrency}");
 
             var url = $"{BaseUrl}/{from}.json";
             var response = await _httpClient.GetAsync(url, cancellationToken);
@@ -50,32 +66,30 @@ public class FawazahmedProvider : IExchangeRateProvider
             {
                 _logger.LogWarning("Fawazahmed API returned {StatusCode} for {From}:{To}",
                     response.StatusCode, fromCurrency, toCurrency);
-                _metrics.ProviderErrors.WithLabels(ProviderName, "http_error").Inc();
-                _metrics.ProviderCalls.WithLabels(ProviderName, "error").Inc();
+                _metrics.RecordProviderError(ProviderName, "http_error");
+                _metrics.RecordProviderCall(ProviderName, "error");
                 return null;
             }
 
             var json = await response.Content.ReadAsStringAsync(cancellationToken);
-            var data = JsonSerializer.Deserialize<Dictionary<string, Dictionary<string, decimal>>>(json);
+            using var document = JsonDocument.Parse(json);
+            var root = document.RootElement;
 
-            if (data == null || !data.ContainsKey(from))
+            if (!root.TryGetProperty(from, out var ratesElement))
             {
                 _logger.LogWarning("Fawazahmed API returned unexpected format for {From}:{To}",
                     fromCurrency, toCurrency);
-                _metrics.ProviderErrors.WithLabels(ProviderName, "parse_error").Inc();
-                _metrics.ProviderCalls.WithLabels(ProviderName, "error").Inc();
+                _metrics.RecordProviderError(ProviderName, "parse_error");
+                _metrics.RecordProviderCall(ProviderName, "error");
                 return null;
             }
 
-            var rates = data[from];
-            if (!rates.ContainsKey(to))
+            if (!ratesElement.TryGetProperty(to, out var rateElement) || !rateElement.TryGetDecimal(out var rate))
             {
                 _logger.LogDebug("Fawazahmed API does not have rate for {From}:{To}",
                     fromCurrency, toCurrency);
                 return null;
             }
-
-            var rate = rates[to];
             var now = DateTime.UtcNow;
 
             var exchangeRate = new ExchangeRate
@@ -86,6 +100,7 @@ public class FawazahmedProvider : IExchangeRateProvider
                 Rate = rate,
                 Provider = ProviderName,
                 IsTransitive = false,
+                IntermediateCurrency = null,
                 FetchedAt = now,
                 ExpiresAt = now.AddSeconds(300), // 5 minutes TTL per research.md
                 CreatedAt = now,
@@ -93,9 +108,9 @@ public class FawazahmedProvider : IExchangeRateProvider
             };
 
             stopwatch.Stop();
-            _metrics.ProviderLatency.WithLabels(ProviderName).Observe(stopwatch.Elapsed.TotalSeconds);
-            _metrics.ProviderCallDuration.WithLabels(ProviderName).Observe(stopwatch.Elapsed.TotalSeconds);
-            _metrics.ProviderCalls.WithLabels(ProviderName, "success").Inc();
+            _metrics.RecordProviderLatency(ProviderName, stopwatch.Elapsed.TotalSeconds);
+            _metrics.RecordProviderCallDuration(ProviderName, stopwatch.Elapsed.TotalSeconds);
+            _metrics.RecordProviderCall(ProviderName, "success");
 
             _logger.LogInformation("Fawazahmed API returned rate for {From}:{To} = {Rate} in {Elapsed}ms",
                 fromCurrency, toCurrency, rate, stopwatch.ElapsedMilliseconds);
@@ -107,8 +122,8 @@ public class FawazahmedProvider : IExchangeRateProvider
             stopwatch.Stop();
             _logger.LogError(ex, "Fawazahmed API request failed for {From}:{To}",
                 fromCurrency, toCurrency);
-            _metrics.ProviderErrors.WithLabels(ProviderName, "network_error").Inc();
-            _metrics.ProviderCalls.WithLabels(ProviderName, "error").Inc();
+            _metrics.RecordProviderError(ProviderName, "network_error");
+            _metrics.RecordProviderCall(ProviderName, "error");
             return null;
         }
         catch (JsonException ex)
@@ -116,8 +131,8 @@ public class FawazahmedProvider : IExchangeRateProvider
             stopwatch.Stop();
             _logger.LogError(ex, "Fawazahmed API JSON parsing failed for {From}:{To}",
                 fromCurrency, toCurrency);
-            _metrics.ProviderErrors.WithLabels(ProviderName, "parse_error").Inc();
-            _metrics.ProviderCalls.WithLabels(ProviderName, "error").Inc();
+            _metrics.RecordProviderError(ProviderName, "parse_error");
+            _metrics.RecordProviderCall(ProviderName, "error");
             return null;
         }
         catch (Exception ex)
@@ -125,12 +140,19 @@ public class FawazahmedProvider : IExchangeRateProvider
             stopwatch.Stop();
             _logger.LogError(ex, "Fawazahmed API unexpected error for {From}:{To}",
                 fromCurrency, toCurrency);
-            _metrics.ProviderErrors.WithLabels(ProviderName, "unknown_error").Inc();
-            _metrics.ProviderCalls.WithLabels(ProviderName, "error").Inc();
+            _metrics.RecordProviderError(ProviderName, "unknown_error");
+            _metrics.RecordProviderCall(ProviderName, "error");
             return null;
         }
     }
 
+    /// <summary>
+    /// Indicates whether the provider supports the given currency pair.
+    /// </summary>
+    /// <param name="fromCurrency">The source currency code.</param>
+    /// <param name="toCurrency">The target currency code.</param>
+    /// <returns>True if the pair is supported, false otherwise.</returns>
+    /// <remarks>Fawazahmed API is assumed to support all common currency pairs.</remarks>
     public bool SupportsPair(string fromCurrency, string toCurrency)
     {
         // Fawazahmed supports all currency pairs (200+ currencies)
@@ -138,6 +160,12 @@ public class FawazahmedProvider : IExchangeRateProvider
         return true;
     }
 
+    /// <summary>
+    /// Retrieves a read-only set of supported currency codes from the provider.
+    /// </summary>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    /// <returns>A <see cref="Task"/> yielding a <see cref="IReadOnlySet{T}"/> of supported currency codes.</returns>
+    /// <remarks>Fawazahmed API does not provide a dedicated endpoint for listing supported currencies, so an empty set is returned.</remarks>
     public Task<IReadOnlySet<string>> GetSupportedCurrenciesAsync(CancellationToken cancellationToken = default)
     {
         // Fawazahmed supports 200+ currencies but doesn't provide a /currencies endpoint

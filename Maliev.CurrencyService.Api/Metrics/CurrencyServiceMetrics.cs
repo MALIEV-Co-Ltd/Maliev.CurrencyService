@@ -1,251 +1,482 @@
-using Prometheus;
+using System.Diagnostics.Metrics;
 
 namespace Maliev.CurrencyService.Api.Metrics;
 
 /// <summary>
-/// Prometheus metrics for Currency Service monitoring
+/// OpenTelemetry metrics for Currency Service monitoring
 /// </summary>
 /// <remarks>
 /// Per Constitution Principle XI and FR-052: Provides comprehensive metrics for
 /// request rates, provider latency, provider error rates, cache hit/miss ratio,
 /// and background job status.
 /// </remarks>
-public class CurrencyServiceMetrics
+public class CurrencyServiceMetrics : IDisposable
 {
-    // Cache metrics (with labels for test compatibility)
-    public Counter CacheRequests { get; }  // cache_requests_total{result="hit|miss"}
-    public Counter CacheHits { get; }
-    public Counter CacheMisses { get; }
-    public Counter CacheInvalidationFailures { get; }
-    public Gauge CacheSizeBytes { get; }
+    private readonly Meter _meter;
+    private readonly string _environment;
 
-    // Provider metrics (with labels for test compatibility)
-    public Counter ProviderCalls { get; }  // provider_calls_total{provider="...",status="success|error"}
-    public Histogram ProviderCallDuration { get; }  // provider_call_duration_seconds{provider="..."}
-    public Counter ProviderRequests { get; }
-    public Counter ProviderErrors { get; }
-    public Histogram ProviderLatency { get; }
-    public Counter ProviderFallbacks { get; }
+    // Counters
+    private readonly Counter<long> _cacheRequests;
+    private readonly Counter<long> _cacheHits;
+    private readonly Counter<long> _cacheMisses;
+    private readonly Counter<long> _cacheInvalidationFailures;
+    private readonly Counter<long> _providerCalls;
+    private readonly Counter<long> _providerRequests;
+    private readonly Counter<long> _providerErrors;
+    private readonly Counter<long> _providerFallbacks;
+    private readonly Counter<long> _httpRequests;
+    private readonly Counter<long> _totalRequests;
+    private readonly Counter<long> _failedRequests;
+    private readonly Counter<long> _backgroundJobExecutions;
+    private readonly Counter<long> _backgroundJobFailures;
+    private readonly Counter<long> _snapshotBatchesProcessed;
+    private readonly Counter<long> _snapshotValidationErrors;
+    private readonly Counter<long> _snapshotRecordsIngested;
+    private readonly Counter<long> _databaseErrors;
 
-    // Request metrics (with labels for test compatibility)
-    public Counter HttpRequests { get; }  // http_requests_total{endpoint="..."}
-    public Histogram HttpRequestDuration { get; }  // http_request_duration_seconds{endpoint="...",method="..."}
-    public Counter TotalRequests { get; }
-    public Counter FailedRequests { get; }
-    public Histogram RequestDuration { get; }
+    // Histograms
+    private readonly Histogram<double> _providerCallDuration;
+    private readonly Histogram<double> _providerLatency;
+    private readonly Histogram<double> _httpRequestDuration;
+    private readonly Histogram<double> _requestDuration;
+    private readonly Histogram<double> _backgroundJobDuration;
+    private readonly Histogram<double> _snapshotBatchSize;
+    private readonly Histogram<double> _databaseQueryDuration;
 
-    // Background job metrics
-    public Counter BackgroundJobExecutions { get; }
-    public Counter BackgroundJobFailures { get; }
-    public Histogram BackgroundJobDuration { get; }
-    public Gauge LastBackgroundJobTimestamp { get; }
+    // Gauges (using tracked state)
+    private long _cacheSizeBytes;
+    private readonly Dictionary<string, long> _lastBackgroundJobTimestamps = new();
 
-    // Snapshot processing metrics (US4)
-    public Counter SnapshotBatchesProcessed { get; }
-    public Histogram SnapshotBatchSize { get; }
-    public Counter SnapshotValidationErrors { get; }
-    public Counter SnapshotRecordsIngested { get; }
-
-    // Database metrics
-    public Histogram DatabaseQueryDuration { get; }
-    public Counter DatabaseErrors { get; }
-
-    public CurrencyServiceMetrics()
+    /// <summary>
+    /// Initializes a new instance of the <see cref="CurrencyServiceMetrics"/> class.
+    /// </summary>
+    /// <param name="configuration">The application configuration.</param>
+    public CurrencyServiceMetrics(IConfiguration configuration)
     {
-        // Cache metrics (test-compatible format)
-        CacheRequests = Prometheus.Metrics.CreateCounter(
+        _environment = configuration["ASPNETCORE_ENVIRONMENT"] ?? "Production";
+        _meter = new Meter("currency-service", "1.0.0");
+
+        // Initialize counters
+        _cacheRequests = _meter.CreateCounter<long>(
             "cache_requests_total",
-            "Total number of cache requests",
-            new CounterConfiguration
-            {
-                LabelNames = new[] { "result" }
-            });
+            description: "Total number of cache requests");
 
-        CacheHits = Prometheus.Metrics.CreateCounter(
-            "currency_cache_hits_total",
-            "Total number of cache hits");
+        _cacheHits = _meter.CreateCounter<long>(
+            "currency.cache_hits_total",
+            description: "Total number of cache hits");
 
-        CacheMisses = Prometheus.Metrics.CreateCounter(
-            "currency_cache_misses_total",
-            "Total number of cache misses");
+        _cacheMisses = _meter.CreateCounter<long>(
+            "currency.cache_misses_total",
+            description: "Total number of cache misses");
 
-        CacheInvalidationFailures = Prometheus.Metrics.CreateCounter(
-            "currency_cache_invalidation_failures_total",
-            "Total number of cache invalidation failures");
+        _cacheInvalidationFailures = _meter.CreateCounter<long>(
+            "currency.cache_invalidation_failures_total",
+            description: "Total number of cache invalidation failures");
 
-        CacheSizeBytes = Prometheus.Metrics.CreateGauge(
-            "currency_cache_size_bytes",
-            "Current size of cache in bytes");
-
-        // Provider metrics (test-compatible format)
-        ProviderCalls = Prometheus.Metrics.CreateCounter(
+        _providerCalls = _meter.CreateCounter<long>(
             "provider_calls_total",
-            "Total number of calls to external providers",
-            new CounterConfiguration
-            {
-                LabelNames = new[] { "provider", "status" }
-            });
+            description: "Total number of calls to external providers");
 
-        ProviderCallDuration = Prometheus.Metrics.CreateHistogram(
-            "provider_call_duration_seconds",
-            "Duration of provider API calls in seconds",
-            new HistogramConfiguration
-            {
-                LabelNames = new[] { "provider" },
-                Buckets = new[] { 0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0 }
-            });
+        _providerRequests = _meter.CreateCounter<long>(
+            "currency.provider_requests_total",
+            description: "Total number of requests to external providers");
 
-        ProviderRequests = Prometheus.Metrics.CreateCounter(
-            "currency_provider_requests_total",
-            "Total number of requests to external providers",
-            new CounterConfiguration
-            {
-                LabelNames = new[] { "provider", "currency_pair" }
-            });
+        _providerErrors = _meter.CreateCounter<long>(
+            "currency.provider_errors_total",
+            description: "Total number of provider errors");
 
-        ProviderErrors = Prometheus.Metrics.CreateCounter(
-            "currency_provider_errors_total",
-            "Total number of provider errors",
-            new CounterConfiguration
-            {
-                LabelNames = new[] { "provider", "error_type" }
-            });
+        _providerFallbacks = _meter.CreateCounter<long>(
+            "currency.provider_fallbacks_total",
+            description: "Total number of provider fallback occurrences");
 
-        ProviderLatency = Prometheus.Metrics.CreateHistogram(
-            "currency_provider_latency_seconds",
-            "Latency of provider API calls in seconds",
-            new HistogramConfiguration
-            {
-                LabelNames = new[] { "provider" },
-                Buckets = new[] { 0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0 }
-            });
-
-        ProviderFallbacks = Prometheus.Metrics.CreateCounter(
-            "currency_provider_fallbacks_total",
-            "Total number of provider fallback occurrences",
-            new CounterConfiguration
-            {
-                LabelNames = new[] { "from_provider", "to_provider" }
-            });
-
-        // Request metrics (test-compatible format)
-        HttpRequests = Prometheus.Metrics.CreateCounter(
+        _httpRequests = _meter.CreateCounter<long>(
             "http_requests_total",
-            "Total number of HTTP requests",
-            new CounterConfiguration
-            {
-                LabelNames = new[] { "endpoint", "method", "status" }
-            });
+            description: "Total number of HTTP requests");
 
-        HttpRequestDuration = Prometheus.Metrics.CreateHistogram(
+        _totalRequests = _meter.CreateCounter<long>(
+            "currency.requests_total",
+            description: "Total number of requests");
+
+        _failedRequests = _meter.CreateCounter<long>(
+            "currency.requests_failed_total",
+            description: "Total number of failed requests");
+
+        _backgroundJobExecutions = _meter.CreateCounter<long>(
+            "currency.background_job_executions_total",
+            description: "Total number of background job executions");
+
+        _backgroundJobFailures = _meter.CreateCounter<long>(
+            "currency.background_job_failures_total",
+            description: "Total number of background job failures");
+
+        _snapshotBatchesProcessed = _meter.CreateCounter<long>(
+            "currency.snapshot_batches_processed_total",
+            description: "Total number of snapshot batches processed");
+
+        _snapshotValidationErrors = _meter.CreateCounter<long>(
+            "currency.snapshot_validation_errors_total",
+            description: "Total number of snapshot validation errors");
+
+        _snapshotRecordsIngested = _meter.CreateCounter<long>(
+            "currency.snapshot_records_ingested_total",
+            description: "Total number of snapshot records successfully ingested");
+
+        _databaseErrors = _meter.CreateCounter<long>(
+            "currency.database_errors_total",
+            description: "Total number of database errors");
+
+        // Initialize histograms
+        _providerCallDuration = _meter.CreateHistogram<double>(
+            "provider_call_duration_seconds",
+            unit: "s",
+            description: "Duration of provider API calls in seconds");
+
+        _providerLatency = _meter.CreateHistogram<double>(
+            "currency.provider_latency_seconds",
+            unit: "s",
+            description: "Latency of provider API calls in seconds");
+
+        _httpRequestDuration = _meter.CreateHistogram<double>(
             "http_request_duration_seconds",
-            "Duration of HTTP requests in seconds",
-            new HistogramConfiguration
+            unit: "s",
+            description: "Duration of HTTP requests in seconds");
+
+        _requestDuration = _meter.CreateHistogram<double>(
+            "currency.request_duration_seconds",
+            unit: "s",
+            description: "Duration of HTTP requests in seconds");
+
+        _backgroundJobDuration = _meter.CreateHistogram<double>(
+            "currency.background_job_duration_seconds",
+            unit: "s",
+            description: "Duration of background job executions in seconds");
+
+        _snapshotBatchSize = _meter.CreateHistogram<double>(
+            "currency.snapshot_batch_size",
+            description: "Size of snapshot batches");
+
+        _databaseQueryDuration = _meter.CreateHistogram<double>(
+            "currency.database_query_duration_seconds",
+            unit: "s",
+            description: "Duration of database queries in seconds");
+
+        // Initialize observable gauges
+        _meter.CreateObservableGauge(
+            "currency.cache_size_bytes",
+            () => new Measurement<long>(_cacheSizeBytes),
+            description: "Current size of cache in bytes");
+
+        _meter.CreateObservableGauge(
+            "currency.background_job_last_run_timestamp",
+            () =>
             {
-                LabelNames = new[] { "endpoint", "method" },
-                Buckets = new[] { 0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0 }
-            });
+                var measurements = new List<Measurement<long>>();
+                lock (_lastBackgroundJobTimestamps)
+                {
+                    foreach (var kvp in _lastBackgroundJobTimestamps)
+                    {
+                        measurements.Add(new Measurement<long>(kvp.Value,
+                            new KeyValuePair<string, object?>("job_name", kvp.Key)));
+                    }
+                }
+                return measurements;
+            },
+            description: "Unix timestamp of last background job execution");
+    }
 
-        TotalRequests = Prometheus.Metrics.CreateCounter(
-            "currency_requests_total",
-            "Total number of requests",
-            new CounterConfiguration
-            {
-                LabelNames = new[] { "endpoint", "method" }
-            });
+    // Cache metrics methods
+    /// <summary>
+    /// Records a cache request with the specified result.
+    /// </summary>
+    /// <param name="result">The result type (hit/miss).</param>
+    public void RecordCacheRequest(string result)
+    {
+        _cacheRequests.Add(1, new KeyValuePair<string, object?>("result", result));
+    }
 
-        FailedRequests = Prometheus.Metrics.CreateCounter(
-            "currency_requests_failed_total",
-            "Total number of failed requests",
-            new CounterConfiguration
-            {
-                LabelNames = new[] { "endpoint", "error_type" }
-            });
+    /// <summary>
+    /// Records a cache hit.
+    /// </summary>
+    public void RecordCacheHit()
+    {
+        _cacheHits.Add(1);
+    }
 
-        RequestDuration = Prometheus.Metrics.CreateHistogram(
-            "currency_request_duration_seconds",
-            "Duration of HTTP requests in seconds",
-            new HistogramConfiguration
-            {
-                LabelNames = new[] { "endpoint", "method" },
-                Buckets = new[] { 0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0 }
-            });
+    /// <summary>
+    /// Records a cache miss.
+    /// </summary>
+    public void RecordCacheMiss()
+    {
+        _cacheMisses.Add(1);
+    }
 
-        // Background job metrics
-        BackgroundJobExecutions = Prometheus.Metrics.CreateCounter(
-            "currency_background_job_executions_total",
-            "Total number of background job executions",
-            new CounterConfiguration
-            {
-                LabelNames = new[] { "job_name" }
-            });
+    /// <summary>
+    /// Records a cache invalidation failure.
+    /// </summary>
+    public void RecordCacheInvalidationFailure()
+    {
+        _cacheInvalidationFailures.Add(1);
+    }
 
-        BackgroundJobFailures = Prometheus.Metrics.CreateCounter(
-            "currency_background_job_failures_total",
-            "Total number of background job failures",
-            new CounterConfiguration
-            {
-                LabelNames = new[] { "job_name", "error_type" }
-            });
+    /// <summary>
+    /// Sets the current cache size in bytes.
+    /// </summary>
+    /// <param name="bytes">The cache size in bytes.</param>
+    public void SetCacheSizeBytes(long bytes)
+    {
+        Interlocked.Exchange(ref _cacheSizeBytes, bytes);
+    }
 
-        BackgroundJobDuration = Prometheus.Metrics.CreateHistogram(
-            "currency_background_job_duration_seconds",
-            "Duration of background job executions in seconds",
-            new HistogramConfiguration
-            {
-                LabelNames = new[] { "job_name" },
-                Buckets = new[] { 1.0, 5.0, 10.0, 30.0, 60.0, 120.0, 300.0, 600.0 }
-            });
+    // Provider metrics methods
+    /// <summary>
+    /// Records a provider call with the specified status.
+    /// </summary>
+    /// <param name="provider">The provider name.</param>
+    /// <param name="status">The call status (success/error).</param>
+    public void RecordProviderCall(string provider, string status)
+    {
+        _providerCalls.Add(1,
+            new KeyValuePair<string, object?>("provider", provider),
+            new KeyValuePair<string, object?>("status", status));
+    }
 
-        LastBackgroundJobTimestamp = Prometheus.Metrics.CreateGauge(
-            "currency_background_job_last_run_timestamp",
-            "Unix timestamp of last background job execution",
-            new GaugeConfiguration
-            {
-                LabelNames = new[] { "job_name" }
-            });
+    /// <summary>
+    /// Records the duration of a provider call.
+    /// </summary>
+    /// <param name="provider">The provider name.</param>
+    /// <param name="durationSeconds">The call duration in seconds.</param>
+    public void RecordProviderCallDuration(string provider, double durationSeconds)
+    {
+        _providerCallDuration.Record(durationSeconds,
+            new KeyValuePair<string, object?>("provider", provider));
+    }
 
-        // Snapshot processing metrics
-        SnapshotBatchesProcessed = Prometheus.Metrics.CreateCounter(
-            "currency_snapshot_batches_processed_total",
-            "Total number of snapshot batches processed");
+    /// <summary>
+    /// Records a request to an external provider.
+    /// </summary>
+    /// <param name="provider">The provider name.</param>
+    /// <param name="currencyPair">The currency pair requested.</param>
+    public void RecordProviderRequest(string provider, string currencyPair)
+    {
+        _providerRequests.Add(1,
+            new KeyValuePair<string, object?>("provider", provider),
+            new KeyValuePair<string, object?>("currency_pair", currencyPair));
+    }
 
-        SnapshotBatchSize = Prometheus.Metrics.CreateHistogram(
-            "currency_snapshot_batch_size",
-            "Size of snapshot batches",
-            new HistogramConfiguration
-            {
-                Buckets = new[] { 10.0, 50.0, 100.0, 500.0, 1000.0, 5000.0, 10000.0 }
-            });
+    /// <summary>
+    /// Records a provider error.
+    /// </summary>
+    /// <param name="provider">The provider name.</param>
+    /// <param name="errorType">The error type.</param>
+    public void RecordProviderError(string provider, string errorType)
+    {
+        _providerErrors.Add(1,
+            new KeyValuePair<string, object?>("provider", provider),
+            new KeyValuePair<string, object?>("error_type", errorType));
+    }
 
-        SnapshotValidationErrors = Prometheus.Metrics.CreateCounter(
-            "currency_snapshot_validation_errors_total",
-            "Total number of snapshot validation errors",
-            new CounterConfiguration
-            {
-                LabelNames = new[] { "error_type" }
-            });
+    /// <summary>
+    /// Records the latency of a provider call.
+    /// </summary>
+    /// <param name="provider">The provider name.</param>
+    /// <param name="latencySeconds">The latency in seconds.</param>
+    public void RecordProviderLatency(string provider, double latencySeconds)
+    {
+        _providerLatency.Record(latencySeconds,
+            new KeyValuePair<string, object?>("provider", provider));
+    }
 
-        SnapshotRecordsIngested = Prometheus.Metrics.CreateCounter(
-            "currency_snapshot_records_ingested_total",
-            "Total number of snapshot records successfully ingested");
+    /// <summary>
+    /// Records a provider fallback occurrence.
+    /// </summary>
+    /// <param name="fromProvider">The provider that failed.</param>
+    /// <param name="toProvider">The provider that was used instead.</param>
+    public void RecordProviderFallback(string fromProvider, string toProvider)
+    {
+        _providerFallbacks.Add(1,
+            new KeyValuePair<string, object?>("from_provider", fromProvider),
+            new KeyValuePair<string, object?>("to_provider", toProvider));
+    }
 
-        // Database metrics
-        DatabaseQueryDuration = Prometheus.Metrics.CreateHistogram(
-            "currency_database_query_duration_seconds",
-            "Duration of database queries in seconds",
-            new HistogramConfiguration
-            {
-                LabelNames = new[] { "operation" },
-                Buckets = new[] { 0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5 }
-            });
+    // Request metrics methods
+    /// <summary>
+    /// Records an HTTP request.
+    /// </summary>
+    /// <param name="endpoint">The endpoint path.</param>
+    /// <param name="method">The HTTP method.</param>
+    /// <param name="status">The HTTP status code.</param>
+    public void RecordHttpRequest(string endpoint, string method, string status)
+    {
+        _httpRequests.Add(1,
+            new KeyValuePair<string, object?>("endpoint", endpoint),
+            new KeyValuePair<string, object?>("method", method),
+            new KeyValuePair<string, object?>("status", status));
+    }
 
-        DatabaseErrors = Prometheus.Metrics.CreateCounter(
-            "currency_database_errors_total",
-            "Total number of database errors",
-            new CounterConfiguration
-            {
-                LabelNames = new[] { "operation", "error_type" }
-            });
+    /// <summary>
+    /// Records the duration of an HTTP request.
+    /// </summary>
+    /// <param name="endpoint">The endpoint path.</param>
+    /// <param name="method">The HTTP method.</param>
+    /// <param name="durationSeconds">The request duration in seconds.</param>
+    public void RecordHttpRequestDuration(string endpoint, string method, double durationSeconds)
+    {
+        _httpRequestDuration.Record(durationSeconds,
+            new KeyValuePair<string, object?>("endpoint", endpoint),
+            new KeyValuePair<string, object?>("method", method));
+    }
+
+    /// <summary>
+    /// Records a total request.
+    /// </summary>
+    /// <param name="endpoint">The endpoint path.</param>
+    /// <param name="method">The HTTP method.</param>
+    public void RecordTotalRequest(string endpoint, string method)
+    {
+        _totalRequests.Add(1,
+            new KeyValuePair<string, object?>("endpoint", endpoint),
+            new KeyValuePair<string, object?>("method", method));
+    }
+
+    /// <summary>
+    /// Records a failed request.
+    /// </summary>
+    /// <param name="endpoint">The endpoint path.</param>
+    /// <param name="errorType">The error type.</param>
+    public void RecordFailedRequest(string endpoint, string errorType)
+    {
+        _failedRequests.Add(1,
+            new KeyValuePair<string, object?>("endpoint", endpoint),
+            new KeyValuePair<string, object?>("error_type", errorType));
+    }
+
+    /// <summary>
+    /// Records the duration of a request.
+    /// </summary>
+    /// <param name="endpoint">The endpoint path.</param>
+    /// <param name="method">The HTTP method.</param>
+    /// <param name="durationSeconds">The request duration in seconds.</param>
+    public void RecordRequestDuration(string endpoint, string method, double durationSeconds)
+    {
+        _requestDuration.Record(durationSeconds,
+            new KeyValuePair<string, object?>("endpoint", endpoint),
+            new KeyValuePair<string, object?>("method", method));
+    }
+
+    // Background job metrics methods
+    /// <summary>
+    /// Records the execution of a background job.
+    /// </summary>
+    /// <param name="jobName">The job name.</param>
+    public void RecordBackgroundJobExecution(string jobName)
+    {
+        _backgroundJobExecutions.Add(1,
+            new KeyValuePair<string, object?>("job_name", jobName));
+    }
+
+    /// <summary>
+    /// Records a background job failure.
+    /// </summary>
+    /// <param name="jobName">The job name.</param>
+    /// <param name="errorType">The error type.</param>
+    public void RecordBackgroundJobFailure(string jobName, string errorType)
+    {
+        _backgroundJobFailures.Add(1,
+            new KeyValuePair<string, object?>("job_name", jobName),
+            new KeyValuePair<string, object?>("error_type", errorType));
+    }
+
+    /// <summary>
+    /// Records the duration of a background job execution.
+    /// </summary>
+    /// <param name="jobName">The job name.</param>
+    /// <param name="durationSeconds">The job duration in seconds.</param>
+    public void RecordBackgroundJobDuration(string jobName, double durationSeconds)
+    {
+        _backgroundJobDuration.Record(durationSeconds,
+            new KeyValuePair<string, object?>("job_name", jobName));
+    }
+
+    /// <summary>
+    /// Sets the last execution timestamp for a background job.
+    /// </summary>
+    /// <param name="jobName">The job name.</param>
+    /// <param name="timestamp">The Unix timestamp of the last execution.</param>
+    public void SetLastBackgroundJobTimestamp(string jobName, long timestamp)
+    {
+        lock (_lastBackgroundJobTimestamps)
+        {
+            _lastBackgroundJobTimestamps[jobName] = timestamp;
+        }
+    }
+
+    // Snapshot processing metrics methods
+    /// <summary>
+    /// Records the processing of a snapshot batch.
+    /// </summary>
+    public void RecordSnapshotBatchProcessed()
+    {
+        _snapshotBatchesProcessed.Add(1);
+    }
+
+    /// <summary>
+    /// Records the size of a snapshot batch.
+    /// </summary>
+    /// <param name="size">The batch size.</param>
+    public void RecordSnapshotBatchSize(double size)
+    {
+        _snapshotBatchSize.Record(size);
+    }
+
+    /// <summary>
+    /// Records a snapshot validation error.
+    /// </summary>
+    /// <param name="errorType">The error type.</param>
+    public void RecordSnapshotValidationError(string errorType)
+    {
+        _snapshotValidationErrors.Add(1,
+            new KeyValuePair<string, object?>("error_type", errorType));
+    }
+
+    /// <summary>
+    /// Records the number of snapshot records ingested.
+    /// </summary>
+    /// <param name="count">The number of records.</param>
+    public void RecordSnapshotRecordsIngested(long count)
+    {
+        _snapshotRecordsIngested.Add(count);
+    }
+
+    // Database metrics methods
+    /// <summary>
+    /// Records the duration of a database query.
+    /// </summary>
+    /// <param name="operation">The database operation.</param>
+    /// <param name="durationSeconds">The query duration in seconds.</param>
+    public void RecordDatabaseQueryDuration(string operation, double durationSeconds)
+    {
+        _databaseQueryDuration.Record(durationSeconds,
+            new KeyValuePair<string, object?>("operation", operation));
+    }
+
+    /// <summary>
+    /// Records a database error.
+    /// </summary>
+    /// <param name="operation">The database operation.</param>
+    /// <param name="errorType">The error type.</param>
+    public void RecordDatabaseError(string operation, string errorType)
+    {
+        _databaseErrors.Add(1,
+            new KeyValuePair<string, object?>("operation", operation),
+            new KeyValuePair<string, object?>("error_type", errorType));
+    }
+
+    /// <summary>
+    /// Releases all resources associated with the metrics.
+    /// </summary>
+    public void Dispose()
+    {
+        _meter?.Dispose();
+        GC.SuppressFinalize(this);
     }
 }

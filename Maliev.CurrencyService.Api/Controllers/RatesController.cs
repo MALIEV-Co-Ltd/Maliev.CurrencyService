@@ -1,5 +1,4 @@
 using Asp.Versioning;
-using FluentValidation;
 using Maliev.CurrencyService.Api.Models.Common;
 using Maliev.CurrencyService.Api.Models.Rates;
 using Maliev.CurrencyService.Api.Services;
@@ -23,16 +22,18 @@ namespace Maliev.CurrencyService.Api.Controllers;
 public class RatesController : ControllerBase
 {
     private readonly IRateService _rateService;
-    private readonly IValidator<RateQueryRequest> _validator;
     private readonly ILogger<RatesController> _logger;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="RatesController"/> class.
+    /// </summary>
+    /// <param name="rateService">The rate service.</param>
+    /// <param name="logger">The logger.</param>
     public RatesController(
         IRateService rateService,
-        IValidator<RateQueryRequest> validator,
         ILogger<RatesController> logger)
     {
         _rateService = rateService;
-        _validator = validator;
         _logger = logger;
     }
 
@@ -61,7 +62,7 @@ public class RatesController : ControllerBase
     {
         try
         {
-            // Create and validate request
+            // Create request
             var request = new RateQueryRequest
             {
                 From = from?.ToUpperInvariant() ?? string.Empty,
@@ -70,11 +71,34 @@ public class RatesController : ControllerBase
                 Date = date
             };
 
-            var validationResult = await _validator.ValidateAsync(request, cancellationToken);
-            if (!validationResult.IsValid)
+            _logger.LogInformation("GET /v1/rates - From: {From}, To: {To}, Mode: {Mode}, Date: {Date}",
+                request.From, request.To, request.Mode, request.Date);
+
+            // Validate request
+            var validationErrors = new List<string>();
+
+            if (string.IsNullOrWhiteSpace(request.From) || request.From.Length != 3)
+                validationErrors.Add("'from' currency code must be exactly 3 characters");
+
+            if (string.IsNullOrWhiteSpace(request.To) || request.To.Length != 3)
+                validationErrors.Add("'to' currency code must be exactly 3 characters");
+
+            if (!string.IsNullOrWhiteSpace(request.From) && !System.Text.RegularExpressions.Regex.IsMatch(request.From, "^[A-Z]{3}$"))
+                validationErrors.Add("'from' currency code must contain only uppercase letters");
+
+            if (!string.IsNullOrWhiteSpace(request.To) && !System.Text.RegularExpressions.Regex.IsMatch(request.To, "^[A-Z]{3}$"))
+                validationErrors.Add("'to' currency code must contain only uppercase letters");
+
+            if (request.Mode != "live" && request.Mode != "snapshot")
+                validationErrors.Add("'mode' must be either 'live' or 'snapshot'");
+
+            if (request.Mode == "snapshot" && !request.Date.HasValue)
+                validationErrors.Add("'date' is required when mode is 'snapshot'");
+
+            if (validationErrors.Count > 0)
             {
                 _logger.LogWarning("Validation failed for rate query: {Errors}",
-                    string.Join(", ", validationResult.Errors.Select(e => e.ErrorMessage)));
+                    string.Join(", ", validationErrors));
 
                 return BadRequest(new ErrorResponse
                 {
@@ -82,36 +106,21 @@ public class RatesController : ControllerBase
                     Message = "Invalid request parameters",
                     Timestamp = DateTime.UtcNow,
                     CorrelationId = HttpContext.TraceIdentifier,
-                    Details = validationResult.Errors
-                        .GroupBy(e => e.PropertyName)
-                        .ToDictionary(
-                            g => g.Key,
-                            g => g.Select(e => e.ErrorMessage).ToArray())
+                    Details = new Dictionary<string, string[]>
+                    {
+                        { "validation", validationErrors.ToArray() }
+                    }
                 });
             }
-
-            _logger.LogInformation("GET /v1/rates - From: {From}, To: {To}, Mode: {Mode}, Date: {Date}",
-                request.From, request.To, request.Mode, request.Date);
 
             // Get rate based on mode (User Story 2: live, User Story 3: snapshot)
             ExchangeRateResponse? rateResponse;
             if (request.Mode == "snapshot")
             {
-                if (!request.Date.HasValue)
-                {
-                    return BadRequest(new ErrorResponse
-                    {
-                        Error = "BadRequest",
-                        Message = "Date parameter is required for snapshot mode",
-                        Timestamp = DateTime.UtcNow,
-                        CorrelationId = HttpContext.TraceIdentifier
-                    });
-                }
-
                 rateResponse = await _rateService.GetSnapshotRateAsync(
                     request.From,
                     request.To,
-                    request.Date.Value,
+                    request.Date!.Value,
                     cancellationToken);
             }
             else // live mode

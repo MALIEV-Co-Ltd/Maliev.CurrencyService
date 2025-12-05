@@ -15,6 +15,11 @@ public class SnapshotCleanupService : BackgroundService
     private readonly ILogger<SnapshotCleanupService> _logger;
     private readonly TimeSpan _cleanupInterval = TimeSpan.FromHours(24); // Run daily
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="SnapshotCleanupService"/> class.
+    /// </summary>
+    /// <param name="serviceProvider">The service provider to create scoped services.</param>
+    /// <param name="logger">The logger for this service.</param>
     public SnapshotCleanupService(
         IServiceProvider serviceProvider,
         ILogger<SnapshotCleanupService> logger)
@@ -23,6 +28,11 @@ public class SnapshotCleanupService : BackgroundService
         _logger = logger;
     }
 
+    /// <summary>
+    /// Executes the snapshot cleanup logic.
+    /// </summary>
+    /// <param name="stoppingToken">A cancellation token to stop the service.</param>
+    /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         _logger.LogInformation("Snapshot cleanup service started");

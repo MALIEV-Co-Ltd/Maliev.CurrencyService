@@ -3,8 +3,19 @@ using System.Diagnostics;
 
 namespace Maliev.CurrencyService.Api.HealthChecks;
 
+/// <summary>
+/// Provides extension methods for adding memory-based health checks.
+/// </summary>
 public static class HealthCheckExtensions
 {
+    /// <summary>
+    /// Adds a health check for the private memory usage of the application.
+    /// </summary>
+    /// <param name="builder">The <see cref="IHealthChecksBuilder"/>.</param>
+    /// <param name="thresholdBytes">The memory threshold in bytes.</param>
+    /// <param name="name">The name of the health check.</param>
+    /// <param name="tags">A list of tags that can be used to filter sets of health checks.</param>
+    /// <returns>The <see cref="IHealthChecksBuilder"/>.</returns>
     public static IHealthChecksBuilder AddPrivateMemoryHealthCheck(
         this IHealthChecksBuilder builder,
         long thresholdBytes,
@@ -14,6 +25,14 @@ public static class HealthCheckExtensions
         return builder.AddCheck(name, new PrivateMemoryHealthCheck(thresholdBytes), tags: tags ?? Enumerable.Empty<string>());
     }
 
+    /// <summary>
+    /// Adds a health check for the working set memory usage of the application.
+    /// </summary>
+    /// <param name="builder">The <see cref="IHealthChecksBuilder"/>.</param>
+    /// <param name="thresholdBytes">The memory threshold in bytes.</param>
+    /// <param name="name">The name of the health check.</param>
+    /// <param name="tags">A list of tags that can be used to filter sets of health checks.</param>
+    /// <returns>The <see cref="IHealthChecksBuilder"/>.</returns>
     public static IHealthChecksBuilder AddWorkingSetHealthCheck(
         this IHealthChecksBuilder builder,
         long thresholdBytes,
@@ -24,15 +43,28 @@ public static class HealthCheckExtensions
     }
 }
 
+/// <summary>
+/// A health check for private memory usage.
+/// </summary>
 public class PrivateMemoryHealthCheck : IHealthCheck
 {
     private readonly long _thresholdBytes;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="PrivateMemoryHealthCheck"/> class.
+    /// </summary>
+    /// <param name="thresholdBytes">The memory threshold in bytes.</param>
     public PrivateMemoryHealthCheck(long thresholdBytes)
     {
         _thresholdBytes = thresholdBytes;
     }
 
+    /// <summary>
+    /// Checks the private memory usage against the threshold.
+    /// </summary>
+    /// <param name="context">A context object associated with the current health check.</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/> that can be used to cancel the health check.</param>
+    /// <returns>A <see cref="Task"/> that completes when the health check has finished, yielding a <see cref="HealthCheckResult"/>.</returns>
     public Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
     {
         try
@@ -64,15 +96,28 @@ public class PrivateMemoryHealthCheck : IHealthCheck
     }
 }
 
+/// <summary>
+/// A health check for working set memory usage.
+/// </summary>
 public class WorkingSetHealthCheck : IHealthCheck
 {
     private readonly long _thresholdBytes;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="WorkingSetHealthCheck"/> class.
+    /// </summary>
+    /// <param name="thresholdBytes">The memory threshold in bytes.</param>
     public WorkingSetHealthCheck(long thresholdBytes)
     {
         _thresholdBytes = thresholdBytes;
     }
 
+    /// <summary>
+    /// Checks the working set memory usage against the threshold.
+    /// </summary>
+    /// <param name="context">A context object associated with the current health check.</param>
+    /// <param name="cancellationToken">A <see cref="CancellationToken"/> that can be used to cancel the health check.</param>
+    /// <returns>A <see cref="Task"/> that completes when the health check has finished, yielding a <see cref="HealthCheckResult"/>.</returns>
     public Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
     {
         try

@@ -1,5 +1,4 @@
 using Asp.Versioning;
-using FluentValidation;
 using Maliev.CurrencyService.Api.Models.Common;
 using Maliev.CurrencyService.Api.Models.Currencies;
 using Maliev.CurrencyService.Api.Services;
@@ -27,6 +26,11 @@ public class CurrenciesController : ControllerBase
     private readonly ICurrencyService _currencyService;
     private readonly ILogger<CurrenciesController> _logger;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="CurrenciesController"/> class.
+    /// </summary>
+    /// <param name="currencyService">The currency service.</param>
+    /// <param name="logger">The logger.</param>
     public CurrenciesController(
         ICurrencyService currencyService,
         ILogger<CurrenciesController> logger)
@@ -408,7 +412,6 @@ public class CurrenciesController : ControllerBase
     /// Create a new currency (admin only)
     /// </summary>
     /// <param name="request">Currency creation request</param>
-    /// <param name="validator">Validator instance</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Created currency</returns>
     [HttpPost("~/currencies/v{version:apiVersion}/admin/currencies")]
@@ -420,14 +423,32 @@ public class CurrenciesController : ControllerBase
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
     public async Task<ActionResult<CurrencyResponse>> CreateAdmin(
         [FromBody] CreateCurrencyRequest request,
-        [FromServices] IValidator<CreateCurrencyRequest> validator,
         CancellationToken cancellationToken = default)
     {
         try
         {
+            _logger.LogInformation("POST /v1/admin/currencies - Creating currency {Code}", request.Code);
+
             // Validate request
-            var validationResult = await validator.ValidateAsync(request, cancellationToken);
-            if (!validationResult.IsValid)
+            var validationErrors = new List<string>();
+
+            if (string.IsNullOrWhiteSpace(request.Code))
+                validationErrors.Add("Code is required");
+            else if (request.Code.Length != 3)
+                validationErrors.Add("Code must be exactly 3 characters");
+            else if (!System.Text.RegularExpressions.Regex.IsMatch(request.Code, "^[A-Z]{3}$"))
+                validationErrors.Add("Code must be uppercase letters only");
+
+            if (string.IsNullOrWhiteSpace(request.Symbol))
+                validationErrors.Add("Symbol is required");
+
+            if (string.IsNullOrWhiteSpace(request.Name))
+                validationErrors.Add("Name is required");
+
+            if (request.DecimalPlaces < 0)
+                validationErrors.Add("DecimalPlaces must be non-negative");
+
+            if (validationErrors.Count > 0)
             {
                 return BadRequest(new ErrorResponse
                 {
@@ -435,15 +456,12 @@ public class CurrenciesController : ControllerBase
                     Message = "Invalid currency creation request",
                     Timestamp = DateTime.UtcNow,
                     CorrelationId = HttpContext.TraceIdentifier,
-                    Details = validationResult.Errors
-                        .GroupBy(e => e.PropertyName)
-                        .ToDictionary(
-                            g => g.Key,
-                            g => g.Select(e => e.ErrorMessage).ToArray())
+                    Details = new Dictionary<string, string[]>
+                    {
+                        { "validation", validationErrors.ToArray() }
+                    }
                 });
             }
-
-            _logger.LogInformation("POST /v1/admin/currencies - Creating currency {Code}", request.Code);
 
             var currency = await _currencyService.CreateAsync(request, cancellationToken);
 
@@ -483,7 +501,6 @@ public class CurrenciesController : ControllerBase
     /// </summary>
     /// <param name="code">Currency code (ISO 4217)</param>
     /// <param name="request">Currency update request</param>
-    /// <param name="validator">Validator instance</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Updated currency</returns>
     [HttpPut("{code}")]
@@ -497,14 +514,25 @@ public class CurrenciesController : ControllerBase
     public async Task<ActionResult<CurrencyResponse>> Update(
         string code,
         [FromBody] UpdateCurrencyRequest request,
-        [FromServices] IValidator<UpdateCurrencyRequest> validator,
         CancellationToken cancellationToken = default)
     {
         try
         {
+            _logger.LogInformation("PUT /v1/currencies/{Code} - Updating currency", code);
+
             // Validate request
-            var validationResult = await validator.ValidateAsync(request, cancellationToken);
-            if (!validationResult.IsValid)
+            var validationErrors = new List<string>();
+
+            if (string.IsNullOrWhiteSpace(request.Symbol))
+                validationErrors.Add("Symbol is required");
+
+            if (string.IsNullOrWhiteSpace(request.Name))
+                validationErrors.Add("Name is required");
+
+            if (request.DecimalPlaces < 0)
+                validationErrors.Add("DecimalPlaces must be non-negative");
+
+            if (validationErrors.Count > 0)
             {
                 return BadRequest(new ErrorResponse
                 {
@@ -512,15 +540,12 @@ public class CurrenciesController : ControllerBase
                     Message = "Invalid currency update request",
                     Timestamp = DateTime.UtcNow,
                     CorrelationId = HttpContext.TraceIdentifier,
-                    Details = validationResult.Errors
-                        .GroupBy(e => e.PropertyName)
-                        .ToDictionary(
-                            g => g.Key,
-                            g => g.Select(e => e.ErrorMessage).ToArray())
+                    Details = new Dictionary<string, string[]>
+                    {
+                        { "validation", validationErrors.ToArray() }
+                    }
                 });
             }
-
-            _logger.LogInformation("PUT /v1/currencies/{Code} - Updating currency", code);
 
             var currency = await _currencyService.UpdateAsync(code, request, cancellationToken);
 
@@ -570,7 +595,6 @@ public class CurrenciesController : ControllerBase
     /// </summary>
     /// <param name="id">Currency GUID</param>
     /// <param name="request">Currency update request</param>
-    /// <param name="validator">Validator instance</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Updated currency</returns>
     [HttpPut("~/currencies/v{version:apiVersion}/admin/currencies/{id:guid}")]
@@ -585,29 +609,10 @@ public class CurrenciesController : ControllerBase
     public async Task<ActionResult<CurrencyResponse>> UpdateById(
         Guid id,
         [FromBody] UpdateCurrencyRequest request,
-        [FromServices] IValidator<UpdateCurrencyRequest> validator,
         CancellationToken cancellationToken = default)
     {
         try
         {
-            // Validate request
-            var validationResult = await validator.ValidateAsync(request, cancellationToken);
-            if (!validationResult.IsValid)
-            {
-                return BadRequest(new ErrorResponse
-                {
-                    Error = "BadRequest",
-                    Message = "Invalid currency update request",
-                    Timestamp = DateTime.UtcNow,
-                    CorrelationId = HttpContext.TraceIdentifier,
-                    Details = validationResult.Errors
-                        .GroupBy(e => e.PropertyName)
-                        .ToDictionary(
-                            g => g.Key,
-                            g => g.Select(e => e.ErrorMessage).ToArray())
-                });
-            }
-
             // FR-006: Check If-Match header for optimistic concurrency
             if (!Request.Headers.IfMatch.Any())
             {
@@ -647,6 +652,33 @@ public class CurrenciesController : ControllerBase
                     Message = "Currency has been modified by another user. Please refresh and try again.",
                     Timestamp = DateTime.UtcNow,
                     CorrelationId = HttpContext.TraceIdentifier
+                });
+            }
+
+            // Validate request
+            var validationErrors = new List<string>();
+
+            if (string.IsNullOrWhiteSpace(request.Symbol))
+                validationErrors.Add("Symbol is required");
+
+            if (string.IsNullOrWhiteSpace(request.Name))
+                validationErrors.Add("Name is required");
+
+            if (request.DecimalPlaces < 0)
+                validationErrors.Add("DecimalPlaces must be non-negative");
+
+            if (validationErrors.Count > 0)
+            {
+                return BadRequest(new ErrorResponse
+                {
+                    Error = "BadRequest",
+                    Message = "Invalid currency update request",
+                    Timestamp = DateTime.UtcNow,
+                    CorrelationId = HttpContext.TraceIdentifier,
+                    Details = new Dictionary<string, string[]>
+                    {
+                        { "validation", validationErrors.ToArray() }
+                    }
                 });
             }
 

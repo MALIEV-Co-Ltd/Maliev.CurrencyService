@@ -23,6 +23,12 @@ public class CurrencyService : ICurrencyService
     private const int CurrencyListCacheTtlSeconds = 300; // 5 minutes
     private const int CountryCurrencyCacheTtlSeconds = 3600; // 1 hour
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="CurrencyService"/> class.
+    /// </summary>
+    /// <param name="context">The database context.</param>
+    /// <param name="cacheService">The cache service.</param>
+    /// <param name="logger">The logger.</param>
     public CurrencyService(
         CurrencyServiceDbContext context,
         ICacheService cacheService,
@@ -33,6 +39,14 @@ public class CurrencyService : ICurrencyService
         _logger = logger;
     }
 
+    /// <summary>
+    /// Retrieves a paginated list of currencies.
+    /// </summary>
+    /// <param name="page">The page number (1-indexed).</param>
+    /// <param name="pageSize">The number of items per page.</param>
+    /// <param name="isActive">Optional filter to retrieve only active or inactive currencies.</param>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    /// <returns>A paginated response containing currency details.</returns>
     public async Task<PaginatedCurrencyResponse> GetAllAsync(
         int page = 1,
         int pageSize = 50,
@@ -112,6 +126,12 @@ public class CurrencyService : ICurrencyService
         return response;
     }
 
+    /// <summary>
+    /// Retrieves a currency by its country code (ISO2 or ISO3).
+    /// </summary>
+    /// <param name="countryCode">The ISO2 or ISO3 country code (e.g., "TH" or "THA").</param>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    /// <returns>The currency response if found, otherwise null.</returns>
     public async Task<CurrencyResponse?> GetByCountryCodeAsync(
         string countryCode,
         CancellationToken cancellationToken = default)
@@ -199,6 +219,12 @@ public class CurrencyService : ICurrencyService
         return currency;
     }
 
+    /// <summary>
+    /// Retrieves a currency by its ISO 4217 code.
+    /// </summary>
+    /// <param name="code">The 3-letter ISO 4217 currency code (e.g., "USD").</param>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    /// <returns>The currency response if found, otherwise null.</returns>
     public async Task<CurrencyResponse?> GetByCodeAsync(
         string code,
         CancellationToken cancellationToken = default)
@@ -231,6 +257,13 @@ public class CurrencyService : ICurrencyService
         return currency;
     }
 
+    /// <summary>
+    /// Creates a new currency.
+    /// </summary>
+    /// <param name="request">The request containing the new currency data.</param>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    /// <returns>The created currency response.</returns>
+    /// <exception cref="InvalidOperationException">Thrown if a currency with the same code already exists.</exception>
     public async Task<CurrencyResponse> CreateAsync(
         CreateCurrencyRequest request,
         CancellationToken cancellationToken = default)
@@ -282,6 +315,13 @@ public class CurrencyService : ICurrencyService
         };
     }
 
+    /// <summary>
+    /// Updates an existing currency by its code.
+    /// </summary>
+    /// <param name="code">The ISO 4217 code of the currency to update.</param>
+    /// <param name="request">The request containing the updated currency data.</param>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    /// <returns>The updated currency response if found, otherwise null.</returns>
     public async Task<CurrencyResponse?> UpdateAsync(
         string code,
         UpdateCurrencyRequest request,
@@ -342,6 +382,12 @@ public class CurrencyService : ICurrencyService
         };
     }
 
+    /// <summary>
+    /// Soft deletes a currency by setting its IsActive flag to false.
+    /// </summary>
+    /// <param name="code">The ISO 4217 code of the currency to delete.</param>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    /// <returns>True if the currency was found and soft deleted, otherwise false.</returns>
     public async Task<bool> DeleteAsync(
         string code,
         CancellationToken cancellationToken = default)
@@ -375,6 +421,12 @@ public class CurrencyService : ICurrencyService
         return true;
     }
 
+    /// <summary>
+    /// Retrieves a currency by its unique identifier.
+    /// </summary>
+    /// <param name="id">The GUID of the currency.</param>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    /// <returns>The currency response if found, otherwise null.</returns>
     public async Task<CurrencyResponse?> GetByIdAsync(
         Guid id,
         CancellationToken cancellationToken = default)
@@ -401,6 +453,13 @@ public class CurrencyService : ICurrencyService
         return currency;
     }
 
+    /// <summary>
+    /// Updates an existing currency by its unique identifier.
+    /// </summary>
+    /// <param name="id">The GUID of the currency to update.</param>
+    /// <param name="request">The request containing the updated currency data.</param>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    /// <returns>The updated currency response if found, otherwise null.</returns>
     public async Task<CurrencyResponse?> UpdateByIdAsync(
         Guid id,
         UpdateCurrencyRequest request,
@@ -453,6 +512,13 @@ public class CurrencyService : ICurrencyService
         };
     }
 
+    /// <summary>
+    /// Soft deletes a currency by its unique identifier, setting its IsActive flag to false.
+    /// </summary>
+    /// <param name="id">The GUID of the currency to delete.</param>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    /// <returns>True if the currency was found and soft deleted, otherwise false.</returns>
+    /// <exception cref="InvalidOperationException">Thrown if the currency has existing country mappings.</exception>
     public async Task<bool> DeleteByIdAsync(
         Guid id,
         CancellationToken cancellationToken = default)

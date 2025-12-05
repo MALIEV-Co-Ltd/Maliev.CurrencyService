@@ -22,6 +22,13 @@ public class SnapshotService : ISnapshotService
 
     private const int MaxRetentionDays = 90; // FR-RET-001
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="SnapshotService"/> class.
+    /// </summary>
+    /// <param name="context">The database context.</param>
+    /// <param name="cacheService">The cache service.</param>
+    /// <param name="logger">The logger.</param>
+    /// <param name="metrics">The metrics service.</param>
     public SnapshotService(
         CurrencyServiceDbContext context,
         ICacheService cacheService,
@@ -34,6 +41,12 @@ public class SnapshotService : ISnapshotService
         _metrics = metrics;
     }
 
+    /// <summary>
+    /// Imports a batch of snapshots, optionally promoting directly to production.
+    /// </summary>
+    /// <param name="request">The batch request containing snapshots.</param>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    /// <returns>A <see cref="SnapshotBatchResponse"/> detailing the import operation result.</returns>
     public async Task<SnapshotBatchResponse> ImportBatchAsync(
         SnapshotBatchRequest request,
         CancellationToken cancellationToken = default)
@@ -114,7 +127,7 @@ public class SnapshotService : ISnapshotService
         }
 
         stopwatch.Stop();
-        _metrics.BackgroundJobDuration.WithLabels("snapshot_import").Observe(stopwatch.Elapsed.TotalSeconds);
+        _metrics.RecordBackgroundJobDuration("snapshot_import", stopwatch.Elapsed.TotalSeconds);
 
         // Auto-promote if requested
         var status = "staged";
@@ -143,6 +156,13 @@ public class SnapshotService : ISnapshotService
         return response;
     }
 
+    /// <summary>
+    /// Promotes staged snapshots to production.
+    /// </summary>
+    /// <param name="batchId">The unique identifier of the batch to promote.</param>
+    /// <param name="source">Optional source/provider name for the snapshots.</param>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    /// <returns>True if promotion succeeded, otherwise false.</returns>
     public async Task<bool> PromoteBatchAsync(
         string batchId,
         string? source = null,
@@ -222,7 +242,7 @@ public class SnapshotService : ISnapshotService
             await InvalidateCacheForPairsAsync(affectedPairs, snapshotDate, cancellationToken);
 
             stopwatch.Stop();
-            _metrics.BackgroundJobDuration.WithLabels("snapshot_promotion").Observe(stopwatch.Elapsed.TotalSeconds);
+            _metrics.RecordBackgroundJobDuration("snapshot_promotion", stopwatch.Elapsed.TotalSeconds);
 
             _logger.LogInformation("Promoted batch {BatchId}: {Count} snapshots in {Elapsed}ms, invalidated {CacheCount} cache keys",
                 batchId, productionSnapshots.Count, stopwatch.ElapsedMilliseconds, affectedPairs.Count);
@@ -232,11 +252,16 @@ public class SnapshotService : ISnapshotService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error promoting batch {BatchId}", batchId);
-            _metrics.BackgroundJobFailures.WithLabels("snapshot_promotion", "exception").Inc();
+            _metrics.RecordBackgroundJobFailure("snapshot_promotion", "exception");
             return false;
         }
     }
 
+    /// <summary>
+    /// Cleans up snapshots older than 90 days.
+    /// </summary>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    /// <returns>The number of snapshots deleted.</returns>
     public async Task<int> CleanupOldSnapshotsAsync(CancellationToken cancellationToken = default)
     {
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
@@ -258,7 +283,7 @@ public class SnapshotService : ISnapshotService
             }
 
             stopwatch.Stop();
-            _metrics.BackgroundJobDuration.WithLabels("snapshot_cleanup").Observe(stopwatch.Elapsed.TotalSeconds);
+            _metrics.RecordBackgroundJobDuration("snapshot_cleanup", stopwatch.Elapsed.TotalSeconds);
 
             _logger.LogInformation("Snapshot cleanup completed: deleted {Count} snapshots in {Elapsed}ms",
                 oldSnapshots.Count, stopwatch.ElapsedMilliseconds);
@@ -268,7 +293,7 @@ public class SnapshotService : ISnapshotService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error during snapshot cleanup");
-            _metrics.BackgroundJobFailures.WithLabels("snapshot_cleanup", "exception").Inc();
+            _metrics.RecordBackgroundJobFailure("snapshot_cleanup", "exception");
             return 0;
         }
     }

@@ -12,6 +12,12 @@ public class MetricsMiddleware
     private readonly CurrencyServiceMetrics _metrics;
     private readonly ILogger<MetricsMiddleware> _logger;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="MetricsMiddleware"/> class.
+    /// </summary>
+    /// <param name="next">The next middleware in the pipeline.</param>
+    /// <param name="metrics">The application metrics service.</param>
+    /// <param name="logger">The logger for this middleware.</param>
     public MetricsMiddleware(
         RequestDelegate next,
         CurrencyServiceMetrics metrics,
@@ -22,6 +28,11 @@ public class MetricsMiddleware
         _logger = logger;
     }
 
+    /// <summary>
+    /// Invokes the middleware to capture and record HTTP request metrics.
+    /// </summary>
+    /// <param name="context">The <see cref="HttpContext"/> for the current request.</param>
+    /// <returns>A <see cref="Task"/> that represents the execution of this middleware.</returns>
     public async Task InvokeAsync(HttpContext context)
     {
         var stopwatch = Stopwatch.StartNew();
@@ -36,10 +47,10 @@ public class MetricsMiddleware
 
             // Track HTTP request metrics
             var statusCode = context.Response.StatusCode.ToString();
-            _metrics.HttpRequests.WithLabels(path, method, statusCode).Inc();
-            _metrics.HttpRequestDuration.WithLabels(path, method).Observe(stopwatch.Elapsed.TotalSeconds);
-            _metrics.TotalRequests.WithLabels(path, method).Inc();
-            _metrics.RequestDuration.WithLabels(path, method).Observe(stopwatch.Elapsed.TotalSeconds);
+            _metrics.RecordHttpRequest(path, method, statusCode);
+            _metrics.RecordHttpRequestDuration(path, method, stopwatch.Elapsed.TotalSeconds);
+            _metrics.RecordTotalRequest(path, method);
+            _metrics.RecordRequestDuration(path, method, stopwatch.Elapsed.TotalSeconds);
 
             _logger.LogDebug("HTTP {Method} {Path} completed in {Elapsed}ms with status {StatusCode}",
                 method, path, stopwatch.ElapsedMilliseconds, statusCode);
@@ -47,7 +58,7 @@ public class MetricsMiddleware
         catch (Exception ex)
         {
             stopwatch.Stop();
-            _metrics.FailedRequests.WithLabels(path, "exception").Inc();
+            _metrics.RecordFailedRequest(path, "exception");
             _logger.LogError(ex, "HTTP {Method} {Path} failed after {Elapsed}ms",
                 method, path, stopwatch.ElapsedMilliseconds);
             throw;
@@ -60,6 +71,11 @@ public class MetricsMiddleware
 /// </summary>
 public static class MetricsMiddlewareExtensions
 {
+    /// <summary>
+    /// Adds the <see cref="MetricsMiddleware"/> to the application's request pipeline to track HTTP metrics.
+    /// </summary>
+    /// <param name="builder">The <see cref="IApplicationBuilder"/>.</param>
+    /// <returns>The configured <see cref="IApplicationBuilder"/>.</returns>
     public static IApplicationBuilder UseRequestMetrics(this IApplicationBuilder builder)
     {
         return builder.UseMiddleware<MetricsMiddleware>();

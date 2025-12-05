@@ -7,6 +7,9 @@ namespace Maliev.CurrencyService.Api.Models;
 /// </summary>
 public class RedisOptions
 {
+    /// <summary>
+    /// The name of the configuration section for Redis options.
+    /// </summary>
     public const string SectionName = "Redis";
 
     /// <summary>
@@ -21,22 +24,22 @@ public class RedisOptions
     public string? InstanceName { get; set; }
 
     /// <summary>
-    /// Database number to use (0-15 for standard Redis)
+    /// Database number to use (0-15 for standard Redis).
     /// </summary>
     public int Database { get; set; } = 0;
 
     /// <summary>
-    /// Connection timeout in seconds
+    /// Connection timeout in seconds.
     /// </summary>
     public int ConnectTimeout { get; set; } = 5;
 
     /// <summary>
-    /// Sync timeout in milliseconds
+    /// Synchronous operation timeout in milliseconds.
     /// </summary>
     public int SyncTimeout { get; set; } = 5000;
 
     /// <summary>
-    /// Whether to abort on connection failure
+    /// Whether to abort all operations if a connection to the server cannot be established.
     /// </summary>
     public bool AbortOnConnectFail { get; set; } = false;
 }

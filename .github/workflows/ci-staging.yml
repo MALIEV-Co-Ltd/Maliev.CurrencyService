@@ -1,4 +1,4 @@
-name: Release Candidate to Staging
+﻿name: Release Candidate to Staging
 
 on:
   push:
@@ -16,7 +16,13 @@ jobs:
       - name: Set up .NET
         uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: "9.x"
+          dotnet-version: "10.x"
+
+      - name: Switch to PackageReference for CI build
+        run: |
+          # Replace ProjectReference with PackageReference in all service csproj files
+          find . -name "*.csproj" -type f -exec sed -i 's|<ProjectReference Include=".*Maliev.Aspire.ServiceDefaults.*.csproj" />|<PackageReference Include="Maliev.Aspire.ServiceDefaults" Version="1.0.*" />|g' {} \;
+          echo "Switched to PackageReference for ServiceDefaults"
 
       - name: Restore dependencies
         run: dotnet restore Maliev.CurrencyService.sln
@@ -41,15 +47,11 @@ jobs:
         with:
           project_id: maliev-website
 
-
       - name: Build and push Docker image
         run: |
           gcloud auth configure-docker asia-southeast1-docker.pkg.dev
           export RELEASE_VERSION=$(echo ${{ github.ref }} | sed -e 's,.*/v,,g')
-          NUGET_USERNAME=${{ github.actor }} NUGET_PASSWORD=${{ secrets.GITOPS_PAT }} docker build \
-            --secret id=nuget_username,env=NUGET_USERNAME \
-            --secret id=nuget_password,env=NUGET_PASSWORD \
-            -t asia-southeast1-docker.pkg.dev/maliev-website/maliev-website-artifact-staging/maliev-currency-service:$RELEASE_VERSION -f Maliev.CurrencyService.Api/Dockerfile .
+          NUGET_USERNAME=${{ github.actor }} NUGET_PASSWORD=${{ secrets.GITOPS_PAT }} docker build --secret id=nuget_username,env=NUGET_USERNAME --secret id=nuget_password,env=NUGET_PASSWORD -t asia-southeast1-docker.pkg.dev/maliev-website/maliev-website-artifact-staging/maliev-currency-service:$RELEASE_VERSION -f Maliev.CurrencyService.Api/Dockerfile .
           docker push asia-southeast1-docker.pkg.dev/maliev-website/maliev-website-artifact-staging/maliev-currency-service:$RELEASE_VERSION
 
       - name: Checkout maliev-gitops repository
@@ -103,9 +105,5 @@ jobs:
           git push origin $BRANCH_NAME
 
           # Create pull request using GitHub CLI
-          gh pr create \
-            --title "Deploy currency-service $RELEASE_VERSION to staging" \
-            --body "$PR_BODY" \
-            --base main \
-            --head $BRANCH_NAME \
-            --repo MALIEV-Co-Ltd/maliev-gitops
+          gh pr create             --title "Deploy currency-service $RELEASE_VERSION to staging"             --body "$PR_BODY"             --base main             --head $BRANCH_NAME             --repo MALIEV-Co-Ltd/maliev-gitops
+

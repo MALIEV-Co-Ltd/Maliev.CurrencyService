@@ -63,7 +63,7 @@ public class RateService : IRateService
         var from = fromCurrency.ToUpperInvariant();
         var to = toCurrency.ToUpperInvariant();
 
-        _logger.LogInformation("GetLiveRateAsync: {From} → {To}", from, to);
+        _logger.LogDebug("GetLiveRateAsync: {From} → {To}", from, to);
 
         // Try to get from cache (database or in-memory cache)
         var cacheKey = $"{RateCacheKeyPrefix}:{from}:{to}";
@@ -83,7 +83,7 @@ public class RateService : IRateService
             // Stale but within revalidation window - return stale + trigger background refresh
             if (age.TotalSeconds <= FreshCacheTtlSeconds + StaleWindowSeconds)
             {
-                _logger.LogInformation("Serving stale cache for {From}:{To} (age: {Age}s), triggering background refresh",
+                _logger.LogDebug("Serving stale cache for {From}:{To} (age: {Age}s), triggering background refresh",
                     from, to, age.TotalSeconds);
 
                 // Trigger background refresh (fire and forget)
@@ -190,7 +190,7 @@ public class RateService : IRateService
         string cacheKey,
         CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Background refresh started for {From}:{To}", from, to);
+        _logger.LogDebug("Background refresh started for {From}:{To}", from, to);
         _metrics.RecordBackgroundJobExecution("rate_refresh");
 
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();

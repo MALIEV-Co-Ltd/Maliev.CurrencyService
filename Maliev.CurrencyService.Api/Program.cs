@@ -3,6 +3,7 @@ using Maliev.CurrencyService.Api.Metrics;
 using Maliev.CurrencyService.Api.Services;
 using Maliev.CurrencyService.Api.Services.External;
 using Maliev.CurrencyService.Data;
+using Maliev.CurrencyService.Api.BackgroundServices;
 using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -92,6 +93,12 @@ builder.Services.AddScoped<IExchangeRateProvider>(sp => sp.GetRequiredService<Fa
 builder.Services.AddScoped<IExchangeRateProvider>(sp => sp.GetRequiredService<FrankfurterProvider>());
 
 builder.Services.AddScoped<ProviderChain>();
+
+builder.Services.AddSingleton<ISnapshotQueue, SnapshotQueue>();
+builder.Services.AddHostedService<SnapshotProcessingService>();
+// Enable other background services if they exist and are safe to run
+// builder.Services.AddHostedService<Maliev.CurrencyService.Api.BackgroundServices.CacheWarmingService>();
+// builder.Services.AddHostedService<Maliev.CurrencyService.Api.BackgroundServices.SnapshotCleanupService>();
 
 builder.Services.AddControllers();
 

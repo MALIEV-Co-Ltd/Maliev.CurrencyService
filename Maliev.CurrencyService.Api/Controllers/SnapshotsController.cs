@@ -22,18 +22,22 @@ namespace Maliev.CurrencyService.Api.Controllers;
 public class SnapshotsController : ControllerBase
 {
     private readonly ISnapshotService _snapshotService;
+    private readonly ISnapshotQueue _snapshotQueue;
     private readonly ILogger<SnapshotsController> _logger;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="SnapshotsController"/> class.
     /// </summary>
     /// <param name="snapshotService">The snapshot service.</param>
+    /// <param name="snapshotQueue">The snapshot queue</param>
     /// <param name="logger">The logger.</param>
     public SnapshotsController(
         ISnapshotService snapshotService,
+        ISnapshotQueue snapshotQueue,
         ILogger<SnapshotsController> logger)
     {
         _snapshotService = snapshotService;
+        _snapshotQueue = snapshotQueue;
         _logger = logger;
     }
 
@@ -55,7 +59,7 @@ public class SnapshotsController : ControllerBase
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
-    public Task<IActionResult> ImportBatch(
+    public async Task<IActionResult> ImportBatch(
         [FromBody] List<SnapshotEntryDto> snapshots,
         [FromQuery] bool dryRun = false,
         CancellationToken cancellationToken = default)
@@ -65,16 +69,43 @@ public class SnapshotsController : ControllerBase
             // Validate input
             if (snapshots == null || snapshots.Count == 0)
             {
-                return Task.FromResult<IActionResult>(BadRequest(new ErrorResponse
+                return BadRequest(new ErrorResponse
                 {
                     Error = "BadRequest",
                     Message = "Snapshot array cannot be empty",
                     Timestamp = DateTime.UtcNow,
                     CorrelationId = HttpContext.TraceIdentifier
-                }));
+                });
             }
 
-            // Validate each snapshot entry
+            // Convert DTOs to internal Request
+            var request = new SnapshotBatchRequest
+            {
+                Snapshots = snapshots.Select(s => new SnapshotEntry 
+                { 
+                    From = s.From, 
+                    To = s.To, 
+                    Rate = s.Rate 
+                }).ToList(),
+                Source = "AdminApi",
+                AutoPromote = false, // Staging mode by default
+                SnapshotDate = DateOnly.FromDateTime(DateTime.UtcNow) // Default to today, or extract from entries
+            };
+
+            // Use the date from the first entry if available
+            if (snapshots.Any() && DateTime.TryParse(snapshots.First().Timestamp, out var ts))
+            {
+                request.SnapshotDate = DateOnly.FromDateTime(ts);
+            }
+
+            // Call Service
+            // For DryRun, we just validate using ImportBatchAsync logic but don't persist?
+            // Actually SnapshotService.ImportBatchAsync persists to Staging.
+            // If DryRun is true, we should probably just Validate.
+            // But the current controller code did custom validation.
+            // Let's keep the custom validation for DryRun as per original logic to avoid breaking FR-028 check
+            
+            // Validate each snapshot entry (Controller Validation Layer)
             var validationErrors = new List<string>();
             for (int i = 0; i < snapshots.Count; i++)
             {
@@ -86,7 +117,6 @@ public class SnapshotsController : ControllerBase
                 if (entry.Rate <= 0)
                     validationErrors.Add($"Entry {i}: Rate must be positive");
 
-                // Validate timestamp format
                 if (string.IsNullOrWhiteSpace(entry.Timestamp) ||
                     !DateTime.TryParse(entry.Timestamp, out _))
                 {
@@ -109,13 +139,13 @@ public class SnapshotsController : ControllerBase
                 };
 
                 Response.Headers["X-Correlation-ID"] = HttpContext.TraceIdentifier;
-                return Task.FromResult<IActionResult>(Ok(report));
+                return Ok(report);
             }
 
             // FR-028a: Reject entire batch on any validation error
             if (validationErrors.Count > 0)
             {
-                return Task.FromResult<IActionResult>(BadRequest(new ErrorResponse
+                return BadRequest(new ErrorResponse
                 {
                     Error = "BadRequest",
                     Message = "validation failed for snapshot batch",
@@ -125,40 +155,55 @@ public class SnapshotsController : ControllerBase
                     {
                         { "snapshots", validationErrors.ToArray() }
                     }
-                }));
+                });
             }
 
-            // FR-027: Process asynchronously - generate batch ID and return immediately
-            var batchId = Guid.NewGuid().ToString();
-            var submittedAt = DateTime.UtcNow;
+            // FR-027: Process asynchronously via Service + Queue
+            // Service stages the data
+            var batchResponse = await _snapshotService.ImportBatchAsync(request, cancellationToken);
+            
+            if (batchResponse.FailureCount > 0 && batchResponse.Errors != null)
+            {
+                 // If service found validation errors (e.g. invalid currency codes), reject
+                 // This effectively implements "All or Nothing" at the service layer too
+                 return BadRequest(new ErrorResponse
+                 {
+                     Error = "BadRequest",
+                     Message = "validation failed for snapshot batch",
+                     Timestamp = DateTime.UtcNow,
+                     CorrelationId = HttpContext.TraceIdentifier,
+                     Details = batchResponse.Errors.ToDictionary(k => k.Key, v => v.Value)
+                 });
+            }
 
-            // TODO: Queue for background processing via _snapshotService
-            // For now, return queued status to pass tests
+            // Queue for background proccesing (Promotion check / Finalization)
+            await _snapshotQueue.QueueBackgroundWorkItemAsync(batchResponse.BatchId);
+
             var result = new SnapshotIngestionResult
             {
-                BatchId = batchId,
+                BatchId = batchResponse.BatchId,
                 Status = "Queued",
-                RecordCount = snapshots.Count,
-                SubmittedAt = submittedAt
+                RecordCount = batchResponse.SuccessCount,
+                SubmittedAt = DateTime.UtcNow
             };
 
             _logger.LogInformation("Snapshot batch {BatchId} queued for processing: {Count} records",
-                batchId, snapshots.Count);
+                batchResponse.BatchId, snapshots.Count);
 
             Response.Headers["X-Correlation-ID"] = HttpContext.TraceIdentifier;
-            return Task.FromResult<IActionResult>(Accepted(result));
+            return Accepted(result);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error importing snapshot batch");
 
-            return Task.FromResult<IActionResult>(StatusCode(StatusCodes.Status500InternalServerError, new ErrorResponse
+            return StatusCode(StatusCodes.Status500InternalServerError, new ErrorResponse
             {
                 Error = "InternalServerError",
                 Message = "An error occurred while importing snapshot batch",
                 Timestamp = DateTime.UtcNow,
                 CorrelationId = HttpContext.TraceIdentifier
-            }));
+            });
         }
     }
 
@@ -197,6 +242,9 @@ public class SnapshotsController : ControllerBase
                     CorrelationId = HttpContext.TraceIdentifier
                 });
             }
+
+            // Update status in queue tracker if present
+            _snapshotQueue.UpdateStatus(batchId, "Promoted");
 
             Response.Headers["X-Correlation-ID"] = HttpContext.TraceIdentifier;
 
@@ -267,7 +315,7 @@ public class SnapshotsController : ControllerBase
     }
 
     /// <summary>
-    /// Get batch status (placeholder for CreatedAtAction)
+    /// Get batch status
     /// </summary>
     /// <param name="batchId">Batch ID</param>
     /// <returns>Batch status</returns>
@@ -277,11 +325,13 @@ public class SnapshotsController : ControllerBase
     [ApiExplorerSettings(IgnoreApi = true)] // Hide from API documentation
     public IActionResult GetBatchStatus(string batchId)
     {
-        // Placeholder for CreatedAtAction - actual implementation could query staging table
+        var (status, error) = _snapshotQueue.GetStatus(batchId);
+        
         return Ok(new
         {
-            batchId,
-            message = "Use promotion endpoint to promote batch or query staging table directly"
+            BatchId = batchId,
+            Status = status,
+            ErrorMessage = error
         });
     }
 }

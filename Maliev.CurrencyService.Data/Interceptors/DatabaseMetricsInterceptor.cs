@@ -116,6 +116,14 @@ public class DatabaseMetricsInterceptor : DbCommandInterceptor
         DbCommand command,
         CommandErrorEventData eventData)
     {
+        if (IsMigrationHistoryCheckFailure(command, eventData.Exception))
+        {
+            // Ignore "relation does not exist" error for __EFMigrationsHistory table check
+            // consistently handled by EF Core internally.
+            base.CommandFailed(command, eventData);
+            return;
+        }
+
         _logger.LogError(
             eventData.Exception,
             "Database command failed after {Duration}ms. CommandType: {CommandType}, SQL: {CommandText}",
@@ -139,6 +147,11 @@ public class DatabaseMetricsInterceptor : DbCommandInterceptor
         CommandErrorEventData eventData,
         CancellationToken cancellationToken = default)
     {
+        if (IsMigrationHistoryCheckFailure(command, eventData.Exception))
+        {
+            return base.CommandFailedAsync(command, eventData, cancellationToken);
+        }
+
         _logger.LogError(
             eventData.Exception,
             "Database command failed after {Duration}ms. CommandType: {CommandType}, SQL: {CommandText}",
@@ -148,6 +161,18 @@ public class DatabaseMetricsInterceptor : DbCommandInterceptor
 
         _metrics?.RecordDatabaseError(GetCommandTypeFromSql(command.CommandText), eventData.Exception.GetType().Name);
         return base.CommandFailedAsync(command, eventData, cancellationToken);
+    }
+
+    private static bool IsMigrationHistoryCheckFailure(DbCommand command, Exception exception)
+    {
+        // Check for specific Postgres error "42P01" (undefined_table) when querying __EFMigrationsHistory
+        if (exception is Npgsql.PostgresException pgEx && 
+            pgEx.SqlState == "42P01" && 
+            command.CommandText.Contains("__EFMigrationsHistory"))
+        {
+            return true;
+        }
+        return false;
     }
 
     private void LogCommandExecution(DbCommand command, TimeSpan duration)

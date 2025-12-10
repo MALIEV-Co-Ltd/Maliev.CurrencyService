@@ -1,4 +1,4 @@
-using Maliev.CurrencyService.Api.HealthChecks;
+
 using Maliev.CurrencyService.Api.Metrics;
 using Maliev.CurrencyService.Api.Services;
 using Maliev.CurrencyService.Api.Services.External;
@@ -17,17 +17,17 @@ builder.AddServiceMeters("currency-service"); // Register service meters for Ope
 
 builder.AddPostgresDbContext<CurrencyServiceDbContext>(connectionStringName: "CurrencyDbContext"); // PostgreSQL with retry logic
 
-// Add Memory Cache (always needed - used by both cache implementations)
-builder.Services.AddMemoryCache();
-
 // Add Cache Service (two-tier with Redis or in-memory only)
+// ServiceDefaults 'AddRedisDistributedCache' handles:
+// 1. Connection string 'redis'
+// 2. AddStackExchangeRedisCache
+// 3. Health Checks (tags: redis, ready)
+// 4. In-Memory fallback (AddMemoryCache)
+builder.AddRedisDistributedCache("currencies-cache");
+
 var redisConnectionString = builder.Configuration.GetConnectionString("Redis");
-if (!string.IsNullOrEmpty(redisConnectionString))
+if (!string.IsNullOrEmpty(redisConnectionString) && !builder.Environment.IsEnvironment("Testing"))
 {
-    builder.Services.AddStackExchangeRedisCache(options =>
-    {
-        options.Configuration = redisConnectionString;
-    });
     builder.Services.AddSingleton<ICacheService, RedisCacheService>();
 }
 else
@@ -58,9 +58,7 @@ if (!builder.Environment.IsProduction())
     });
 }
 
-// Add Health Checks
-builder.Services.AddHealthChecks()
-    .AddCheck<DatabaseHealthCheck>("database", tags: new[] { "db", "readiness" });
+
 
 // Add Rate Limiting
 builder.Services.AddRateLimiter(options =>
@@ -77,7 +75,15 @@ builder.Services.AddRateLimiter(options =>
 });
 
 // Add Metrics
+// Add Metrics
 builder.Services.AddSingleton<CurrencyServiceMetrics>();
+// Register IDatabaseMetrics to resolve to the same CurrencyServiceMetrics instance
+builder.Services.AddSingleton<Maliev.CurrencyService.Data.Interceptors.IDatabaseMetrics>(
+    sp => sp.GetRequiredService<CurrencyServiceMetrics>());
+
+// Add Data Interceptors
+builder.Services.AddScoped<Maliev.CurrencyService.Data.Interceptors.DatabaseMetricsInterceptor>();
+builder.Services.AddScoped<Maliev.CurrencyService.Data.Interceptors.AuditLogInterceptor>();
 
 // Add Domain Services
 builder.Services.AddScoped<ICurrencyService, CurrencyService>();
@@ -145,7 +151,10 @@ app.UseAuthorization();
 app.MapControllers();
 
 // Map Aspire default endpoints (/health, /alive, /metrics)
+// Standardized pattern used throughout MALIEV's services
 app.MapDefaultEndpoints(servicePrefix: "currencies");
+
+
 
 // Map OpenAPI and Scalar documentation (dev/staging only)
 app.MapApiDocumentation(servicePrefix: "currencies");

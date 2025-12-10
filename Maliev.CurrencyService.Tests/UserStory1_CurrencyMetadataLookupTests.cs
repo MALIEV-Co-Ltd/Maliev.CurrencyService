@@ -9,6 +9,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Testcontainers.PostgreSql;
+using OpenTelemetry.Metrics;
 using Xunit;
 
 namespace Maliev.CurrencyService.Tests;
@@ -274,7 +275,7 @@ public class CurrencyServiceTestFixture : IAsyncDisposable
         // Constitution Principle IV: PostgreSQL-only testing
         // Use Testcontainers to automatically start PostgreSQL for tests
         _postgresContainer = new PostgreSqlBuilder()
-            .WithImage("postgres:16-alpine")
+            .WithImage("postgres:18-alpine")
             .WithDatabase("currency_app_db")
             .WithUsername("postgres")
             .WithPassword("postgres123")
@@ -287,16 +288,13 @@ public class CurrencyServiceTestFixture : IAsyncDisposable
         Factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
         {
             builder.UseEnvironment("Testing");
+            builder.UseSetting("ConnectionStrings:CurrencyDbContext", _postgresContainer.GetConnectionString());
 
             builder.ConfigureServices(services =>
             {
-                // Constitution Principle IV: Use PostgreSQL for all tests (no InMemoryDatabase)
-                // Note: AddPostgresDbContext skips registration in Testing environment,
-                // so we must manually register DbContext here with Testcontainers connection string
-                services.AddDbContext<CurrencyServiceDbContext>(options =>
-                {
-                    options.UseNpgsql(_postgresContainer.GetConnectionString());
-                });
+                // Constitution Principle IV: Use PostgreSQL for all tests
+                // We rely on ServiceDefaults (AddPostgresDbContext) to register DbContext and HealthChecks
+                // explicitly enabled in Testing environment via Extensions.Database.cs modification.
 
                 // Remove Redis cache service and use in-memory cache for tests
                 var cacheDescriptor = services.SingleOrDefault(d => d.ServiceType.Name.Contains("ICacheService"));
@@ -316,11 +314,12 @@ public class CurrencyServiceTestFixture : IAsyncDisposable
                 services.AddMemoryCache();
                 services.AddSingleton<Maliev.CurrencyService.Api.Services.ICacheService, Maliev.CurrencyService.Api.Services.InMemoryCacheService>();
 
-                // Configure JWT Authentication to use our dynamic RSA public key
+                // Configure JWT Authentication ...
                 services.PostConfigure<Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerOptions>(
                     Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerDefaults.AuthenticationScheme, 
                     options =>
                 {
+                    // ... (keep existing JWT config)
                     options.TokenValidationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters
                     {
                         ValidateIssuerSigningKey = true,
@@ -337,10 +336,19 @@ public class CurrencyServiceTestFixture : IAsyncDisposable
                     options.RequireHttpsMetadata = false;
                 });
                 
-                // Explicitly add HealthChecks to ensure they are registered in the test environment
-                // Explicitly add HealthChecks and ensure a passing liveness check for tests
+                // Explicitly add HealthChecks
+                // ServiceDefaults adds 'self' (liveness) and 'CurrencyServiceDbContext' (readiness/db).
+                // We only need to mock Redis since we removed the real service.
                 services.AddHealthChecks()
-                    .AddCheck("test_liveness", () => Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Healthy(), tags: new[] { "liveness" });
+                    .AddCheck("redis", () => Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckResult.Healthy(), tags: new[] { "redis" });
+                
+                // Configure OpenTelemetry Metrics for Test Environment
+                services.AddOpenTelemetry()
+                    .WithMetrics(metrics => 
+                    {
+                        metrics.AddMeter("currency-service");
+                        metrics.AddPrometheusExporter();
+                    });
             });
         });
 

@@ -1,4 +1,5 @@
 using System.Diagnostics.Metrics;
+using Maliev.CurrencyService.Data.Interceptors;
 
 namespace Maliev.CurrencyService.Api.Metrics;
 
@@ -10,7 +11,7 @@ namespace Maliev.CurrencyService.Api.Metrics;
 /// request rates, provider latency, provider error rates, cache hit/miss ratio,
 /// and background job status.
 /// </remarks>
-public class CurrencyServiceMetrics : IDisposable
+public class CurrencyServiceMetrics : IDisposable, IDatabaseMetrics
 {
     private readonly Meter _meter;
     private readonly string _environment;
@@ -33,6 +34,7 @@ public class CurrencyServiceMetrics : IDisposable
     private readonly Counter<long> _snapshotValidationErrors;
     private readonly Counter<long> _snapshotRecordsIngested;
     private readonly Counter<long> _databaseErrors;
+    private readonly Counter<long> _databaseQueries;
 
     // Histograms
     private readonly Histogram<double> _providerCallDuration;
@@ -124,6 +126,10 @@ public class CurrencyServiceMetrics : IDisposable
         _databaseErrors = _meter.CreateCounter<long>(
             "currency.database_errors_total",
             description: "Total number of database errors");
+
+        _databaseQueries = _meter.CreateCounter<long>(
+            "currency.database_queries_total",
+            description: "Total number of database queries executed");
 
         // Initialize histograms
         _providerCallDuration = _meter.CreateHistogram<double>(
@@ -469,6 +475,16 @@ public class CurrencyServiceMetrics : IDisposable
         _databaseErrors.Add(1,
             new KeyValuePair<string, object?>("operation", operation),
             new KeyValuePair<string, object?>("error_type", errorType));
+    }
+
+    /// <summary>
+    /// Records a database query execution.
+    /// </summary>
+    /// <param name="operation">The database operation (SELECT, INSERT, etc).</param>
+    public void RecordDatabaseQuery(string operation)
+    {
+        _databaseQueries.Add(1,
+            new KeyValuePair<string, object?>("operation", operation));
     }
 
     /// <summary>

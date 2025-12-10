@@ -27,7 +27,7 @@ public class IntegrationTestWebAppFactory : WebApplicationFactory<Program>, IAsy
         _testRsa = RSA.Create(2048);
 
         _postgresContainer = new PostgreSqlBuilder()
-            .WithImage("postgres:18")
+            .WithImage("postgres:18-alpine")
             .WithDatabase("currency_test")
             .WithUsername("postgres")
             .WithPassword("postgres")

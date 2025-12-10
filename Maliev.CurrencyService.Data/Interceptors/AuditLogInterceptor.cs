@@ -68,10 +68,15 @@ public class AuditLogInterceptor : SaveChangesInterceptor
         var entries = context.ChangeTracker.Entries()
             .Where(e => e.State == EntityState.Added
                      || e.State == EntityState.Modified
-                     || e.State == EntityState.Deleted);
+                     || e.State == EntityState.Deleted)
+            .ToList(); // ToList is crucial to avoid "Collection was modified" exception
+
+        var auditLogs = new List<Maliev.CurrencyService.Data.Models.AuditLog>();
 
         foreach (var entry in entries)
         {
+            if (entry.Entity is Maliev.CurrencyService.Data.Models.AuditLog) continue;
+
             var entityType = entry.Entity.GetType().Name;
             var operation = entry.State.ToString();
 
@@ -87,11 +92,9 @@ public class AuditLogInterceptor : SaveChangesInterceptor
                 ? string.Join(", ", entry.Properties
                     .Where(p => p.IsModified)
                     .Select(p => $"{p.Metadata.Name}"))
-                : string.Empty;
+                : null;
 
             // Log the audit information
-            // Note: User ID would be extracted from HttpContext.User claims in a real implementation
-            // For now, we log the operation details
             _logger.LogInformation(
                 "Audit: {Operation} on {EntityType} with ID {PrimaryKey} at {Timestamp}. Changed fields: {ChangedFields}",
                 operation,
@@ -100,8 +103,22 @@ public class AuditLogInterceptor : SaveChangesInterceptor
                 timestamp,
                 changedFields ?? "N/A");
 
-            // TODO: Future enhancement - Store audit logs in dedicated audit_logs table
-            // or send to external logging system for compliance requirements
+            // Create audit log entity
+            auditLogs.Add(new Maliev.CurrencyService.Data.Models.AuditLog
+            {
+                Id = Guid.NewGuid(),
+                EntityType = entityType,
+                EntityId = primaryKey,
+                Operation = operation,
+                ChangedFields = changedFields,
+                Timestamp = timestamp,
+                UserId = "System" // No HTTP context access here
+            });
+        }
+
+        if (auditLogs.Any())
+        {
+            context.AddRange(auditLogs);
         }
     }
 }

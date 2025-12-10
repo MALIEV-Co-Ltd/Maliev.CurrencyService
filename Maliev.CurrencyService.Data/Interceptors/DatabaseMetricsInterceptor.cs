@@ -17,15 +17,27 @@ namespace Maliev.CurrencyService.Data.Interceptors;
 public class DatabaseMetricsInterceptor : DbCommandInterceptor
 {
     private readonly ILogger<DatabaseMetricsInterceptor> _logger;
+    private readonly IDatabaseMetrics _metrics;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="DatabaseMetricsInterceptor"/> class.
     /// </summary>
     /// <param name="logger">The logger for the interceptor.</param>
-    public DatabaseMetricsInterceptor(ILogger<DatabaseMetricsInterceptor> logger)
+    /// <param name="metrics">The metrics recorder.</param>
+    public DatabaseMetricsInterceptor(
+        ILogger<DatabaseMetricsInterceptor> _logger = null!, // Using nullable for safety if DI mismatch, but normally required
+        IDatabaseMetrics metrics = null!)
     {
-        _logger = logger;
+        this._logger = _logger; 
+        _metrics = metrics;
     }
+
+    /// <summary>
+    /// Intercepts the execution of a <see cref="DbCommand"/> that is expected to return a <see cref="DbDataReader"/> asynchronously.
+    /// </summary>
+// ... (skip unchanged methods to keep tool call small if possible, but I must match Start/End)
+// Actually I need to replace the constructor to inject. And LogCommandExecution to use.
+// Multireplace is better.
 
     /// <summary>
     /// Intercepts the execution of a <see cref="DbCommand"/> that is expected to return a <see cref="DbDataReader"/> asynchronously.
@@ -111,6 +123,7 @@ public class DatabaseMetricsInterceptor : DbCommandInterceptor
             command.CommandType,
             command.CommandText);
 
+        _metrics?.RecordDatabaseError(GetCommandTypeFromSql(command.CommandText), eventData.Exception.GetType().Name);
         base.CommandFailed(command, eventData);
     }
 
@@ -133,6 +146,7 @@ public class DatabaseMetricsInterceptor : DbCommandInterceptor
             command.CommandType,
             command.CommandText);
 
+        _metrics?.RecordDatabaseError(GetCommandTypeFromSql(command.CommandText), eventData.Exception.GetType().Name);
         return base.CommandFailedAsync(command, eventData, cancellationToken);
     }
 
@@ -140,10 +154,15 @@ public class DatabaseMetricsInterceptor : DbCommandInterceptor
     {
         var commandType = GetCommandTypeFromSql(command.CommandText);
 
-        // Log slow queries (> 100ms threshold)
+        // Record metrics
+        _metrics?.RecordDatabaseQuery(commandType);
+        _metrics?.RecordDatabaseQueryDuration(commandType, duration.TotalSeconds);
+
         if (duration.TotalMilliseconds > 100)
         {
-            _logger.LogWarning(
+             // Log slow queries (> 100ms threshold)
+             // ... existing logging ...
+             _logger.LogWarning(
                 "Slow database query detected: {Duration}ms, Type: {CommandType}, SQL: {CommandText}",
                 duration.TotalMilliseconds,
                 commandType,
@@ -151,16 +170,11 @@ public class DatabaseMetricsInterceptor : DbCommandInterceptor
         }
         else if (duration.TotalMilliseconds > 50)
         {
-            _logger.LogInformation(
+             _logger.LogInformation(
                 "Database query: {Duration}ms, Type: {CommandType}",
                 duration.TotalMilliseconds,
                 commandType);
         }
-
-        // TODO: Future enhancement - Record metrics to Prometheus counters:
-        // - database_queries_total{type=SELECT|INSERT|UPDATE|DELETE}
-        // - database_query_duration_seconds{type, percentile}
-        // - database_errors_total{type, error_code}
     }
 
     private static string GetCommandTypeFromSql(string sql)

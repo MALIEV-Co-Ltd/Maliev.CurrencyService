@@ -13,13 +13,38 @@ namespace Maliev.CurrencyService.Data;
 /// </remarks>
 public class CurrencyServiceDbContext : DbContext
 {
+    private readonly Maliev.CurrencyService.Data.Interceptors.DatabaseMetricsInterceptor _metricsInterceptor;
+    private readonly Maliev.CurrencyService.Data.Interceptors.AuditLogInterceptor _auditInterceptor;
+
     /// <summary>
     /// Initializes a new instance of the <see cref="CurrencyServiceDbContext"/> class.
     /// </summary>
     /// <param name="options">The options for this context.</param>
-    public CurrencyServiceDbContext(DbContextOptions<CurrencyServiceDbContext> options)
+    /// <param name="metricsInterceptor">The database metrics interceptor.</param>
+    /// <param name="auditInterceptor">The audit log interceptor.</param>
+    public CurrencyServiceDbContext(
+        DbContextOptions<CurrencyServiceDbContext> options,
+        Maliev.CurrencyService.Data.Interceptors.DatabaseMetricsInterceptor? metricsInterceptor = null,
+        Maliev.CurrencyService.Data.Interceptors.AuditLogInterceptor? auditInterceptor = null)
         : base(options)
     {
+        _metricsInterceptor = metricsInterceptor!;
+        _auditInterceptor = auditInterceptor!;
+    }
+
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+    {
+        if (_metricsInterceptor != null)
+        {
+            optionsBuilder.AddInterceptors(_metricsInterceptor);
+        }
+
+        if (_auditInterceptor != null)
+        {
+            optionsBuilder.AddInterceptors(_auditInterceptor);
+        }
+
+        base.OnConfiguring(optionsBuilder);
     }
 
     // Core entities per data-model.md
@@ -43,6 +68,10 @@ public class CurrencyServiceDbContext : DbContext
     /// Gets or sets the collection of staged snapshots.
     /// </summary>
     public DbSet<StagedSnapshot> StagedSnapshots => Set<StagedSnapshot>();
+    /// <summary>
+    /// Gets or sets the collection of audit logs.
+    /// </summary>
+    public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

@@ -404,7 +404,7 @@ public class EdgeCaseTests : IClassFixture<CurrencyServiceTestFixture>
         }
     }
 
-    [Fact(Skip = "ETag generation inconsistent in test environment")]
+    [Fact]
     public async Task SC013_Given_ETagSupport_When_UsedByClients_Then_ReducesBandwidthBy40Percent()
     {
         // SC-013: API consumers successfully use ETag to reduce bandwidth by at least 40% for repeated queries

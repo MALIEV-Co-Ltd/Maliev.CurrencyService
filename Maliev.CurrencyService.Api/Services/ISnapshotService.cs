@@ -50,4 +50,12 @@ public interface ISnapshotService
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Number of snapshots deleted</returns>
     Task<int> CleanupOldSnapshotsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Retrieves audit log for a specific batch (FR-032)
+    /// </summary>
+    /// <param name="batchId">Batch ID</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>Audit log or null if not found</returns>
+    Task<SnapshotAuditLog?> GetBatchAuditAsync(string batchId, CancellationToken cancellationToken = default);
 }

@@ -319,6 +319,65 @@ public class SnapshotService : ISnapshotService
     }
 
     /// <summary>
+    /// Retrieves audit log for a specific batch (FR-032)
+    /// </summary>
+    public async Task<SnapshotAuditLog?> GetBatchAuditAsync(string batchId, CancellationToken cancellationToken = default)
+    {
+        if (!Guid.TryParse(batchId, out var parsedBatchId))
+        {
+            return null;
+        }
+
+        // 1. Check RateSnapshots (Promoted/History)
+        // Optimistic: Only need one entry to get metadata, but need count.
+        // For accurate count, we must count.
+        var promotedCount = await _context.RateSnapshots
+            .Where(r => r.BatchId == parsedBatchId)
+            .CountAsync(cancellationToken);
+
+        if (promotedCount > 0)
+        {
+            var first = await _context.RateSnapshots
+                .Where(r => r.BatchId == parsedBatchId)
+                .Select(r => new { r.CreatedAt, r.Source })
+                .FirstAsync(cancellationToken);
+
+            return new SnapshotAuditLog
+            {
+                BatchId = batchId,
+                Timestamp = first.CreatedAt,
+                RecordCount = promotedCount,
+                Source = first.Source ?? "Unknown",
+                SubmittedBy = "Admin" // Placeholder as not currently tracked in schema
+            };
+        }
+
+        // 2. Check StagedSnapshots (Pending/Validation)
+        var stagedCount = await _context.StagedSnapshots
+            .Where(s => s.BatchId == parsedBatchId)
+            .CountAsync(cancellationToken);
+
+        if (stagedCount > 0)
+        {
+            var first = await _context.StagedSnapshots
+                .Where(s => s.BatchId == parsedBatchId)
+                .Select(s => new { s.CreatedAt })
+                .FirstAsync(cancellationToken);
+
+            return new SnapshotAuditLog
+            {
+                BatchId = batchId,
+                Timestamp = first.CreatedAt,
+                RecordCount = stagedCount,
+                Source = "Staging", // Source not stored in StagedSnapshot
+                SubmittedBy = "Admin"
+            };
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// Adds validation error to dictionary
     /// </summary>
     private static void AddError(Dictionary<string, List<string>> errors, string key, string message)

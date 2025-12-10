@@ -190,13 +190,13 @@ public class UserStory4_SnapshotBatchIngestionTests : IClassFixture<CurrencyServ
 
     #region FR-032: Audit Logging
 
-    [Fact(Skip = "Audit logging endpoint /audit not fully implemented in test environment")]
+    [Fact]
     public async Task FR032_Given_SnapshotIngestion_When_Processed_Then_LogsOperationWithDetails()
     {
         // Arrange
         var snapshotBatch = new[]
         {
-            new { from = "USD", to = "CAD", rate = 1.25m, timestamp = "2025-11-02T00:00:00Z" }
+            new { from = "USD", to = "EUR", rate = 1.25m, timestamp = "2025-11-02T00:00:00Z" }
         };
 
         var content = new StringContent(
@@ -216,14 +216,13 @@ public class UserStory4_SnapshotBatchIngestionTests : IClassFixture<CurrencyServ
         // FR-032: System must log snapshot ingestion operations with timestamp, source, and record counts
         // Verify via audit endpoint if available
         var auditResponse = await _client.GetAsync($"/currencies/v1/admin/snapshots/{result!.BatchId}/audit");
-        if (auditResponse.StatusCode == HttpStatusCode.OK)
-        {
-            var auditLog = await auditResponse.Content.ReadFromJsonAsync<SnapshotAuditLog>();
-            Assert.NotNull(auditLog);
-            Assert.Equal(result.BatchId, auditLog!.BatchId);
-            Assert.InRange(auditLog.Timestamp, DateTime.UtcNow.AddMinutes(-5), DateTime.UtcNow.AddMinutes(5));
-            Assert.Equal(1, auditLog.RecordCount);
-        }
+        Assert.Equal(HttpStatusCode.OK, auditResponse.StatusCode);
+
+        var auditLog = await auditResponse.Content.ReadFromJsonAsync<SnapshotAuditLog>();
+        Assert.NotNull(auditLog);
+        Assert.Equal(result.BatchId, auditLog!.BatchId);
+        Assert.InRange(auditLog.Timestamp, DateTime.UtcNow.AddMinutes(-5), DateTime.UtcNow.AddMinutes(5));
+        Assert.Equal(1, auditLog.RecordCount);
     }
 
     #endregion

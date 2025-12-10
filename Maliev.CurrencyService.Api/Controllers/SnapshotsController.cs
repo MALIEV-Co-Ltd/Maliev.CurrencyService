@@ -334,4 +334,45 @@ public class SnapshotsController : ControllerBase
             ErrorMessage = error
         });
     }
+    /// <summary>
+    /// Get batch audit log (FR-032)
+    /// </summary>
+    /// <param name="batchId">Batch ID</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>Audit log</returns>
+    [HttpGet("{batchId}/audit")]
+    [ProducesResponseType(typeof(SnapshotAuditLog), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
+    public async Task<IActionResult> GetBatchAudit(string batchId, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var auditLog = await _snapshotService.GetBatchAuditAsync(batchId, cancellationToken);
+            
+            if (auditLog == null)
+            {
+                return NotFound(new ErrorResponse
+                {
+                    Error = "NotFound",
+                    Message = $"Audit log for batch {batchId} not found",
+                    Timestamp = DateTime.UtcNow,
+                    CorrelationId = HttpContext.TraceIdentifier
+                });
+            }
+
+            return Ok(auditLog);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving audit log for batch {BatchId}", batchId);
+            return StatusCode(StatusCodes.Status500InternalServerError, new ErrorResponse
+            {
+                Error = "InternalServerError",
+                Message = "An error occurred while retrieving audit log",
+                Timestamp = DateTime.UtcNow,
+                CorrelationId = HttpContext.TraceIdentifier
+            });
+        }
+    }
 }

@@ -25,10 +25,10 @@ public class DatabaseMetricsInterceptor : DbCommandInterceptor
     /// <param name="logger">The logger for the interceptor.</param>
     /// <param name="metrics">The metrics recorder.</param>
     public DatabaseMetricsInterceptor(
-        ILogger<DatabaseMetricsInterceptor> _logger = null!, // Using nullable for safety if DI mismatch, but normally required
+        ILogger<DatabaseMetricsInterceptor> logger = null!,
         IDatabaseMetrics metrics = null!)
     {
-        this._logger = _logger; 
+        _logger = logger; 
         _metrics = metrics;
     }
 

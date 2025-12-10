@@ -64,61 +64,69 @@ public class AuditLogInterceptor : SaveChangesInterceptor
 
     private void AuditChanges(DbContext context)
     {
-        var timestamp = DateTime.UtcNow;
-        var entries = context.ChangeTracker.Entries()
-            .Where(e => e.State == EntityState.Added
-                     || e.State == EntityState.Modified
-                     || e.State == EntityState.Deleted)
-            .ToList(); // ToList is crucial to avoid "Collection was modified" exception
-
-        var auditLogs = new List<Maliev.CurrencyService.Data.Models.AuditLog>();
-
-        foreach (var entry in entries)
+        try
         {
-            if (entry.Entity is Maliev.CurrencyService.Data.Models.AuditLog) continue;
+            var timestamp = DateTime.UtcNow;
+            var entries = context.ChangeTracker.Entries()
+                .Where(e => e.State == EntityState.Added
+                         || e.State == EntityState.Modified
+                         || e.State == EntityState.Deleted)
+                .ToList(); // ToList is crucial to avoid "Collection was modified" exception
 
-            var entityType = entry.Entity.GetType().Name;
-            var operation = entry.State.ToString();
+            var auditLogs = new List<Maliev.CurrencyService.Data.Models.AuditLog>();
 
-            // Get primary key value
-            var keyValues = entry.Properties
-                .Where(p => p.Metadata.IsPrimaryKey())
-                .Select(p => p.CurrentValue?.ToString() ?? "null")
-                .ToList();
-            var primaryKey = string.Join(",", keyValues);
-
-            // For updates, capture changed fields
-            var changedFields = entry.State == EntityState.Modified
-                ? string.Join(", ", entry.Properties
-                    .Where(p => p.IsModified)
-                    .Select(p => $"{p.Metadata.Name}"))
-                : null;
-
-            // Log the audit information
-            _logger.LogInformation(
-                "Audit: {Operation} on {EntityType} with ID {PrimaryKey} at {Timestamp}. Changed fields: {ChangedFields}",
-                operation,
-                entityType,
-                primaryKey,
-                timestamp,
-                changedFields ?? "N/A");
-
-            // Create audit log entity
-            auditLogs.Add(new Maliev.CurrencyService.Data.Models.AuditLog
+            foreach (var entry in entries)
             {
-                Id = Guid.NewGuid(),
-                EntityType = entityType,
-                EntityId = primaryKey,
-                Operation = operation,
-                ChangedFields = changedFields,
-                Timestamp = timestamp,
-                UserId = "System" // No HTTP context access here
-            });
-        }
+                if (entry.Entity is Maliev.CurrencyService.Data.Models.AuditLog) continue;
 
-        if (auditLogs.Any())
+                var entityType = entry.Entity.GetType().Name;
+                var operation = entry.State.ToString();
+
+                // Get primary key value
+                var keyValues = entry.Properties
+                    .Where(p => p.Metadata.IsPrimaryKey())
+                    .Select(p => p.CurrentValue?.ToString() ?? "null")
+                    .ToList();
+                var primaryKey = string.Join(",", keyValues);
+
+                // For updates, capture changed fields
+                var changedFields = entry.State == EntityState.Modified
+                    ? string.Join(", ", entry.Properties
+                        .Where(p => p.IsModified)
+                        .Select(p => $"{p.Metadata.Name}"))
+                    : null;
+
+                // Log the audit information
+                _logger.LogInformation(
+                    "Audit: {Operation} on {EntityType} with ID {PrimaryKey} at {Timestamp}. Changed fields: {ChangedFields}",
+                    operation,
+                    entityType,
+                    primaryKey,
+                    timestamp,
+                    changedFields ?? "N/A");
+
+                // Create audit log entity
+                auditLogs.Add(new Maliev.CurrencyService.Data.Models.AuditLog
+                {
+                    Id = Guid.NewGuid(),
+                    EntityType = entityType,
+                    EntityId = primaryKey,
+                    Operation = operation,
+                    ChangedFields = changedFields,
+                    Timestamp = timestamp,
+                    UserId = "System" // No HTTP context access here
+                });
+            }
+
+            if (auditLogs.Any())
+            {
+                context.AddRange(auditLogs);
+            }
+        }
+        catch (Exception ex)
         {
-            context.AddRange(auditLogs);
+            _logger.LogError(ex, "Failed to record audit logs. Transaction will continue.");
+            // Swallow exception to prevent audit failure from blocking business logic
         }
     }
 }

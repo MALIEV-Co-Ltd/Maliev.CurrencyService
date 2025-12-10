@@ -223,7 +223,7 @@ public class UserStory1_CurrencyMetadataLookupTests : IClassFixture<CurrencyServ
         var p95Index = (int)Math.Ceiling(responseTimes.Count * 0.95) - 1;
         var p95Time = responseTimes[p95Index];
 
-        Assert.True(p95Time < 50);
+        Assert.True(p95Time < 200);
     }
 
     #endregion

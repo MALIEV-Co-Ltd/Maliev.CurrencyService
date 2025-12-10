@@ -177,7 +177,7 @@ public class UserStory2_LiveExchangeRateRetrievalTests : IClassFixture<CurrencyS
         // FR-022: Stale-while-revalidate pattern should be in effect
     }
 
-    [Fact(Skip = "Performance test - timing sensitive in CI environment")]
+    [Fact]
     public async Task AC5_Given_MultipleConcurrentCachedRequests_When_Executed_Then_AllCompleteUnder50ms()
     {
         // Arrange - Warm cache
@@ -276,13 +276,13 @@ public class UserStory2_LiveExchangeRateRetrievalTests : IClassFixture<CurrencyS
     #region FR-048: Input Validation
 
     [Theory]
-    [InlineData("", "USD", "from currency code is required")]
-    [InlineData("USD", "", "to currency code is required")]
-    [InlineData("USDD", "EUR", "currency codes must be 3 characters")]
-    [InlineData("USD", "EU", "currency codes must be 3 characters")]
-    [InlineData("123", "USD", "currency codes must be valid")]
+    [InlineData("", "USD")]
+    [InlineData("USD", "")]
+    [InlineData("USDD", "EUR")]
+    [InlineData("USD", "EU")]
+    [InlineData("123", "USD")]
     public async Task FR048_Given_InvalidInput_When_ClientRequestsRate_Then_ReturnsBadRequest(
-        string fromCurrency, string toCurrency, string reason)
+        string fromCurrency, string toCurrency)
     {
         // Act
         var response = await _client.GetAsync($"/currencies/v1/rates?from={fromCurrency}&to={toCurrency}&mode=live");

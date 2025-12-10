@@ -194,7 +194,7 @@ public class UserStory1_CurrencyMetadataLookupTests : IClassFixture<CurrencyServ
 
     #region FR-033: Performance Requirements
 
-    [Fact(Skip = "Performance test - timing sensitive in CI environment")]
+    [Fact]
     public async Task FR033_Given_MultipleConcurrentRequests_When_QueryingCachedData_Then_AllCompleteUnder50ms()
     {
         // Arrange
@@ -262,9 +262,15 @@ public class CurrencyServiceTestFixture : IAsyncDisposable
     internal WebApplicationFactory<Program> Factory { get; private set; } = null!;
     public HttpClient Client { get; private set; } = null!;
     public string DatabaseName { get; } = $"TestDb_{Guid.NewGuid()}";
+    
+    // Dynamic RSA Key for signing test tokens
+    private readonly System.Security.Cryptography.RSA _rsaKey;
 
     public CurrencyServiceTestFixture()
     {
+        // Generate a new 2048-bit RSA key pair for this test run
+        _rsaKey = System.Security.Cryptography.RSA.Create(2048);
+        
         // Constitution Principle IV: PostgreSQL-only testing
         // Use Testcontainers to automatically start PostgreSQL for tests
         _postgresContainer = new PostgreSqlBuilder()
@@ -310,11 +316,26 @@ public class CurrencyServiceTestFixture : IAsyncDisposable
                 services.AddMemoryCache();
                 services.AddSingleton<Maliev.CurrencyService.Api.Services.ICacheService, Maliev.CurrencyService.Api.Services.InMemoryCacheService>();
 
-                // Add test authentication scheme for endpoints with [Authorize]
-                services.AddAuthentication("TestScheme")
-                    .AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, TestAuthenticationHandler>(
-                        "TestScheme", options => { });
-                services.AddAuthorization();
+                // Configure JWT Authentication to use our dynamic RSA public key
+                services.PostConfigure<Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerOptions>(
+                    Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerDefaults.AuthenticationScheme, 
+                    options =>
+                {
+                    options.TokenValidationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters
+                    {
+                        ValidateIssuerSigningKey = true,
+                        IssuerSigningKey = new Microsoft.IdentityModel.Tokens.RsaSecurityKey(_rsaKey.ExportParameters(false)),
+                        ValidateIssuer = true,
+                        ValidIssuer = "TestIssuer",
+                        ValidateAudience = true,
+                        ValidAudience = "TestAudience",
+                        ValidateLifetime = true,
+                        ClockSkew = TimeSpan.Zero
+                    };
+                    
+                    // Disable HTTPS requirement for tests
+                    options.RequireHttpsMetadata = false;
+                });
                 
                 // Explicitly add HealthChecks to ensure they are registered in the test environment
                 // Explicitly add HealthChecks and ensure a passing liveness check for tests
@@ -324,8 +345,36 @@ public class CurrencyServiceTestFixture : IAsyncDisposable
         });
 
         Client = Factory.CreateClient();
+        
+        // Set default Authorization header with a valid admin token
+        Client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
+            "Bearer", GenerateJwtToken());
+            
         SeedTestData().GetAwaiter().GetResult();
         WarmupCache().GetAwaiter().GetResult();
+    }
+
+    public string GenerateJwtToken(string role = "admin")
+    {
+        var claims = new[]
+        {
+            new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.Name, "TestUser"),
+            new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.NameIdentifier, "test-user-id"),
+            new System.Security.Claims.Claim(System.Security.Claims.ClaimTypes.Role, role)
+        };
+
+        var key = new Microsoft.IdentityModel.Tokens.RsaSecurityKey(_rsaKey.ExportParameters(true));
+        var creds = new Microsoft.IdentityModel.Tokens.SigningCredentials(key, Microsoft.IdentityModel.Tokens.SecurityAlgorithms.RsaSha256);
+
+        var token = new System.IdentityModel.Tokens.Jwt.JwtSecurityToken(
+            issuer: "TestIssuer",
+            audience: "TestAudience",
+            claims: claims,
+            expires: DateTime.Now.AddMinutes(30),
+            signingCredentials: creds
+        );
+
+        return new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler().WriteToken(token);
     }
 
     private async Task WarmupCache()

@@ -13,9 +13,11 @@ namespace Maliev.CurrencyService.Tests;
 public class UserStory5_CurrencyMetadataManagementTests : IClassFixture<CurrencyServiceTestFixture>
 {
     private readonly HttpClient _client;
+    private readonly CurrencyServiceTestFixture _fixture;
 
     public UserStory5_CurrencyMetadataManagementTests(CurrencyServiceTestFixture fixture)
     {
+        _fixture = fixture;
         _client = fixture.Client;
     }
 
@@ -280,11 +282,11 @@ public class UserStory5_CurrencyMetadataManagementTests : IClassFixture<Currency
 
     #region FR-046, FR-053: RBAC and Audit Logging
 
-    [Fact(Skip = "Test creates HttpClient outside fixture, bypassing WebApplicationFactory test infrastructure")]
+    [Fact]
     public async Task FR046_Given_UnauthenticatedUser_When_AccessingAdminEndpoint_Then_ReturnsUnauthorized()
     {
         // Arrange
-        var unauthClient = new HttpClient { BaseAddress = _client.BaseAddress };
+        var unauthClient = _fixture.Factory.CreateClient();
 
         // Act - Try to create currency without auth
         var newCurrency = new CreateCurrencyRequest { Code = "TST", Symbol = "T", Name = "Test", DecimalPlaces = 2 };
@@ -332,15 +334,15 @@ public class UserStory5_CurrencyMetadataManagementTests : IClassFixture<Currency
     #region Validation Tests
 
     [Theory]
-    [InlineData("", "Symbol", "Name", 2, "Code is required")]
-    [InlineData("US", "Symbol", "Name", 2, "Code must be exactly 3 characters")]
-    [InlineData("USDD", "Symbol", "Name", 2, "Code must be exactly 3 characters")]
-    [InlineData("usd", "$", "Name", 2, "Code must be uppercase")]
-    [InlineData("USD", "", "Name", 2, "Symbol is required")]
-    [InlineData("USD", "$", "", 2, "Name is required")]
-    [InlineData("USD", "$", "Name", -1, "DecimalPlaces must be non-negative")]
+    [InlineData("", "Symbol", "Name", 2)]
+    [InlineData("US", "Symbol", "Name", 2)]
+    [InlineData("USDD", "Symbol", "Name", 2)]
+    [InlineData("usd", "$", "Name", 2)]
+    [InlineData("USD", "", "Name", 2)]
+    [InlineData("USD", "$", "", 2)]
+    [InlineData("USD", "$", "Name", -1)]
     public async Task Validation_Given_InvalidCurrencyData_When_Creating_Then_ReturnsBadRequest(
-        string code, string symbol, string name, int decimalPlaces, string reason)
+        string code, string symbol, string name, int decimalPlaces)
     {
         // Arrange
         var invalidCurrency = new CreateCurrencyRequest

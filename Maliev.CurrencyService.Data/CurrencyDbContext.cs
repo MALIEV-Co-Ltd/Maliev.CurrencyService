@@ -1,5 +1,6 @@
 using Maliev.CurrencyService.Data.Models;
 using Microsoft.EntityFrameworkCore;
+using Maliev.Aspire.ServiceDefaults.Database;
 
 namespace Maliev.CurrencyService.Data;
 
@@ -11,25 +12,36 @@ namespace Maliev.CurrencyService.Data;
 /// Includes optimistic concurrency control via Version (row version) columns.
 /// Entities: Currency, CountryCurrency, ExchangeRate, RateSnapshot, StagedSnapshot
 /// </remarks>
-public class CurrencyServiceDbContext : DbContext
+public class CurrencyDbContext : DbContext
 {
-    private readonly Maliev.CurrencyService.Data.Interceptors.DatabaseMetricsInterceptor _metricsInterceptor;
-    private readonly Maliev.CurrencyService.Data.Interceptors.AuditLogInterceptor _auditInterceptor;
+    private readonly Maliev.CurrencyService.Data.Interceptors.DatabaseMetricsInterceptor? _metricsInterceptor;
+    private readonly Maliev.CurrencyService.Data.Interceptors.AuditLogInterceptor? _auditInterceptor;
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="CurrencyServiceDbContext"/> class.
+    /// Initializes a new instance of the <see cref="CurrencyDbContext"/> class for testing.
+    /// </summary>
+    /// <param name="options">The options for this context.</param>
+    public CurrencyDbContext(DbContextOptions<CurrencyDbContext> options)
+        : base(options)
+    {
+        _metricsInterceptor = null;
+        _auditInterceptor = null;
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="CurrencyDbContext"/> class.
     /// </summary>
     /// <param name="options">The options for this context.</param>
     /// <param name="metricsInterceptor">The database metrics interceptor.</param>
     /// <param name="auditInterceptor">The audit log interceptor.</param>
-    public CurrencyServiceDbContext(
-        DbContextOptions<CurrencyServiceDbContext> options,
-        Maliev.CurrencyService.Data.Interceptors.DatabaseMetricsInterceptor? metricsInterceptor = null,
-        Maliev.CurrencyService.Data.Interceptors.AuditLogInterceptor? auditInterceptor = null)
+    public CurrencyDbContext(
+        DbContextOptions<CurrencyDbContext> options,
+        Maliev.CurrencyService.Data.Interceptors.DatabaseMetricsInterceptor metricsInterceptor,
+        Maliev.CurrencyService.Data.Interceptors.AuditLogInterceptor auditInterceptor)
         : base(options)
     {
-        _metricsInterceptor = metricsInterceptor!;
-        _auditInterceptor = auditInterceptor!;
+        _metricsInterceptor = metricsInterceptor;
+        _auditInterceptor = auditInterceptor;
     }
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
@@ -79,7 +91,10 @@ public class CurrencyServiceDbContext : DbContext
 
         // Apply all entity configurations from Configurations/ directory
         // This will be used once configurations are created in Task T016
-        modelBuilder.ApplyConfigurationsFromAssembly(typeof(CurrencyServiceDbContext).Assembly);
+        modelBuilder.ApplyConfigurationsFromAssembly(typeof(CurrencyDbContext).Assembly);
+
+        // Apply PostgreSQL snake_case naming convention globally
+        SnakeCaseNamingHelper.ApplySnakeCaseNaming(modelBuilder);
     }
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)

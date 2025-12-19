@@ -22,4 +22,8 @@
     <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\Maliev.Aspire\Maliev.Aspire.ServiceDefaults\Maliev.Aspire.ServiceDefaults.csproj" />
+  </ItemGroup>
+
 </Project>

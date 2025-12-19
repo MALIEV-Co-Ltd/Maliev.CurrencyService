@@ -15,7 +15,7 @@ namespace Maliev.CurrencyService.Api.Services;
 /// </remarks>
 public class SnapshotService : ISnapshotService
 {
-    private readonly CurrencyServiceDbContext _context;
+    private readonly CurrencyDbContext _context;
     private readonly ICacheService _cacheService;
     private readonly ILogger<SnapshotService> _logger;
     private readonly CurrencyServiceMetrics _metrics;
@@ -30,7 +30,7 @@ public class SnapshotService : ISnapshotService
     /// <param name="logger">The logger.</param>
     /// <param name="metrics">The metrics service.</param>
     public SnapshotService(
-        CurrencyServiceDbContext context,
+        CurrencyDbContext context,
         ICacheService cacheService,
         ILogger<SnapshotService> logger,
         CurrencyServiceMetrics metrics)

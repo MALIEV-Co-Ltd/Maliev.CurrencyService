@@ -19,7 +19,7 @@ namespace Maliev.CurrencyService.Api.Controllers;
 /// </remarks>
 [ApiController]
 [ApiVersion("1.0")]
-[Route("currencies/v{version:apiVersion}/currencies")]
+[Route("currency/v{version:apiVersion}/currencies")]
 [Produces("application/json")]
 public class CurrenciesController : ControllerBase
 {
@@ -152,7 +152,7 @@ public class CurrenciesController : ControllerBase
     /// <param name="countryCode">Country code in ISO2 (e.g., "TH") or ISO3 (e.g., "THA") format</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Primary currency for the country</returns>
-    [HttpGet("~/currencies/v{version:apiVersion}/countries/{countryCode}/currency")]
+    [HttpGet("~/currency/v{version:apiVersion}/countries/{countryCode}/currency")]
     [ProducesResponseType(typeof(CurrencyResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
@@ -359,7 +359,7 @@ public class CurrenciesController : ControllerBase
     /// <param name="id">Currency GUID</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Currency details with ETag</returns>
-    [HttpGet("~/currencies/v{version:apiVersion}/admin/currencies/{id:guid}")]
+    [HttpGet("~/currency/v{version:apiVersion}/admin/currencies/{id:guid}")]
     [Authorize] // Requires JWT authentication
     [ProducesResponseType(typeof(CurrencyResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
@@ -414,7 +414,7 @@ public class CurrenciesController : ControllerBase
     /// <param name="request">Currency creation request</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Created currency</returns>
-    [HttpPost("~/currencies/v{version:apiVersion}/admin/currencies")]
+    [HttpPost("~/currency/v{version:apiVersion}/admin/currencies")]
     [Authorize] // Requires JWT authentication
     [ProducesResponseType(typeof(CurrencyResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
@@ -597,7 +597,7 @@ public class CurrenciesController : ControllerBase
     /// <param name="request">Currency update request</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Updated currency</returns>
-    [HttpPut("~/currencies/v{version:apiVersion}/admin/currencies/{id:guid}")]
+    [HttpPut("~/currency/v{version:apiVersion}/admin/currencies/{id:guid}")]
     [Authorize] // Requires JWT authentication
     [ProducesResponseType(typeof(CurrencyResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
@@ -734,7 +734,7 @@ public class CurrenciesController : ControllerBase
     /// <param name="id">Currency GUID</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Success indicator</returns>
-    [HttpDelete("~/currencies/v{version:apiVersion}/admin/currencies/{id:guid}")]
+    [HttpDelete("~/currency/v{version:apiVersion}/admin/currencies/{id:guid}")]
     [Authorize] // Requires JWT authentication
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]

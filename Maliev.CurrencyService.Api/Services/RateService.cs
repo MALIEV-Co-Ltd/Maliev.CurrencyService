@@ -18,7 +18,7 @@ public class RateService : IRateService
 {
     private readonly ProviderChain _providerChain;
     private readonly ICacheService _cacheService;
-    private readonly CurrencyServiceDbContext _context;
+    private readonly CurrencyDbContext _context;
     private readonly ILogger<RateService> _logger;
     private readonly CurrencyServiceMetrics _metrics;
 
@@ -37,7 +37,7 @@ public class RateService : IRateService
     public RateService(
         ProviderChain providerChain,
         ICacheService cacheService,
-        CurrencyServiceDbContext context,
+        CurrencyDbContext context,
         ILogger<RateService> logger,
         CurrencyServiceMetrics metrics)
     {

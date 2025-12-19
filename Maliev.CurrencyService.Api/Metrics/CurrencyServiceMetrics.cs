@@ -56,7 +56,7 @@ public class CurrencyServiceMetrics : IDisposable, IDatabaseMetrics
     public CurrencyServiceMetrics(IConfiguration configuration)
     {
         _environment = configuration["ASPNETCORE_ENVIRONMENT"] ?? "Production";
-        _meter = new Meter("currency-service", "1.0.0");
+        _meter = new Meter("currencies-meter", "1.0.0");
 
         // Initialize counters
         _cacheRequests = _meter.CreateCounter<long>(

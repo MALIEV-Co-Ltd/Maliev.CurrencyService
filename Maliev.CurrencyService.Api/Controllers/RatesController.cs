@@ -17,7 +17,7 @@ namespace Maliev.CurrencyService.Api.Controllers;
 /// </remarks>
 [ApiController]
 [ApiVersion("1.0")]
-[Route("currencies/v{version:apiVersion}/rates")]
+[Route("currency/v{version:apiVersion}/rates")]
 [Produces("application/json")]
 public class RatesController : ControllerBase
 {

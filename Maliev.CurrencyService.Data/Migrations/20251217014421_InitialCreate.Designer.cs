@@ -11,8 +11,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 namespace Maliev.CurrencyService.Data.Migrations
 {
-    [DbContext(typeof(CurrencyServiceDbContext))]
-    [Migration("20251203130614_InitialCreate")]
+    [DbContext(typeof(CurrencyDbContext))]
+    [Migration("20251217014421_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -24,6 +24,51 @@ namespace Maliev.CurrencyService.Data.Migrations
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
+
+            modelBuilder.Entity("Maliev.CurrencyService.Data.Models.AuditLog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("ChangedFields")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("changed_fields");
+
+                    b.Property<string>("EntityId")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("entity_id");
+
+                    b.Property<string>("EntityType")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("entity_type");
+
+                    b.Property<string>("Operation")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("operation");
+
+                    b.Property<DateTime>("Timestamp")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("timestamp");
+
+                    b.Property<string>("UserId")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_audit_logs");
+
+                    b.ToTable("audit_logs");
+                });
 
             modelBuilder.Entity("Maliev.CurrencyService.Data.Models.CountryCurrency", b =>
                 {
@@ -65,7 +110,8 @@ namespace Maliev.CurrencyService.Data.Migrations
                         .HasDefaultValue(true)
                         .HasColumnName("is_primary");
 
-                    b.HasKey("Id");
+                    b.HasKey("Id")
+                        .HasName("pk_country_currencies");
 
                     b.HasIndex("CurrencyCode")
                         .HasDatabaseName("ix_country_currencies_currency_code");
@@ -144,7 +190,8 @@ namespace Maliev.CurrencyService.Data.Migrations
                         .HasDefaultValue(new byte[] { 0, 0, 0, 0, 0, 0, 0, 0 })
                         .HasColumnName("version");
 
-                    b.HasKey("Id");
+                    b.HasKey("Id")
+                        .HasName("pk_currencies");
 
                     b.HasAlternateKey("Code")
                         .HasName("ak_currencies_code");
@@ -223,7 +270,8 @@ namespace Maliev.CurrencyService.Data.Migrations
                         .HasColumnName("updated_at")
                         .HasDefaultValueSql("NOW()");
 
-                    b.HasKey("Id");
+                    b.HasKey("Id")
+                        .HasName("pk_exchange_rates");
 
                     b.HasIndex("ExpiresAt")
                         .HasDatabaseName("ix_exchange_rates_expires_at");
@@ -283,7 +331,8 @@ namespace Maliev.CurrencyService.Data.Migrations
                         .HasColumnType("character varying(3)")
                         .HasColumnName("to_currency");
 
-                    b.HasKey("Id");
+                    b.HasKey("Id")
+                        .HasName("pk_rate_snapshots");
 
                     b.HasIndex("BatchId")
                         .HasDatabaseName("ix_rate_snapshots_batch_id");
@@ -351,7 +400,8 @@ namespace Maliev.CurrencyService.Data.Migrations
                         .HasColumnType("text")
                         .HasColumnName("validation_error");
 
-                    b.HasKey("Id");
+                    b.HasKey("Id")
+                        .HasName("pk_staged_snapshots");
 
                     b.HasIndex("BatchId")
                         .HasDatabaseName("ix_staged_snapshots_batch_id");
@@ -369,7 +419,8 @@ namespace Maliev.CurrencyService.Data.Migrations
                         .HasForeignKey("CurrencyCode")
                         .HasPrincipalKey("Code")
                         .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .IsRequired()
+                        .HasConstraintName("fk_country_currencies_currencies_currency_code");
 
                     b.Navigation("Currency");
                 });

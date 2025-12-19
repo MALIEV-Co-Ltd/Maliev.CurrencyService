@@ -14,7 +14,7 @@ namespace Maliev.CurrencyService.Api.Services;
 /// </remarks>
 public class CurrencyService : ICurrencyService
 {
-    private readonly CurrencyServiceDbContext _context;
+    private readonly CurrencyDbContext _context;
     private readonly ICacheService _cacheService;
     private readonly ILogger<CurrencyService> _logger;
 
@@ -30,7 +30,7 @@ public class CurrencyService : ICurrencyService
     /// <param name="cacheService">The cache service.</param>
     /// <param name="logger">The logger.</param>
     public CurrencyService(
-        CurrencyServiceDbContext context,
+        CurrencyDbContext context,
         ICacheService cacheService,
         ILogger<CurrencyService> logger)
     {

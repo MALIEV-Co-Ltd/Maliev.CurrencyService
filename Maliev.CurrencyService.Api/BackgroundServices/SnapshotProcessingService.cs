@@ -69,7 +69,7 @@ public class SnapshotProcessingService : BackgroundService
 
         using var scope = _serviceProvider.CreateScope();
         // Use a separate context for background processing
-        var context = scope.ServiceProvider.GetRequiredService<CurrencyServiceDbContext>();
+        var context = scope.ServiceProvider.GetRequiredService<CurrencyDbContext>();
 
         try
         {

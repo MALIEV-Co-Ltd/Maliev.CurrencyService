@@ -12,6 +12,23 @@ namespace Maliev.CurrencyService.Data.Migrations
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.CreateTable(
+                name: "audit_logs",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    entity_type = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false),
+                    entity_id = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false),
+                    operation = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false),
+                    changed_fields = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: true),
+                    timestamp = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    user_id = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_audit_logs", x => x.id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "currencies",
                 columns: table => new
                 {
@@ -28,7 +45,7 @@ namespace Maliev.CurrencyService.Data.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_currencies", x => x.id);
+                    table.PrimaryKey("pk_currencies", x => x.id);
                     table.UniqueConstraint("ak_currencies_code", x => x.code);
                 });
 
@@ -50,7 +67,7 @@ namespace Maliev.CurrencyService.Data.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_exchange_rates", x => x.id);
+                    table.PrimaryKey("pk_exchange_rates", x => x.id);
                 });
 
             migrationBuilder.CreateTable(
@@ -68,7 +85,7 @@ namespace Maliev.CurrencyService.Data.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_rate_snapshots", x => x.id);
+                    table.PrimaryKey("pk_rate_snapshots", x => x.id);
                 });
 
             migrationBuilder.CreateTable(
@@ -87,7 +104,7 @@ namespace Maliev.CurrencyService.Data.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_staged_snapshots", x => x.id);
+                    table.PrimaryKey("pk_staged_snapshots", x => x.id);
                 });
 
             migrationBuilder.CreateTable(
@@ -103,9 +120,9 @@ namespace Maliev.CurrencyService.Data.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_country_currencies", x => x.id);
+                    table.PrimaryKey("pk_country_currencies", x => x.id);
                     table.ForeignKey(
-                        name: "FK_country_currencies_currencies_currency_code",
+                        name: "fk_country_currencies_currencies_currency_code",
                         column: x => x.currency_code,
                         principalTable: "currencies",
                         principalColumn: "code",
@@ -186,6 +203,9 @@ namespace Maliev.CurrencyService.Data.Migrations
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.DropTable(
+                name: "audit_logs");
+
             migrationBuilder.DropTable(
                 name: "country_currencies");
 

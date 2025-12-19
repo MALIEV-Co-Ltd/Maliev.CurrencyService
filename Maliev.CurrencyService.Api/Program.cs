@@ -13,9 +13,9 @@ builder.AddGoogleSecretManagerVolume(); // Load secrets from /mnt/secrets if ava
 
 // --- Infrastructure & Observability ---
 builder.AddServiceDefaults(); // OpenTelemetry, health checks, resilience
-builder.AddServiceMeters("currency-service"); // Register service meters for OpenTelemetry business metrics
+builder.AddServiceMeters("currencies-meter"); // Register service meters for OpenTelemetry business metrics
 
-builder.AddPostgresDbContext<CurrencyServiceDbContext>(connectionStringName: "CurrencyDbContext"); // PostgreSQL with retry logic
+builder.AddPostgresDbContext<CurrencyDbContext>(connectionStringName: "CurrencyDbContext"); // PostgreSQL with retry logic
 
 // Add Cache Service (two-tier with Redis or in-memory only)
 // ServiceDefaults 'AddRedisDistributedCache' handles:
@@ -23,18 +23,10 @@ builder.AddPostgresDbContext<CurrencyServiceDbContext>(connectionStringName: "Cu
 // 2. AddStackExchangeRedisCache
 // 3. Health Checks (tags: redis, ready)
 // 4. In-Memory fallback (AddMemoryCache)
-builder.AddRedisDistributedCache("currencies-cache");
+builder.AddRedisDistributedCache(instanceName: "currency:");
+builder.Services.AddMemoryCache();
 
-var redisConnectionString = builder.Configuration.GetConnectionString("Redis");
-if (!string.IsNullOrEmpty(redisConnectionString) && !builder.Environment.IsEnvironment("Testing"))
-{
-    builder.Services.AddSingleton<ICacheService, RedisCacheService>();
-}
-else
-{
-    builder.Services.AddSingleton<ICacheService, InMemoryCacheService>();
-}
-
+builder.Services.AddSingleton<ICacheService, RedisCacheService>();
 // --- API Configuration ---
 builder.AddDefaultCors(); // CORS from CORS:AllowedOrigins config
 builder.AddDefaultApiVersioning(); // API versioning with URL segment reader
@@ -81,9 +73,12 @@ builder.Services.AddSingleton<CurrencyServiceMetrics>();
 builder.Services.AddSingleton<Maliev.CurrencyService.Data.Interceptors.IDatabaseMetrics>(
     sp => sp.GetRequiredService<CurrencyServiceMetrics>());
 
-// Add Data Interceptors
-builder.Services.AddScoped<Maliev.CurrencyService.Data.Interceptors.DatabaseMetricsInterceptor>();
-builder.Services.AddScoped<Maliev.CurrencyService.Data.Interceptors.AuditLogInterceptor>();
+// Add Data Interceptors (skip in Testing environment to allow simpler DbContext constructor)
+if (!builder.Environment.IsEnvironment("Testing"))
+{
+    builder.Services.AddScoped<Maliev.CurrencyService.Data.Interceptors.DatabaseMetricsInterceptor>();
+    builder.Services.AddScoped<Maliev.CurrencyService.Data.Interceptors.AuditLogInterceptor>();
+}
 
 // Add Domain Services
 builder.Services.AddScoped<ICurrencyService, CurrencyService>();
@@ -115,28 +110,15 @@ var metricsService = app.Services.GetRequiredService<CurrencyServiceMetrics>();
 
 var logger = app.Services.GetRequiredService<ILogger<Program>>();
 
-// Run database migrations on startup (skip in Testing environment)
-if (!app.Environment.IsEnvironment("Testing"))
+// Run database migrations on startup
+try
 {
-    try
-    {
-        await app.MigrateDatabaseAsync<CurrencyServiceDbContext>();
-    }
-    catch (Exception ex)
-    {
-        logger.LogError(ex, "Database migration failed - application may not function correctly");
-        // Don't throw - allow app to start for debugging
-    }
+    await app.MigrateDatabaseAsync<CurrencyDbContext>();
 }
-
-// Log startup configuration
-if (!string.IsNullOrEmpty(redisConnectionString))
+catch (Exception ex)
 {
-    logger.LogInformation("Redis distributed cache configured");
-}
-else
-{
-    logger.LogInformation("Using in-memory cache");
+    logger.LogError(ex, "Database migration failed - application may not function correctly");
+    // Don't throw - allow app to start for debugging
 }
 
 app.UseHttpsRedirection();
@@ -152,12 +134,10 @@ app.MapControllers();
 
 // Map Aspire default endpoints (/health, /alive, /metrics)
 // Standardized pattern used throughout MALIEV's services
-app.MapDefaultEndpoints(servicePrefix: "currencies");
-
-
+app.MapDefaultEndpoints(servicePrefix: "currency");
 
 // Map OpenAPI and Scalar documentation (dev/staging only)
-app.MapApiDocumentation(servicePrefix: "currencies");
+app.MapApiDocumentation(servicePrefix: "currency");
 
 logger.LogInformation("CurrencyService started successfully");
 await app.RunAsync();

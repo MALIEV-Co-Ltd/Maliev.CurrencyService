@@ -35,13 +35,6 @@ public class DatabaseMetricsInterceptor : DbCommandInterceptor
     /// <summary>
     /// Intercepts the execution of a <see cref="DbCommand"/> that is expected to return a <see cref="DbDataReader"/> asynchronously.
     /// </summary>
-// ... (skip unchanged methods to keep tool call small if possible, but I must match Start/End)
-// Actually I need to replace the constructor to inject. And LogCommandExecution to use.
-// Multireplace is better.
-
-    /// <summary>
-    /// Intercepts the execution of a <see cref="DbCommand"/> that is expected to return a <see cref="DbDataReader"/> asynchronously.
-    /// </summary>
     /// <param name="command">The command being executed.</param>
     /// <param name="eventData">Contextual data associated with a command being executed.</param>
     /// <param name="result">The result of the command execution.</param>

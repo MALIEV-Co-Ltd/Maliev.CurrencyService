@@ -16,7 +16,7 @@ namespace Maliev.CurrencyService.Api.Controllers;
 /// </remarks>
 [ApiController]
 [ApiVersion("1.0")]
-[Route("currencies/v{version:apiVersion}/admin/snapshots")]
+[Route("currency/v{version:apiVersion}/admin/snapshots")]
 [Produces("application/json")]
 [Authorize] // Requires JWT authentication
 public class SnapshotsController : ControllerBase

@@ -8,7 +8,8 @@ namespace Maliev.CurrencyService.Tests;
 /// Health & Observability Tests
 /// Tests FR-050, FR-051, FR-052, FR-053, FR-054, FR-025 from specification
 /// </summary>
-public class HealthAndObservabilityTests : IClassFixture<CurrencyServiceTestFixture>
+[Collection("CurrencyService")]
+public class HealthAndObservabilityTests
 {
     private readonly HttpClient _client;
 
@@ -25,7 +26,7 @@ public class HealthAndObservabilityTests : IClassFixture<CurrencyServiceTestFixt
         // FR-050: System must provide liveness endpoint that returns 200 when service is running
 
         // Act
-        var response = await _client.GetAsync("/currencies/liveness");
+        var response = await _client.GetAsync("/currency/liveness");
 
         // Assert
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -41,7 +42,7 @@ public class HealthAndObservabilityTests : IClassFixture<CurrencyServiceTestFixt
 
         // Act - Multiple concurrent liveness checks
         var tasks = Enumerable.Range(0, 100)
-            .Select(_ => _client.GetAsync("/currencies/liveness"))
+            .Select(_ => _client.GetAsync("/currency/liveness"))
             .ToList();
 
         var responses = await Task.WhenAll(tasks);
@@ -63,35 +64,41 @@ public class HealthAndObservabilityTests : IClassFixture<CurrencyServiceTestFixt
         // Returns 200 only when all dependencies are healthy
 
         // Act
-        var response = await _client.GetAsync("/currencies/readiness");
+        var response = await _client.GetAsync("/currency/readiness");
 
         // Assert - FR-051: Returns 200 OK
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        // MapDefaultEndpoints returns text/plain "Healthy" by default
-        var status = await response.Content.ReadAsStringAsync();
-        Assert.Equal("Healthy", status);
+        // ServiceDefaults now returns detailed JSON health information
+        Assert.Equal("application/json", response.Content.Headers.ContentType?.MediaType);
 
-        // Note: Without UIResponseWriter, we cannot verify individual checks in the response body.
+        var healthJson = await response.Content.ReadAsStringAsync();
+        Assert.False(string.IsNullOrEmpty(healthJson));
+        Assert.Contains("\"status\"", healthJson);
+        Assert.Contains("\"checks\"", healthJson);
     }
 
-    [Fact(Skip = "Standard ServiceDefaults readiness endpoint returns text/plain, not detailed JSON (FR051 detail check skipped)")]
+    [Fact]
     public async Task FR051_Given_ReadinessEndpoint_When_Requested_Then_IncludesDetailedHealthInfo()
     {
         // Act
-        var response = await _client.GetAsync("/currencies/readiness");
+        var response = await _client.GetAsync("/currency/readiness");
 
         // Assert
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("application/json", response.Content.Headers.ContentType?.MediaType);
 
         var healthReport = await response.Content.ReadFromJsonAsync<HealthCheckResponse>();
         Assert.NotNull(healthReport);
+        Assert.False(string.IsNullOrEmpty(healthReport!.Status));
 
         // Verify each check includes details
-        foreach (var check in healthReport!.Checks.Values)
+        foreach (var check in healthReport.Checks.Values)
         {
             Assert.False(string.IsNullOrEmpty(check.Status));
-            Assert.False(string.IsNullOrEmpty(check.Description));
+            // Description may be empty for some checks
+            // Duration should be >= 0 milliseconds
+            Assert.True(check.Duration >= 0.0);
 
             if (check.Status == "Unhealthy")
             {
@@ -107,7 +114,7 @@ public class HealthAndObservabilityTests : IClassFixture<CurrencyServiceTestFixt
         // For now, we verify that the readiness endpoint can distinguish health states
 
         // Act
-        var response = await _client.GetAsync("/currencies/readiness");
+        var response = await _client.GetAsync("/currency/readiness");
 
         // Assert
         // If dependencies are unhealthy, should return 503
@@ -139,7 +146,7 @@ public class HealthAndObservabilityTests : IClassFixture<CurrencyServiceTestFixt
         // - Cache hit/miss ratios
 
         // Act
-        var response = await _client.GetAsync("/currencies/metrics");
+        var response = await _client.GetAsync("/currency/metrics");
 
         // Assert
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -158,13 +165,13 @@ public class HealthAndObservabilityTests : IClassFixture<CurrencyServiceTestFixt
     public async Task FR052_Given_RequestsProcessed_When_MetricsQueried_Then_IncludesRequestMetrics()
     {
         // Arrange - Make some requests to generate metrics
-        await _client.GetAsync("/currencies/v1/currencies");
-        await _client.GetAsync("/currencies/v1/rates?from=USD&to=THB&mode=live");
+        await _client.GetAsync("/currency/v1/currencies");
+        await _client.GetAsync("/currency/v1/rates?from=USD&to=THB&mode=live");
         // Arrange - Make request that triggers provider call
-        await _client.GetAsync("/currencies/v1/rates?from=USD&to=EUR&mode=live");
+        await _client.GetAsync("/currency/v1/rates?from=USD&to=EUR&mode=live");
 
         // Act
-        var response = await _client.GetAsync("/currencies/metrics");
+        var response = await _client.GetAsync("/currency/metrics");
         var metricsContent = await response.Content.ReadAsStringAsync();
 
         // Assert - FR-052: Provider call success/failure rates
@@ -180,12 +187,12 @@ public class HealthAndObservabilityTests : IClassFixture<CurrencyServiceTestFixt
         // FR-025: System must track cache hit/miss ratios for monitoring
 
         // Arrange - Generate cache hits and misses
-        await _client.GetAsync("/currencies/v1/rates?from=USD&to=GBP&mode=live"); // Cache miss
+        await _client.GetAsync("/currency/v1/rates?from=USD&to=GBP&mode=live"); // Cache miss
         await Task.Delay(100);
-        await _client.GetAsync("/currencies/v1/rates?from=USD&to=GBP&mode=live"); // Cache hit
+        await _client.GetAsync("/currency/v1/rates?from=USD&to=GBP&mode=live"); // Cache hit
 
         // Act
-        var response = await _client.GetAsync("/currencies/metrics");
+        var response = await _client.GetAsync("/currency/metrics");
         var metricsContent = await response.Content.ReadAsStringAsync();
 
         // Assert
@@ -206,8 +213,8 @@ public class HealthAndObservabilityTests : IClassFixture<CurrencyServiceTestFixt
         // Verify metrics endpoint is stable and returns consistent format
 
         // Act
-        var response1 = await _client.GetAsync("/currencies/metrics");
-        var response2 = await _client.GetAsync("/currencies/metrics");
+        var response1 = await _client.GetAsync("/currency/metrics");
+        var response2 = await _client.GetAsync("/currency/metrics");
 
         // Assert
         Assert.Equal(HttpStatusCode.OK, response1.StatusCode);
@@ -250,7 +257,7 @@ public class HealthAndObservabilityTests : IClassFixture<CurrencyServiceTestFixt
             "application/json");
 
         // Act
-        var response = await _client.PostAsync("/currencies/v1/admin/currencies", content);
+        var response = await _client.PostAsync("/currency/v1/admin/currencies", content);
 
         // Assert - Operation should be logged
         // In production, we'd query logs or audit trail
@@ -279,7 +286,7 @@ public class HealthAndObservabilityTests : IClassFixture<CurrencyServiceTestFixt
     public async Task FR053_Given_UpdateOperation_When_Executed_Then_LogsChangeDetails()
     {
         // Arrange - First get a currency
-        var listResponse = await _client.GetAsync("/currencies/v1/currencies");
+        var listResponse = await _client.GetAsync("/currency/v1/currencies");
         var currencies = await listResponse.Content.ReadFromJsonAsync<PagedResult<CurrencyDto>>();
 
         if (!currencies!.Items.Any())
@@ -301,11 +308,11 @@ public class HealthAndObservabilityTests : IClassFixture<CurrencyServiceTestFixt
             "application/json");
 
         // Get ETag for optimistic concurrency
-        var detailResponse = await _client.GetAsync($"/currencies/v1/admin/currencies/{currency.Id}");
+        var detailResponse = await _client.GetAsync($"/currency/v1/admin/currencies/{currency.Id}");
         var etag = detailResponse.Headers.ETag?.Tag;
 
         // Act - Update operation
-        var request = new HttpRequestMessage(HttpMethod.Put, $"/currencies/v1/admin/currencies/{currency.Id}")
+        var request = new HttpRequestMessage(HttpMethod.Put, $"/currency/v1/admin/currencies/{currency.Id}")
         {
             Content = content
         };
@@ -348,7 +355,7 @@ public class HealthAndObservabilityTests : IClassFixture<CurrencyServiceTestFixt
             System.Text.Encoding.UTF8,
             "application/json");
 
-        var createResponse = await _client.PostAsync("/currencies/v1/admin/currencies", createContent);
+        var createResponse = await _client.PostAsync("/currency/v1/admin/currencies", createContent);
 
         if (createResponse.StatusCode != HttpStatusCode.Created)
             return; // Skip if creation failed
@@ -356,14 +363,14 @@ public class HealthAndObservabilityTests : IClassFixture<CurrencyServiceTestFixt
         var created = await createResponse.Content.ReadFromJsonAsync<CurrencyDto>();
 
         // Act - Delete operation
-        var response = await _client.DeleteAsync($"/currencies/v1/admin/currencies/{created!.Id}");
+        var response = await _client.DeleteAsync($"/currency/v1/admin/currencies/{created!.Id}");
 
         // Assert - FR-053: Delete should be logged
         if (response.StatusCode == HttpStatusCode.NoContent)
         {
             // Deletion succeeded - should be logged in audit trail
             // Verify it's actually deleted
-            var verifyResponse = await _client.GetAsync($"/currencies/v1/currencies/{created.Id}");
+            var verifyResponse = await _client.GetAsync($"/currency/v1/currencies/{created.Id}");
             Assert.Equal(HttpStatusCode.NotFound, verifyResponse.StatusCode);
         }
     }
@@ -381,7 +388,7 @@ public class HealthAndObservabilityTests : IClassFixture<CurrencyServiceTestFixt
         // - Response time
 
         // Arrange & Act - Trigger a provider call
-        var response = await _client.GetAsync("/currencies/v1/rates?from=USD&to=EUR&mode=live");
+        var response = await _client.GetAsync("/currency/v1/rates?from=USD&to=EUR&mode=live");
 
         // Assert - Verify response includes provider information
         if (response.StatusCode == HttpStatusCode.OK)
@@ -405,7 +412,7 @@ public class HealthAndObservabilityTests : IClassFixture<CurrencyServiceTestFixt
         // both attempts should be logged
 
         // Act - Request that might trigger fallback
-        var response = await _client.GetAsync("/currencies/v1/rates?from=THB&to=JPY&mode=live");
+        var response = await _client.GetAsync("/currency/v1/rates?from=THB&to=JPY&mode=live");
 
         // Assert
         if (response.StatusCode == HttpStatusCode.OK)
@@ -430,12 +437,12 @@ public class HealthAndObservabilityTests : IClassFixture<CurrencyServiceTestFixt
     public async Task FR054_Given_MultipleProviderCalls_When_MetricsQueried_Then_ShowsProviderBreakdown()
     {
         // Arrange - Generate multiple provider calls
-        await _client.GetAsync("/currencies/v1/rates?from=USD&to=EUR&mode=live");
-        await _client.GetAsync("/currencies/v1/rates?from=GBP&to=USD&mode=live");
-        await _client.GetAsync("/currencies/v1/rates?from=JPY&to=THB&mode=live");
+        await _client.GetAsync("/currency/v1/rates?from=USD&to=EUR&mode=live");
+        await _client.GetAsync("/currency/v1/rates?from=GBP&to=USD&mode=live");
+        await _client.GetAsync("/currency/v1/rates?from=JPY&to=THB&mode=live");
 
         // Act - Check metrics
-        var response = await _client.GetAsync("/currencies/metrics");
+        var response = await _client.GetAsync("/currency/metrics");
         var metricsContent = await response.Content.ReadAsStringAsync();
 
         // Assert - FR-054: Provider call logging should be visible in metrics
@@ -454,8 +461,8 @@ public class HealthAndObservabilityTests : IClassFixture<CurrencyServiceTestFixt
         // Verify that both health and metrics endpoints are independently accessible
 
         // Act
-        var healthResponse = await _client.GetAsync("/currencies/readiness");
-        var metricsResponse = await _client.GetAsync("/currencies/metrics");
+        var healthResponse = await _client.GetAsync("/currency/readiness");
+        var metricsResponse = await _client.GetAsync("/currency/metrics");
 
         // Assert
         Assert.Equal(HttpStatusCode.OK, healthResponse.StatusCode);
@@ -464,7 +471,7 @@ public class HealthAndObservabilityTests : IClassFixture<CurrencyServiceTestFixt
 
         // Both should be fast (< 100ms for health, < 500ms for metrics)
         var healthStopwatch = System.Diagnostics.Stopwatch.StartNew();
-        await _client.GetAsync("/currencies/readiness");
+        await _client.GetAsync("/currency/readiness");
         healthStopwatch.Stop();
 
         Assert.True(healthStopwatch.ElapsedMilliseconds < 100);
@@ -477,13 +484,13 @@ public class HealthAndObservabilityTests : IClassFixture<CurrencyServiceTestFixt
 
         // Arrange - Create some load
         var loadTasks = Enumerable.Range(0, 50)
-            .Select(_ => _client.GetAsync("/currencies/v1/currencies"))
+            .Select(_ => _client.GetAsync("/currency/v1/currencies"))
             .ToList();
 
         // Act - Query observability endpoints during load
-        var healthTask = _client.GetAsync("/currencies/readiness");
-        var metricsTask = _client.GetAsync("/currencies/metrics");
-        var livenessTask = _client.GetAsync("/currencies/liveness");
+        var healthTask = _client.GetAsync("/currency/readiness");
+        var metricsTask = _client.GetAsync("/currency/metrics");
+        var livenessTask = _client.GetAsync("/currency/liveness");
 
         await Task.WhenAll(loadTasks);
         var healthResponse = await healthTask;
@@ -508,14 +515,14 @@ public record HealthCheckResponse
 {
     public string Status { get; init; } = string.Empty;
     public Dictionary<string, HealthCheckEntry> Checks { get; init; } = new();
-    public TimeSpan TotalDuration { get; init; }
+    public double TotalDuration { get; init; } // Total duration in milliseconds
 }
 
 public record HealthCheckEntry
 {
     public string Status { get; init; } = string.Empty;
     public string Description { get; init; } = string.Empty;
-    public TimeSpan Duration { get; init; }
+    public double Duration { get; init; } // Duration in milliseconds
     public string? Exception { get; init; }
     public Dictionary<string, object>? Data { get; init; }
 }

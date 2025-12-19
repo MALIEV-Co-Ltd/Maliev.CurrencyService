@@ -10,7 +10,8 @@ namespace Maliev.CurrencyService.Tests;
 /// User Story 4: Snapshot Batch Ingestion
 /// Tests FR-026 through FR-032 from specification
 /// </summary>
-public class UserStory4_SnapshotBatchIngestionTests : IClassFixture<CurrencyServiceTestFixture>
+[Collection("CurrencyService")]
+public class UserStory4_SnapshotBatchIngestionTests
 {
     private readonly HttpClient _client;
     private readonly CurrencyServiceTestFixture _fixture;
@@ -41,7 +42,7 @@ public class UserStory4_SnapshotBatchIngestionTests : IClassFixture<CurrencyServ
             "application/json");
 
         // Act
-        var response = await _client.PostAsync("/currencies/v1/admin/snapshots/ingest", content);
+        var response = await _client.PostAsync("/currency/v1/admin/snapshots/ingest", content);
 
         // Assert
         Assert.Contains(response.StatusCode, new[] { HttpStatusCode.Accepted, HttpStatusCode.OK });
@@ -73,7 +74,7 @@ public class UserStory4_SnapshotBatchIngestionTests : IClassFixture<CurrencyServ
             "application/json");
 
         // Act - FR-028: dry-run mode for validation
-        var response = await _client.PostAsync("/currencies/v1/admin/snapshots/ingest?dryRun=true", content);
+        var response = await _client.PostAsync("/currency/v1/admin/snapshots/ingest?dryRun=true", content);
 
         // Assert
         Assert.Equal(HttpStatusCode.OK, response.StatusCode); // FR-028: dry-run should validate and return report without applying changes
@@ -103,7 +104,7 @@ public class UserStory4_SnapshotBatchIngestionTests : IClassFixture<CurrencyServ
             "application/json");
 
         // Act
-        var response = await _client.PostAsync("/currencies/v1/admin/snapshots/ingest?dryRun=true", content);
+        var response = await _client.PostAsync("/currency/v1/admin/snapshots/ingest?dryRun=true", content);
 
         // Assert
         Assert.Equal(HttpStatusCode.OK, response.StatusCode); // dry-run should return validation report
@@ -141,7 +142,7 @@ public class UserStory4_SnapshotBatchIngestionTests : IClassFixture<CurrencyServ
             "application/json");
 
         // Act
-        var response = await _client.PostAsync("/currencies/v1/admin/snapshots/ingest", content);
+        var response = await _client.PostAsync("/currency/v1/admin/snapshots/ingest", content);
 
         // Assert
         // FR-028a: System must reject entire batch on any validation error (all-or-nothing)
@@ -158,7 +159,7 @@ public class UserStory4_SnapshotBatchIngestionTests : IClassFixture<CurrencyServ
 
             // Poll for status
             await Task.Delay(2000);
-            var statusResponse = await _client.GetAsync($"/currencies/v1/admin/snapshots/{result!.BatchId}/status");
+            var statusResponse = await _client.GetAsync($"/currency/v1/admin/snapshots/{result!.BatchId}/status");
             var status = await statusResponse.Content.ReadFromJsonAsync<SnapshotIngestionStatus>();
 
             Assert.Equal("Failed", status!.Status); // FR-028a: batch with invalid data should be rejected
@@ -180,7 +181,7 @@ public class UserStory4_SnapshotBatchIngestionTests : IClassFixture<CurrencyServ
         var oldDate = DateTime.UtcNow.AddDays(-100);
 
         // Act
-        var response = await _client.GetAsync($"/currencies/v1/rates?from=USD&to=EUR&mode=snapshot&date={oldDate:yyyy-MM-dd}");
+        var response = await _client.GetAsync($"/currency/v1/rates?from=USD&to=EUR&mode=snapshot&date={oldDate:yyyy-MM-dd}");
 
         // Assert - FR-031: snapshots older than retention window should be purged
         Assert.Contains(response.StatusCode, new[] { HttpStatusCode.NotFound, HttpStatusCode.Gone });
@@ -205,7 +206,7 @@ public class UserStory4_SnapshotBatchIngestionTests : IClassFixture<CurrencyServ
             "application/json");
 
         // Act
-        var response = await _client.PostAsync("/currencies/v1/admin/snapshots/ingest", content);
+        var response = await _client.PostAsync("/currency/v1/admin/snapshots/ingest", content);
 
         // Assert
         Assert.Contains(response.StatusCode, new[] { HttpStatusCode.Accepted, HttpStatusCode.OK });
@@ -215,7 +216,7 @@ public class UserStory4_SnapshotBatchIngestionTests : IClassFixture<CurrencyServ
 
         // FR-032: System must log snapshot ingestion operations with timestamp, source, and record counts
         // Verify via audit endpoint if available
-        var auditResponse = await _client.GetAsync($"/currencies/v1/admin/snapshots/{result!.BatchId}/audit");
+        var auditResponse = await _client.GetAsync($"/currency/v1/admin/snapshots/{result!.BatchId}/audit");
         Assert.Equal(HttpStatusCode.OK, auditResponse.StatusCode);
 
         var auditLog = await auditResponse.Content.ReadFromJsonAsync<SnapshotAuditLog>();
@@ -243,8 +244,8 @@ public class UserStory4_SnapshotBatchIngestionTests : IClassFixture<CurrencyServ
         var content2 = new StringContent(JsonSerializer.Serialize(batch2), Encoding.UTF8, "application/json");
 
         // Act - Submit concurrently
-        var task1 = _client.PostAsync("/currencies/v1/admin/snapshots/ingest", content1);
-        var task2 = _client.PostAsync("/currencies/v1/admin/snapshots/ingest", content2);
+        var task1 = _client.PostAsync("/currency/v1/admin/snapshots/ingest", content1);
+        var task2 = _client.PostAsync("/currency/v1/admin/snapshots/ingest", content2);
 
         var responses = await Task.WhenAll(task1, task2);
 
@@ -274,7 +275,7 @@ public class UserStory4_SnapshotBatchIngestionTests : IClassFixture<CurrencyServ
         var unauthClient = _fixture.Factory.CreateClient();
 
         // Act
-        var response = await unauthClient.PostAsync("/currencies/v1/admin/snapshots/ingest", content);
+        var response = await unauthClient.PostAsync("/currency/v1/admin/snapshots/ingest", content);
 
         // Assert
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode); // FR-046: system must enforce RBAC for admin endpoints
@@ -299,11 +300,11 @@ public class UserStory4_SnapshotBatchIngestionTests : IClassFixture<CurrencyServ
         var content = new StringContent(JsonSerializer.Serialize(snapshotBatch), Encoding.UTF8, "application/json");
 
         // Act - Submit batch
-        var submitResponse = await _client.PostAsync("/currencies/v1/admin/snapshots/ingest", content);
+        var submitResponse = await _client.PostAsync("/currency/v1/admin/snapshots/ingest", content);
         var result = await submitResponse.Content.ReadFromJsonAsync<SnapshotIngestionResult>();
 
         // Immediately query - should not see uncommitted data
-        var immediateQueryResponse = await _client.GetAsync("/currencies/v1/rates?from=USD&to=THB&mode=snapshot&date=2025-11-04");
+        var immediateQueryResponse = await _client.GetAsync("/currency/v1/rates?from=USD&to=THB&mode=snapshot&date=2025-11-04");
 
         // Assert - Data should not be visible until processing completes
         if (result!.Status == "Queued" || result.Status == "Processing")
@@ -329,7 +330,7 @@ public class UserStory4_SnapshotBatchIngestionTests : IClassFixture<CurrencyServ
 
         // Act
         // 1. Submit batch
-        var submitResponse = await _client.PostAsync("/currencies/v1/admin/snapshots/ingest", content);
+        var submitResponse = await _client.PostAsync("/currency/v1/admin/snapshots/ingest", content);
         submitResponse.EnsureSuccessStatusCode();
         var result = await submitResponse.Content.ReadFromJsonAsync<SnapshotIngestionResult>();
 
@@ -338,7 +339,7 @@ public class UserStory4_SnapshotBatchIngestionTests : IClassFixture<CurrencyServ
         for (int i = 0; i < 10; i++)
         {
             await Task.Delay(500);
-            var statusResponse = await _client.GetAsync($"/currencies/v1/admin/snapshots/{result!.BatchId}/status");
+            var statusResponse = await _client.GetAsync($"/currency/v1/admin/snapshots/{result!.BatchId}/status");
             if (statusResponse.IsSuccessStatusCode)
             {
                 // The status model returned by GetBatchStatus is simple { BatchId, Status, ErrorMessage }
@@ -352,12 +353,12 @@ public class UserStory4_SnapshotBatchIngestionTests : IClassFixture<CurrencyServ
         Assert.Equal("Completed", status?.Status);
 
         // 3. Promote Batch (Explicit promotion required as per API design)
-        var promoteResponse = await _client.PostAsync($"/currencies/v1/admin/snapshots/{result!.BatchId}/promote", null);
+        var promoteResponse = await _client.PostAsync($"/currency/v1/admin/snapshots/{result!.BatchId}/promote", null);
         promoteResponse.EnsureSuccessStatusCode();
 
         // 4. Verify Cache Invalidation / New Rate
         // The rate should now be 50.0
-        var rateResponse = await _client.GetAsync("/currencies/v1/rates?from=USD&to=THB&mode=live"); // Using live mode to check DB? 
+        var rateResponse = await _client.GetAsync("/currency/v1/rates?from=USD&to=THB&mode=live"); // Using live mode to check DB? 
         // Or snapshot mode? "mode=snapshot&date=2025-11-02"
         // If "live" mode uses provider, it might not pick up snapshot unless provider fails or snapshot is prioritized.
         // Assuming the system prefers "fresh" provider data for "live".
@@ -372,7 +373,7 @@ public class UserStory4_SnapshotBatchIngestionTests : IClassFixture<CurrencyServ
         // For this specific AC, let's verify we can retrieve it.
         // NOTE: The original test code might have been checking a specific behavior.
         // Verify cache invalidation - live rate should update
-        var verifyResponse = await _client.GetAsync("/currencies/v1/rates?from=USD&to=THB&mode=live");
+        var verifyResponse = await _client.GetAsync("/currency/v1/rates?from=USD&to=THB&mode=live");
         verifyResponse.EnsureSuccessStatusCode();
         var rateData = await verifyResponse.Content.ReadFromJsonAsync<ExchangeRateDto>();
         
@@ -404,7 +405,7 @@ public class UserStory4_SnapshotBatchIngestionTests : IClassFixture<CurrencyServ
 
         // Act
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
-        var submitResponse = await _client.PostAsync("/currencies/v1/admin/snapshots/ingest", content);
+        var submitResponse = await _client.PostAsync("/currency/v1/admin/snapshots/ingest", content);
         var result = await submitResponse.Content.ReadFromJsonAsync<SnapshotIngestionResult>();
 
         // Poll for completion
@@ -414,7 +415,7 @@ public class UserStory4_SnapshotBatchIngestionTests : IClassFixture<CurrencyServ
         while (stopwatch.Elapsed.TotalSeconds < maxWaitSeconds)
         {
             await Task.Delay(2000);
-            var statusResponse = await _client.GetAsync($"/currencies/v1/admin/snapshots/{result!.BatchId}/status");
+            var statusResponse = await _client.GetAsync($"/currency/v1/admin/snapshots/{result!.BatchId}/status");
             if (statusResponse.StatusCode == HttpStatusCode.OK)
             {
                 status = await statusResponse.Content.ReadFromJsonAsync<SnapshotIngestionStatus>();

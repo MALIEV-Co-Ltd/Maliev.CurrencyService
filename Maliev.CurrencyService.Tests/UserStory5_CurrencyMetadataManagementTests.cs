@@ -10,7 +10,8 @@ namespace Maliev.CurrencyService.Tests;
 /// User Story 5: Currency Metadata Management
 /// Tests FR-005, FR-006, FR-024, FR-046, FR-053 from specification
 /// </summary>
-public class UserStory5_CurrencyMetadataManagementTests : IClassFixture<CurrencyServiceTestFixture>
+[Collection("CurrencyService")]
+public class UserStory5_CurrencyMetadataManagementTests
 {
     private readonly HttpClient _client;
     private readonly CurrencyServiceTestFixture _fixture;
@@ -41,7 +42,7 @@ public class UserStory5_CurrencyMetadataManagementTests : IClassFixture<Currency
             "application/json");
 
         // Act
-        var response = await _client.PostAsync("/currencies/v1/admin/currencies", content);
+        var response = await _client.PostAsync("/currency/v1/admin/currencies", content);
 
         // Assert
         Assert.Equal(HttpStatusCode.Created, response.StatusCode); // FR-005: system must support CRUD operations on currency metadata
@@ -58,10 +59,12 @@ public class UserStory5_CurrencyMetadataManagementTests : IClassFixture<Currency
         Assert.NotNull(response.Headers.Location); // should include Location header with resource URI
 
         // FR-053: All admin operations must be logged
-        // Verify currency appears in list
-        var listResponse = await _client.GetAsync("/currencies/v1/currencies");
-        var currencies = await listResponse.Content.ReadFromJsonAsync<PagedResult<CurrencyDto>>();
-        Assert.Contains(currencies!.Items, c => c.Code == "BTC");
+        // Verify currency can be retrieved by code
+        var getResponse = await _client.GetAsync("/currency/v1/currencies/BTC");
+        Assert.Equal(HttpStatusCode.OK, getResponse.StatusCode);
+        var retrieved = await getResponse.Content.ReadFromJsonAsync<CurrencyDto>();
+        Assert.NotNull(retrieved);
+        Assert.Equal("BTC", retrieved!.Code);
     }
 
     #endregion
@@ -72,12 +75,12 @@ public class UserStory5_CurrencyMetadataManagementTests : IClassFixture<Currency
     public async Task AC2_Given_ExistingCurrency_When_AdminUpdatesWithIfMatch_Then_AppliesUpdateAndInvalidatesCache()
     {
         // Arrange - First get a currency to update
-        var getResponse = await _client.GetAsync("/currencies/v1/currencies");
+        var getResponse = await _client.GetAsync("/currency/v1/currencies");
         var currencies = await getResponse.Content.ReadFromJsonAsync<PagedResult<CurrencyDto>>();
         var currency = currencies!.Items.First();
 
         // Get detailed currency with ETag
-        var detailResponse = await _client.GetAsync($"/currencies/v1/admin/currencies/{currency.Id}");
+        var detailResponse = await _client.GetAsync($"/currency/v1/admin/currencies/{currency.Id}");
         var etag = detailResponse.Headers.ETag?.Tag;
         Assert.False(string.IsNullOrEmpty(etag)); // FR-006: must support optimistic concurrency with version identifiers
 
@@ -97,7 +100,7 @@ public class UserStory5_CurrencyMetadataManagementTests : IClassFixture<Currency
             "application/json");
 
         // Act - FR-006: Update with If-Match header
-        var request = new HttpRequestMessage(HttpMethod.Put, $"/currencies/v1/admin/currencies/{currency.Id}")
+        var request = new HttpRequestMessage(HttpMethod.Put, $"/currency/v1/admin/currencies/{currency.Id}")
         {
             Content = content
         };
@@ -114,7 +117,7 @@ public class UserStory5_CurrencyMetadataManagementTests : IClassFixture<Currency
         Assert.Contains("Updated", updated!.Name); // name should be updated
 
         // FR-006: Cache should be invalidated
-        var cacheCheckResponse = await _client.GetAsync($"/currencies/v1/currencies/{currency.Id}");
+        var cacheCheckResponse = await _client.GetAsync($"/currency/v1/currencies/{currency.Id}");
         var cached = await cacheCheckResponse.Content.ReadFromJsonAsync<CurrencyDto>();
         Assert.Contains("Updated", cached!.Name); // cache should be invalidated after update
     }
@@ -127,7 +130,7 @@ public class UserStory5_CurrencyMetadataManagementTests : IClassFixture<Currency
     public async Task AC3_Given_ExistingCurrency_When_AdminUpdatesWithoutCorrectIfMatch_Then_ReturnsPreconditionFailed()
     {
         // Arrange
-        var getResponse = await _client.GetAsync("/currencies/v1/currencies");
+        var getResponse = await _client.GetAsync("/currency/v1/currencies");
         var currencies = await getResponse.Content.ReadFromJsonAsync<PagedResult<CurrencyDto>>();
         var currency = currencies!.Items.First();
 
@@ -144,7 +147,7 @@ public class UserStory5_CurrencyMetadataManagementTests : IClassFixture<Currency
             "application/json");
 
         // Act - Update without If-Match header or with incorrect ETag
-        var request = new HttpRequestMessage(HttpMethod.Put, $"/currencies/v1/admin/currencies/{currency.Id}")
+        var request = new HttpRequestMessage(HttpMethod.Put, $"/currency/v1/admin/currencies/{currency.Id}")
         {
             Content = content
         };
@@ -164,7 +167,7 @@ public class UserStory5_CurrencyMetadataManagementTests : IClassFixture<Currency
     public async Task AC4_Given_CurrencyWithCountryMappings_When_AdminAttemptsDelete_Then_RejectsOrWarns()
     {
         // Arrange - THB has country mappings (TH)
-        var getResponse = await _client.GetAsync("/currencies/v1/currencies");
+        var getResponse = await _client.GetAsync("/currency/v1/currencies");
         var currencies = await getResponse.Content.ReadFromJsonAsync<PagedResult<CurrencyDto>>();
         var thb = currencies!.Items.FirstOrDefault(c => c.Code == "THB");
 
@@ -175,7 +178,7 @@ public class UserStory5_CurrencyMetadataManagementTests : IClassFixture<Currency
         }
 
         // Act
-        var response = await _client.DeleteAsync($"/currencies/v1/admin/currencies/{thb.Id}");
+        var response = await _client.DeleteAsync($"/currency/v1/admin/currencies/{thb.Id}");
 
         // Assert
         // System should either reject deletion or warn about dependencies
@@ -211,17 +214,17 @@ public class UserStory5_CurrencyMetadataManagementTests : IClassFixture<Currency
             Encoding.UTF8,
             "application/json");
 
-        var createResponse = await _client.PostAsync("/currencies/v1/admin/currencies", createContent);
+        var createResponse = await _client.PostAsync("/currency/v1/admin/currencies", createContent);
         var created = await createResponse.Content.ReadFromJsonAsync<CurrencyDto>();
 
         // Act
-        var response = await _client.DeleteAsync($"/currencies/v1/admin/currencies/{created!.Id}");
+        var response = await _client.DeleteAsync($"/currency/v1/admin/currencies/{created!.Id}");
 
         // Assert
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode); // deletion of currency without dependencies should succeed
 
         // Verify it's deleted
-        var getResponse = await _client.GetAsync($"/currencies/v1/currencies/{created.Id}");
+        var getResponse = await _client.GetAsync($"/currency/v1/currencies/{created.Id}");
         Assert.Equal(HttpStatusCode.NotFound, getResponse.StatusCode); // deleted currency should no longer be accessible
     }
 
@@ -249,10 +252,10 @@ public class UserStory5_CurrencyMetadataManagementTests : IClassFixture<Currency
             Encoding.UTF8,
             "application/json");
 
-        await _client.PostAsync("/currencies/v1/admin/currencies", content);
+        await _client.PostAsync("/currency/v1/admin/currencies", content);
 
         // Act - Trigger cache warming (if endpoint exists)
-        var warmingResponse = await _client.PostAsync("/currencies/v1/admin/cache/warm", null);
+        var warmingResponse = await _client.PostAsync("/currency/v1/admin/cache/warm", null);
 
         // Assert
         if (warmingResponse.StatusCode == HttpStatusCode.Accepted || warmingResponse.StatusCode == HttpStatusCode.OK)
@@ -268,7 +271,7 @@ public class UserStory5_CurrencyMetadataManagementTests : IClassFixture<Currency
         foreach (var (from, to) in pairs)
         {
             var stopwatch = System.Diagnostics.Stopwatch.StartNew();
-            var rateResponse = await _client.GetAsync($"/currencies/v1/rates?from={from}&to={to}&mode=live");
+            var rateResponse = await _client.GetAsync($"/currency/v1/rates?from={from}&to={to}&mode=live");
             stopwatch.Stop();
 
             if (rateResponse.StatusCode == HttpStatusCode.OK)
@@ -292,7 +295,7 @@ public class UserStory5_CurrencyMetadataManagementTests : IClassFixture<Currency
         var newCurrency = new CreateCurrencyRequest { Code = "TST", Symbol = "T", Name = "Test", DecimalPlaces = 2 };
         var content = new StringContent(JsonSerializer.Serialize(newCurrency), Encoding.UTF8, "application/json");
 
-        var response = await unauthClient.PostAsync("/currencies/v1/admin/currencies", content);
+        var response = await unauthClient.PostAsync("/currency/v1/admin/currencies", content);
 
         // Assert
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode); // FR-046: system must enforce RBAC for admin endpoints
@@ -313,11 +316,11 @@ public class UserStory5_CurrencyMetadataManagementTests : IClassFixture<Currency
         };
 
         var content = new StringContent(JsonSerializer.Serialize(newCurrency), Encoding.UTF8, "application/json");
-        var response = await _client.PostAsync("/currencies/v1/admin/currencies", content);
+        var response = await _client.PostAsync("/currency/v1/admin/currencies", content);
         var created = await response.Content.ReadFromJsonAsync<CurrencyDto>();
 
         // Assert - Query audit log if available
-        var auditResponse = await _client.GetAsync($"/currencies/v1/admin/currencies/{created!.Id}/audit");
+        var auditResponse = await _client.GetAsync($"/currency/v1/admin/currencies/{created!.Id}/audit");
         if (auditResponse.StatusCode == HttpStatusCode.OK)
         {
             var auditLog = await auditResponse.Content.ReadFromJsonAsync<AuditLogEntry>();
@@ -356,7 +359,7 @@ public class UserStory5_CurrencyMetadataManagementTests : IClassFixture<Currency
         var content = new StringContent(JsonSerializer.Serialize(invalidCurrency), Encoding.UTF8, "application/json");
 
         // Act
-        var response = await _client.PostAsync("/currencies/v1/admin/currencies", content);
+        var response = await _client.PostAsync("/currency/v1/admin/currencies", content);
 
         // Assert
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode); // FR-048: system must validate input - {reason}
@@ -380,7 +383,7 @@ public class UserStory5_CurrencyMetadataManagementTests : IClassFixture<Currency
         var content = new StringContent(JsonSerializer.Serialize(duplicate), Encoding.UTF8, "application/json");
 
         // Act
-        var response = await _client.PostAsync("/currencies/v1/admin/currencies", content);
+        var response = await _client.PostAsync("/currency/v1/admin/currencies", content);
 
         // Assert - system should prevent duplicate currency codes
         Assert.Contains(response.StatusCode, new[] { HttpStatusCode.Conflict, HttpStatusCode.BadRequest });
@@ -407,13 +410,13 @@ public class UserStory5_CurrencyMetadataManagementTests : IClassFixture<Currency
         var content = new StringContent(JsonSerializer.Serialize(mapping), Encoding.UTF8, "application/json");
 
         // Act
-        var response = await _client.PostAsync("/currencies/v1/admin/country-mappings", content);
+        var response = await _client.PostAsync("/currency/v1/admin/country-mappings", content);
 
         // Assert
         if (response.StatusCode == HttpStatusCode.Created || response.StatusCode == HttpStatusCode.OK)
         {
             // Verify mapping works
-            var resolveResponse = await _client.GetAsync("/currencies/v1/countries/NZ/currency");
+            var resolveResponse = await _client.GetAsync("/currency/v1/countries/NZ/currency");
             Assert.Equal(HttpStatusCode.OK, resolveResponse.StatusCode);
 
             var currency = await resolveResponse.Content.ReadFromJsonAsync<CurrencyDto>();

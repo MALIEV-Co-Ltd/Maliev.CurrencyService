@@ -9,7 +9,8 @@ namespace Maliev.CurrencyService.Tests;
 /// User Story 2: Live Exchange Rate Retrieval
 /// Tests FR-008 through FR-018, FR-040 through FR-044 from specification
 /// </summary>
-public class UserStory2_LiveExchangeRateRetrievalTests : IClassFixture<CurrencyServiceTestFixture>
+[Collection("CurrencyService")]
+public class UserStory2_LiveExchangeRateRetrievalTests
 {
     private readonly HttpClient _client;
 
@@ -31,7 +32,7 @@ public class UserStory2_LiveExchangeRateRetrievalTests : IClassFixture<CurrencyS
         var stopwatch = Stopwatch.StartNew();
 
         // Act
-        var response = await _client.GetAsync($"/currencies/v1/rates?from={fromCurrency}&to={toCurrency}&mode=live");
+        var response = await _client.GetAsync($"/currency/v1/rates?from={fromCurrency}&to={toCurrency}&mode=live");
         stopwatch.Stop();
 
         // Assert
@@ -61,7 +62,7 @@ public class UserStory2_LiveExchangeRateRetrievalTests : IClassFixture<CurrencyS
         // For now, we test that the system CAN use secondary provider
 
         // Act
-        var response = await _client.GetAsync("/currencies/v1/rates?from=USD&to=GBP&mode=live");
+        var response = await _client.GetAsync("/currency/v1/rates?from=USD&to=GBP&mode=live");
 
         // Assert
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -85,7 +86,7 @@ public class UserStory2_LiveExchangeRateRetrievalTests : IClassFixture<CurrencyS
         string fromCurrency, string toCurrency)
     {
         // Act
-        var response = await _client.GetAsync($"/currencies/v1/rates?from={fromCurrency}&to={toCurrency}&mode=live");
+        var response = await _client.GetAsync($"/currency/v1/rates?from={fromCurrency}&to={toCurrency}&mode=live");
 
         // Assert
         if (response.StatusCode == HttpStatusCode.OK)
@@ -116,14 +117,14 @@ public class UserStory2_LiveExchangeRateRetrievalTests : IClassFixture<CurrencyS
     public async Task AC4_Given_AllProvidersUnavailable_When_ClientRequestsLiveRate_Then_ReturnsCachedRateWithStalenessHeader()
     {
         // Arrange - First request to populate cache
-        var initialResponse = await _client.GetAsync("/currencies/v1/rates?from=USD&to=THB&mode=live");
+        var initialResponse = await _client.GetAsync("/currency/v1/rates?from=USD&to=THB&mode=live");
         Assert.Equal(HttpStatusCode.OK, initialResponse.StatusCode);
 
         // For this test to fully work, we'd need to simulate provider unavailability
         // Here we verify the contract exists
 
         // Act - Request when providers might be unavailable
-        var response = await _client.GetAsync("/currencies/v1/rates?from=USD&to=THB&mode=live");
+        var response = await _client.GetAsync("/currency/v1/rates?from=USD&to=THB&mode=live");
 
         // Assert
         if (response.StatusCode == HttpStatusCode.OK)
@@ -153,7 +154,7 @@ public class UserStory2_LiveExchangeRateRetrievalTests : IClassFixture<CurrencyS
     public async Task AC5_Given_CachedRateExists_When_ClientRequestsSamePair_Then_ReturnsCachedRateUnder50ms()
     {
         // Arrange - First request to populate cache
-        var warmupResponse = await _client.GetAsync("/currencies/v1/rates?from=USD&to=EUR&mode=live");
+        var warmupResponse = await _client.GetAsync("/currency/v1/rates?from=USD&to=EUR&mode=live");
         Assert.Equal(HttpStatusCode.OK, warmupResponse.StatusCode);
 
         // Wait a moment to ensure cache is populated
@@ -161,7 +162,7 @@ public class UserStory2_LiveExchangeRateRetrievalTests : IClassFixture<CurrencyS
 
         // Act - Second request should hit cache
         var stopwatch = Stopwatch.StartNew();
-        var response = await _client.GetAsync("/currencies/v1/rates?from=USD&to=EUR&mode=live");
+        var response = await _client.GetAsync("/currency/v1/rates?from=USD&to=EUR&mode=live");
         stopwatch.Stop();
 
         // Assert
@@ -181,7 +182,7 @@ public class UserStory2_LiveExchangeRateRetrievalTests : IClassFixture<CurrencyS
     public async Task AC5_Given_MultipleConcurrentCachedRequests_When_Executed_Then_AllCompleteUnder50ms()
     {
         // Arrange - Warm cache
-        await _client.GetAsync("/currencies/v1/rates?from=USD&to=THB&mode=live");
+        await _client.GetAsync("/currency/v1/rates?from=USD&to=THB&mode=live");
         await Task.Delay(100);
 
         const int requestCount = 100;
@@ -193,7 +194,7 @@ public class UserStory2_LiveExchangeRateRetrievalTests : IClassFixture<CurrencyS
             tasks.Add(Task.Run(async () =>
             {
                 var sw = Stopwatch.StartNew();
-                var response = await _client.GetAsync("/currencies/v1/rates?from=USD&to=THB&mode=live");
+                var response = await _client.GetAsync("/currency/v1/rates?from=USD&to=THB&mode=live");
                 sw.Stop();
                 return (response.StatusCode, sw.ElapsedMilliseconds);
             }));
@@ -219,14 +220,14 @@ public class UserStory2_LiveExchangeRateRetrievalTests : IClassFixture<CurrencyS
     public async Task FR015_016_017_Given_RateWithETag_When_ClientSendsIfNoneMatch_Then_Returns304NotModified()
     {
         // Arrange - First request to get ETag
-        var initialResponse = await _client.GetAsync("/currencies/v1/rates?from=USD&to=EUR&mode=live");
+        var initialResponse = await _client.GetAsync("/currency/v1/rates?from=USD&to=EUR&mode=live");
         Assert.Equal(HttpStatusCode.OK, initialResponse.StatusCode);
 
         var etag = initialResponse.Headers.ETag?.Tag;
         Assert.False(string.IsNullOrEmpty(etag));
 
         // Act - Request with If-None-Match
-        var request = new HttpRequestMessage(HttpMethod.Get, "/currencies/v1/rates?from=USD&to=EUR&mode=live");
+        var request = new HttpRequestMessage(HttpMethod.Get, "/currency/v1/rates?from=USD&to=EUR&mode=live");
         request.Headers.IfNoneMatch.Add(new System.Net.Http.Headers.EntityTagHeaderValue(etag!));
 
         var response = await _client.SendAsync(request);
@@ -255,14 +256,14 @@ public class UserStory2_LiveExchangeRateRetrievalTests : IClassFixture<CurrencyS
     public async Task FR016_017_Given_RateWithLastModified_When_ClientSendsIfModifiedSince_Then_ReturnsAppropriately()
     {
         // Arrange
-        var initialResponse = await _client.GetAsync("/currencies/v1/rates?from=USD&to=GBP&mode=live");
+        var initialResponse = await _client.GetAsync("/currency/v1/rates?from=USD&to=GBP&mode=live");
         Assert.Equal(HttpStatusCode.OK, initialResponse.StatusCode);
 
         var lastModified = initialResponse.Content.Headers.LastModified;
         Assert.NotNull(lastModified);
 
         // Act - Request with If-Modified-Since
-        var request = new HttpRequestMessage(HttpMethod.Get, "/currencies/v1/rates?from=USD&to=GBP&mode=live");
+        var request = new HttpRequestMessage(HttpMethod.Get, "/currency/v1/rates?from=USD&to=GBP&mode=live");
         request.Headers.IfModifiedSince = lastModified;
 
         var response = await _client.SendAsync(request);
@@ -285,7 +286,7 @@ public class UserStory2_LiveExchangeRateRetrievalTests : IClassFixture<CurrencyS
         string fromCurrency, string toCurrency)
     {
         // Act
-        var response = await _client.GetAsync($"/currencies/v1/rates?from={fromCurrency}&to={toCurrency}&mode=live");
+        var response = await _client.GetAsync($"/currency/v1/rates?from={fromCurrency}&to={toCurrency}&mode=live");
 
         // Assert
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);

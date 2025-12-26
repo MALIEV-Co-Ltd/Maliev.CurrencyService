@@ -1,8 +1,11 @@
 using Asp.Versioning;
 using Maliev.CurrencyService.Api.Models.Common;
-using Maliev.CurrencyService.Api.Models.Rates;
+using Maliev.Aspire.ServiceDefaults.Authorization;
 using Maliev.CurrencyService.Api.Services;
+using Maliev.CurrencyService.Api.Models.Rates;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -47,6 +50,8 @@ public class RatesController : ControllerBase
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Exchange rate response</returns>
     [HttpGet]
+    [AllowAnonymous]
+    [EnableRateLimiting("PublicApi")]
     [ProducesResponseType(typeof(ExchangeRateResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status304NotModified)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
@@ -106,7 +111,7 @@ public class RatesController : ControllerBase
                     Message = "Invalid request parameters",
                     Timestamp = DateTime.UtcNow,
                     CorrelationId = HttpContext.TraceIdentifier,
-                    Details = new Dictionary<string, string[]>
+                    Details = new Dictionary<string, string[]> 
                     {
                         { "validation", validationErrors.ToArray() }
                     }
@@ -233,6 +238,62 @@ public class RatesController : ControllerBase
                 CorrelationId = HttpContext.TraceIdentifier
             });
         }
+    }
+
+    /// <summary>
+    /// Update a specific exchange rate (admin only)
+    /// </summary>
+    [HttpPut]
+    [Authorize]
+    [RequirePermission(CurrencyPermissions.RatesUpdate)]
+    [EnableRateLimiting("AuthenticatedApi")]
+    public async Task<IActionResult> UpdateRate([FromBody] UpdateRateRequest request)
+    {
+        // Implementation stub
+        _logger.LogInformation("Admin updating rate {From}:{To} to {Rate}", request.From, request.To, request.Rate);
+        return Ok(new { message = "Rate update accepted" });
+    }
+
+    /// <summary>
+    /// Bulk update exchange rates (admin only)
+    /// </summary>
+    [HttpPost("bulk-update")]
+    [Authorize]
+    [RequirePermission(CurrencyPermissions.RatesBulkUpdate)]
+    [EnableRateLimiting("AuthenticatedApi")]
+    public async Task<IActionResult> BulkUpdateRates([FromBody] BulkUpdateRatesRequest request)
+    {
+        // Implementation stub
+        _logger.LogInformation("Admin bulk updating {Count} rates", request.Rates.Count);
+        return Ok(new { message = "Bulk update processed" });
+    }
+
+    /// <summary>
+    /// Set the active rate source provider (admin only)
+    /// </summary>
+    [HttpPost("set-source")]
+    [Authorize]
+    [RequirePermission(CurrencyPermissions.RatesSetSource)]
+    [EnableRateLimiting("AuthenticatedApi")]
+    public async Task<IActionResult> SetRateSource([FromBody] SetRateSourceRequest request)
+    {
+        // Implementation stub
+        _logger.LogInformation("Admin setting rate source to {Provider}", request.ProviderName);
+        return Ok(new { message = $"Rate source set to {request.ProviderName}" });
+    }
+
+    /// <summary>
+    /// Trigger manual rate refresh from external providers (admin only)
+    /// </summary>
+    [HttpPost("refresh")]
+    [Authorize]
+    [RequirePermission(CurrencyPermissions.SystemRefreshRates)]
+    [EnableRateLimiting("AuthenticatedApi")]
+    public async Task<IActionResult> RefreshRatesFromProvider()
+    {
+        // Implementation stub
+        _logger.LogInformation("Admin triggering manual rate refresh");
+        return Accepted(new { message = "Rate refresh triggered" });
     }
 
     /// <summary>

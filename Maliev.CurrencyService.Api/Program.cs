@@ -13,9 +13,13 @@ builder.AddGoogleSecretManagerVolume(); // Load secrets from /mnt/secrets if ava
 
 // --- Infrastructure & Observability ---
 builder.AddServiceDefaults(); // OpenTelemetry, health checks, resilience
+builder.AddStandardMiddleware(options =>
+{
+    options.EnableRequestLogging = true;
+});
 builder.AddServiceMeters("currencies-meter"); // Register service meters for OpenTelemetry business metrics
 
-builder.AddPostgresDbContext<CurrencyDbContext>(connectionStringName: "CurrencyDbContext"); // PostgreSQL with retry logic
+builder.AddPostgresDbContext<CurrencyDbContext>(connectionName: "CurrencyDbContext"); // PostgreSQL with retry logic
 
 // Add Cache Service (two-tier with Redis or in-memory only)
 // ServiceDefaults 'AddRedisDistributedCache' handles:
@@ -37,34 +41,43 @@ builder.AddJwtAuthentication();
 // Add OpenAPI (must be in Program.cs for XML comments to work via source generator)
 if (!builder.Environment.IsProduction())
 {
-    builder.Services.AddEndpointsApiExplorer();
-    builder.Services.AddOpenApi("v1", options =>
-    {
-        options.AddDocumentTransformer((document, context, cancellationToken) =>
-        {
-            document.Info.Title = "MALIEV Currency Service API";
-            document.Info.Version = "v1";
-            document.Info.Description = "Currency and exchange rate service. Provides ISO 4217 currency metadata, country-to-currency resolution, exchange rate snapshots with historical tracking, and administrative endpoints for currency management with optimistic concurrency control.";
-            return Task.CompletedTask;
-        });
-    });
+    builder.AddStandardOpenApi(
+        title: "MALIEV Currency Service API",
+        description: "Currency and exchange rate service. Provides ISO 4217 currency metadata, country-to-currency resolution, exchange rate snapshots with historical tracking, and administrative endpoints for currency management with optimistic concurrency control.");
 }
 
 
 
-// Add Rate Limiting
-builder.Services.AddRateLimiter(options =>
+// Add Rate Limiting (disabled in Testing environment to support concurrent test scenarios)
+if (!builder.Environment.IsEnvironment("Testing"))
 {
-    options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
-        RateLimitPartition.GetFixedWindowLimiter(
-            partitionKey: httpContext.User.Identity?.Name ?? httpContext.Request.Headers.Host.ToString(),
-            factory: partition => new FixedWindowRateLimiterOptions
-            {
-                AutoReplenishment = true,
-                PermitLimit = 1000,
-                Window = TimeSpan.FromMinutes(1)
-            }));
-});
+    builder.Services.AddRateLimiter(options =>
+    {
+        options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+        // Policy for anonymous users (IP-based)
+        options.AddPolicy("PublicApi", httpContext =>
+            RateLimitPartition.GetFixedWindowLimiter(
+                partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "anonymous",
+                factory: _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = 100,
+                    Window = TimeSpan.FromMinutes(1),
+                    QueueLimit = 20
+                }));
+
+        // Policy for authenticated users (Identity-based)
+        options.AddPolicy("AuthenticatedApi", httpContext =>
+            RateLimitPartition.GetFixedWindowLimiter(
+                partitionKey: httpContext.User.Identity?.Name ?? "anonymous",
+                factory: _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = 1000,
+                    Window = TimeSpan.FromMinutes(1),
+                    QueueLimit = 50
+                }));
+    });
+}
 
 // Add Metrics
 // Add Metrics
@@ -89,6 +102,9 @@ builder.Services.AddScoped<IRateService, RateService>();
 builder.Services.AddHttpClient<FawazahmedProvider>().AddStandardResilienceHandler();
 builder.Services.AddHttpClient<FrankfurterProvider>().AddStandardResilienceHandler();
 
+// IAM Service Client
+builder.AddServiceClient("IAMService");
+
 // Register them as IExchangeRateProvider by resolving the typed client
 builder.Services.AddScoped<IExchangeRateProvider>(sp => sp.GetRequiredService<FawazahmedProvider>());
 builder.Services.AddScoped<IExchangeRateProvider>(sp => sp.GetRequiredService<FrankfurterProvider>());
@@ -97,9 +113,7 @@ builder.Services.AddScoped<ProviderChain>();
 
 builder.Services.AddSingleton<ISnapshotQueue, SnapshotQueue>();
 builder.Services.AddHostedService<SnapshotProcessingService>();
-// Enable other background services if they exist and are safe to run
-// builder.Services.AddHostedService<Maliev.CurrencyService.Api.BackgroundServices.CacheWarmingService>();
-// builder.Services.AddHostedService<Maliev.CurrencyService.Api.BackgroundServices.SnapshotCleanupService>();
+builder.Services.AddIAMRegistration<CurrencyIAMRegistrationService>();
 
 builder.Services.AddControllers();
 
@@ -121,8 +135,13 @@ catch (Exception ex)
     // Don't throw - allow app to start for debugging
 }
 
+app.UseStandardMiddleware();
+
 app.UseHttpsRedirection();
-app.UseRateLimiter();
+if (!app.Environment.IsEnvironment("Testing"))
+{
+    app.UseRateLimiter();
+}
 app.UseCors();
 
 // JWT Authentication & Authorization

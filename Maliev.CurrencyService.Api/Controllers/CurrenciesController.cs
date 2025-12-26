@@ -1,9 +1,11 @@
 using Asp.Versioning;
+using Maliev.Aspire.ServiceDefaults.Authorization;
 using Maliev.CurrencyService.Api.Models.Common;
 using Maliev.CurrencyService.Api.Models.Currencies;
 using Maliev.CurrencyService.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Cryptography;
 using System.Text;
@@ -48,6 +50,8 @@ public class CurrenciesController : ControllerBase
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Paginated currency list</returns>
     [HttpGet]
+    [AllowAnonymous]
+    [EnableRateLimiting("PublicApi")]
     [ProducesResponseType(typeof(PaginatedCurrencyResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status429TooManyRequests)]
@@ -96,6 +100,8 @@ public class CurrenciesController : ControllerBase
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Currency details</returns>
     [HttpGet("{id:guid}")]
+    [AllowAnonymous]
+    [EnableRateLimiting("PublicApi")]
     [ProducesResponseType(typeof(CurrencyResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status429TooManyRequests)]
@@ -153,6 +159,8 @@ public class CurrenciesController : ControllerBase
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Primary currency for the country</returns>
     [HttpGet("~/currency/v{version:apiVersion}/countries/{countryCode}/currency")]
+    [AllowAnonymous]
+    [EnableRateLimiting("PublicApi")]
     [ProducesResponseType(typeof(CurrencyResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
@@ -223,6 +231,8 @@ public class CurrenciesController : ControllerBase
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Primary currency for the country</returns>
     [HttpGet("by-country")]
+    [AllowAnonymous]
+    [EnableRateLimiting("PublicApi")]
     [ProducesResponseType(typeof(CurrencyResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
@@ -295,6 +305,8 @@ public class CurrenciesController : ControllerBase
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Currency details</returns>
     [HttpGet("{code}")]
+    [AllowAnonymous]
+    [EnableRateLimiting("PublicApi")]
     [ProducesResponseType(typeof(CurrencyResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status304NotModified)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
@@ -361,6 +373,7 @@ public class CurrenciesController : ControllerBase
     /// <returns>Currency details with ETag</returns>
     [HttpGet("~/currency/v{version:apiVersion}/admin/currencies/{id:guid}")]
     [Authorize] // Requires JWT authentication
+    [EnableRateLimiting("AuthenticatedApi")]
     [ProducesResponseType(typeof(CurrencyResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
@@ -416,6 +429,8 @@ public class CurrenciesController : ControllerBase
     /// <returns>Created currency</returns>
     [HttpPost("~/currency/v{version:apiVersion}/admin/currencies")]
     [Authorize] // Requires JWT authentication
+    [RequirePermission(CurrencyPermissions.CurrenciesCreate)]
+    [EnableRateLimiting("AuthenticatedApi")]
     [ProducesResponseType(typeof(CurrencyResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
@@ -456,7 +471,7 @@ public class CurrenciesController : ControllerBase
                     Message = "Invalid currency creation request",
                     Timestamp = DateTime.UtcNow,
                     CorrelationId = HttpContext.TraceIdentifier,
-                    Details = new Dictionary<string, string[]>
+                    Details = new Dictionary<string, string[]> 
                     {
                         { "validation", validationErrors.ToArray() }
                     }
@@ -505,6 +520,8 @@ public class CurrenciesController : ControllerBase
     /// <returns>Updated currency</returns>
     [HttpPut("{code}")]
     [Authorize] // Requires JWT authentication
+    [RequirePermission(CurrencyPermissions.CurrenciesUpdate)]
+    [EnableRateLimiting("AuthenticatedApi")]
     [ProducesResponseType(typeof(CurrencyResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
@@ -540,7 +557,7 @@ public class CurrenciesController : ControllerBase
                     Message = "Invalid currency update request",
                     Timestamp = DateTime.UtcNow,
                     CorrelationId = HttpContext.TraceIdentifier,
-                    Details = new Dictionary<string, string[]>
+                    Details = new Dictionary<string, string[]> 
                     {
                         { "validation", validationErrors.ToArray() }
                     }
@@ -599,6 +616,8 @@ public class CurrenciesController : ControllerBase
     /// <returns>Updated currency</returns>
     [HttpPut("~/currency/v{version:apiVersion}/admin/currencies/{id:guid}")]
     [Authorize] // Requires JWT authentication
+    [RequirePermission(CurrencyPermissions.CurrenciesUpdate)]
+    [EnableRateLimiting("AuthenticatedApi")]
     [ProducesResponseType(typeof(CurrencyResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
@@ -675,7 +694,7 @@ public class CurrenciesController : ControllerBase
                     Message = "Invalid currency update request",
                     Timestamp = DateTime.UtcNow,
                     CorrelationId = HttpContext.TraceIdentifier,
-                    Details = new Dictionary<string, string[]>
+                    Details = new Dictionary<string, string[]> 
                     {
                         { "validation", validationErrors.ToArray() }
                     }
@@ -736,6 +755,8 @@ public class CurrenciesController : ControllerBase
     /// <returns>Success indicator</returns>
     [HttpDelete("~/currency/v{version:apiVersion}/admin/currencies/{id:guid}")]
     [Authorize] // Requires JWT authentication
+    [RequirePermission(CurrencyPermissions.CurrenciesDelete)]
+    [EnableRateLimiting("AuthenticatedApi")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
@@ -800,6 +821,8 @@ public class CurrenciesController : ControllerBase
     /// <returns>Success indicator</returns>
     [HttpDelete("{code}")]
     [Authorize] // Requires JWT authentication
+    [RequirePermission(CurrencyPermissions.CurrenciesDelete)]
+    [EnableRateLimiting("AuthenticatedApi")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
@@ -841,6 +864,34 @@ public class CurrenciesController : ControllerBase
                 CorrelationId = HttpContext.TraceIdentifier
             });
         }
+    }
+
+    /// <summary>
+    /// Activate a currency (admin only)
+    /// </summary>
+    [HttpPost("~/currency/v{version:apiVersion}/admin/currencies/{id:guid}/activate")]
+    [Authorize]
+    [RequirePermission(CurrencyPermissions.CurrenciesActivate)]
+    [EnableRateLimiting("AuthenticatedApi")]
+    public async Task<IActionResult> Activate(Guid id, CancellationToken cancellationToken = default)
+    {
+        var success = await _currencyService.ActivateAsync(id, cancellationToken);
+        if (!success) return NotFound();
+        return Ok();
+    }
+
+    /// <summary>
+    /// Deactivate a currency (admin only)
+    /// </summary>
+    [HttpPost("~/currency/v{version:apiVersion}/admin/currencies/{id:guid}/deactivate")]
+    [Authorize]
+    [RequirePermission(CurrencyPermissions.CurrenciesActivate)]
+    [EnableRateLimiting("AuthenticatedApi")]
+    public async Task<IActionResult> Deactivate(Guid id, CancellationToken cancellationToken = default)
+    {
+        var success = await _currencyService.DeactivateAsync(id, cancellationToken);
+        if (!success) return NotFound();
+        return Ok();
     }
 
     /// <summary>

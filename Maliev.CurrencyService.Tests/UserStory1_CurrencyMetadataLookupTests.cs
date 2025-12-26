@@ -266,6 +266,11 @@ public record PagedResult<T>
 /// </summary>
 public class CurrencyServiceTestFactory : BaseIntegrationTestFactory<Program, CurrencyDbContext>
 {
+    protected override void ConfigureEnvironmentVariables()
+    {
+        // Disable IAM registration in tests - uses the service's built-in degraded mode
+        Environment.SetEnvironmentVariable("Features__PermissionBasedAuthEnabled", "false");
+    }
 }
 
 /// <summary>
@@ -285,17 +290,21 @@ public class CurrencyServiceTestFixture : IAsyncDisposable
 
         Client = Factory.CreateClient();
 
-        // Set default Authorization header with a valid admin token
+        // Set default Authorization header with a valid admin token (GCP-style role format + all permissions)
         Client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue(
-            "Bearer", Factory.CreateTestJwtToken(roles: new[] { "admin" }));
+            "Bearer", Factory.CreateTestJwtTokenWithPermissions(
+                roles: new[] { "roles.currency.admin" },
+                permissions: Maliev.CurrencyService.Api.Services.CurrencyPermissions.All));
 
         SeedTestData().GetAwaiter().GetResult();
         WarmupCache().GetAwaiter().GetResult();
     }
 
-    public string GenerateJwtToken(string role = "admin")
+    public string GenerateJwtToken(string role = "roles.currency.admin")
     {
-        return Factory.CreateTestJwtToken(roles: new[] { role });
+        return Factory.CreateTestJwtTokenWithPermissions(
+            roles: new[] { role },
+            permissions: Maliev.CurrencyService.Api.Services.CurrencyPermissions.All);
     }
 
     private async Task WarmupCache()

@@ -1,4 +1,4 @@
-﻿using System.IdentityModel.Tokens.Jwt;
+using System.IdentityModel.Tokens.Jwt;
 using MassTransit;
 using Microsoft.Extensions.Configuration;
 using System.Security.Claims;
@@ -132,6 +132,7 @@ public class BaseIntegrationTestFactory<TProgram, TDbContext> : WebApplicationFa
             // Configure JWT Bearer authentication with test RSA key
             services.PostConfigureAll<Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerOptions>(options =>
             {
+                options.MapInboundClaims = false;
                 options.TokenValidationParameters = new TokenValidationParameters
                 {
                     ValidateIssuer = true,
@@ -309,6 +310,64 @@ public class BaseIntegrationTestFactory<TProgram, TDbContext> : WebApplicationFa
             foreach (var role in roles)
             {
                 claims.Add(new Claim(ClaimTypes.Role, role));
+            }
+        }
+
+        if (additionalClaims != null)
+        {
+            foreach (var (key, value) in additionalClaims)
+            {
+                claims.Add(new Claim(key, value));
+            }
+        }
+
+        var rsaSecurityKey = new RsaSecurityKey(_testRsa);
+        var signingCredentials = new SigningCredentials(rsaSecurityKey, SecurityAlgorithms.RsaSha256);
+
+        var token = new JwtSecurityToken(
+            issuer: "test-issuer",
+            audience: "test-audience",
+            claims: claims,
+            expires: DateTime.UtcNow.AddHours(1),
+            signingCredentials: signingCredentials
+        );
+
+        return new JwtSecurityTokenHandler().WriteToken(token);
+    }
+
+    /// <summary>
+    /// Creates a test JWT token with permissions for authorization testing.
+    /// </summary>
+    /// <param name="userId">User ID to include in token</param>
+    /// <param name="roles">Roles to include in token claims</param>
+    /// <param name="permissions">Permissions to include as multiple 'permissions' claims</param>
+    /// <param name="additionalClaims">Additional claims to include</param>
+    /// <returns>JWT token string</returns>
+    public string CreateTestJwtTokenWithPermissions(
+        string userId = "test-user",
+        string[]? roles = null,
+        string[]? permissions = null,
+        Dictionary<string, string>? additionalClaims = null)
+    {
+        var claims = new List<Claim>
+        {
+            new(JwtRegisteredClaimNames.Sub, userId),
+            new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+        };
+
+        if (roles != null)
+        {
+            foreach (var role in roles)
+            {
+                claims.Add(new Claim(ClaimTypes.Role, role));
+            }
+        }
+
+        if (permissions != null)
+        {
+            foreach (var permission in permissions)
+            {
+                claims.Add(new Claim("permissions", permission));
             }
         }
 

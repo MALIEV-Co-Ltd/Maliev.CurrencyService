@@ -1,9 +1,11 @@
 using Asp.Versioning;
+using Maliev.Aspire.ServiceDefaults.Authorization;
 using Maliev.CurrencyService.Api.Models.Common;
 using Maliev.CurrencyService.Api.Models.Snapshots;
 using Maliev.CurrencyService.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace Maliev.CurrencyService.Api.Controllers;
 
@@ -19,6 +21,7 @@ namespace Maliev.CurrencyService.Api.Controllers;
 [Route("currency/v{version:apiVersion}/admin/snapshots")]
 [Produces("application/json")]
 [Authorize] // Requires JWT authentication
+[EnableRateLimiting("AuthenticatedApi")]
 public class SnapshotsController : ControllerBase
 {
     private readonly ISnapshotService _snapshotService;
@@ -54,6 +57,7 @@ public class SnapshotsController : ControllerBase
     /// FR-028: Supports dry-run mode for validation without applying changes
     /// </remarks>
     [HttpPost("ingest")]
+    [RequirePermission(CurrencyPermissions.SnapshotsCreate)]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status202Accepted)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
@@ -81,11 +85,11 @@ public class SnapshotsController : ControllerBase
             // Convert DTOs to internal Request
             var request = new SnapshotBatchRequest
             {
-                Snapshots = snapshots.Select(s => new SnapshotEntry 
-                { 
-                    From = s.From, 
-                    To = s.To, 
-                    Rate = s.Rate 
+                Snapshots = snapshots.Select(s => new SnapshotEntry
+                {
+                    From = s.From,
+                    To = s.To,
+                    Rate = s.Rate
                 }).ToList(),
                 Source = "AdminApi",
                 AutoPromote = false, // Staging mode by default
@@ -104,7 +108,7 @@ public class SnapshotsController : ControllerBase
             // If DryRun is true, we should probably just Validate.
             // But the current controller code did custom validation.
             // Let's keep the custom validation for DryRun as per original logic to avoid breaking FR-028 check
-            
+
             // Validate each snapshot entry (Controller Validation Layer)
             var validationErrors = new List<string>();
             for (int i = 0; i < snapshots.Count; i++)
@@ -161,19 +165,19 @@ public class SnapshotsController : ControllerBase
             // FR-027: Process asynchronously via Service + Queue
             // Service stages the data
             var batchResponse = await _snapshotService.ImportBatchAsync(request, cancellationToken);
-            
+
             if (batchResponse.FailureCount > 0 && batchResponse.Errors != null)
             {
-                 // If service found validation errors (e.g. invalid currency codes), reject
-                 // This effectively implements "All or Nothing" at the service layer too
-                 return BadRequest(new ErrorResponse
-                 {
-                     Error = "BadRequest",
-                     Message = "validation failed for snapshot batch",
-                     Timestamp = DateTime.UtcNow,
-                     CorrelationId = HttpContext.TraceIdentifier,
-                     Details = batchResponse.Errors.ToDictionary(k => k.Key, v => v.Value)
-                 });
+                // If service found validation errors (e.g. invalid currency codes), reject
+                // This effectively implements "All or Nothing" at the service layer too
+                return BadRequest(new ErrorResponse
+                {
+                    Error = "BadRequest",
+                    Message = "validation failed for snapshot batch",
+                    Timestamp = DateTime.UtcNow,
+                    CorrelationId = HttpContext.TraceIdentifier,
+                    Details = batchResponse.Errors.ToDictionary(k => k.Key, v => v.Value)
+                });
             }
 
             // Queue for background proccesing (Promotion check / Finalization)
@@ -218,6 +222,7 @@ public class SnapshotsController : ControllerBase
     /// Invalidates affected cache keys and removes staging entries.
     /// </remarks>
     [HttpPost("{batchId}/promote")]
+    [RequirePermission(CurrencyPermissions.SnapshotsCreate)]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
@@ -280,6 +285,7 @@ public class SnapshotsController : ControllerBase
     /// This endpoint is typically called by scheduled jobs, but can be triggered manually.
     /// </remarks>
     [HttpPost("cleanup")]
+    [RequirePermission(CurrencyPermissions.SnapshotsDelete)]
     [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
@@ -320,13 +326,14 @@ public class SnapshotsController : ControllerBase
     /// <param name="batchId">Batch ID</param>
     /// <returns>Batch status</returns>
     [HttpGet("{batchId}/status")]
+    [RequirePermission(CurrencyPermissions.SnapshotsRead)]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
     [ApiExplorerSettings(IgnoreApi = true)] // Hide from API documentation
     public IActionResult GetBatchStatus(string batchId)
     {
         var (status, error) = _snapshotQueue.GetStatus(batchId);
-        
+
         return Ok(new
         {
             BatchId = batchId,
@@ -341,6 +348,7 @@ public class SnapshotsController : ControllerBase
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Audit log</returns>
     [HttpGet("{batchId}/audit")]
+    [RequirePermission(CurrencyPermissions.SnapshotsAudit)]
     [ProducesResponseType(typeof(SnapshotAuditLog), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
@@ -349,7 +357,7 @@ public class SnapshotsController : ControllerBase
         try
         {
             var auditLog = await _snapshotService.GetBatchAuditAsync(batchId, cancellationToken);
-            
+
             if (auditLog == null)
             {
                 return NotFound(new ErrorResponse

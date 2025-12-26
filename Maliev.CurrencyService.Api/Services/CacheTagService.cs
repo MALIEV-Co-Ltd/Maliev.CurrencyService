@@ -55,7 +55,7 @@ public class CacheTagService : ICacheTagService
         try
         {
             var tagKey = $"cache_tag_{tag}";
-            
+
             HashSet<string>? cacheKeys;
             if (_cache.TryGetValue(tagKey, out cacheKeys) && cacheKeys != null)
             {
@@ -89,7 +89,7 @@ public class CacheTagService : ICacheTagService
         try
         {
             var tagKey = $"cache_tag_{tag}";
-            
+
             HashSet<string>? cacheKeys;
             if (_cache.TryGetValue(tagKey, out cacheKeys) && cacheKeys != null)
             {
@@ -98,7 +98,7 @@ public class CacheTagService : ICacheTagService
                     _cache.Remove(cacheKey);
                     _logger.LogDebug("Removed cache key {CacheKey} by tag {Tag}", cacheKey, tag);
                 }
-                
+
                 // Remove the tag itself
                 _cache.Remove(tagKey);
                 _logger.LogDebug("Removed cache tag {Tag}", tag);
@@ -118,13 +118,13 @@ public class CacheTagService : ICacheTagService
     public IEnumerable<string> GetCacheKeysByTag(string tag)
     {
         var tagKey = $"cache_tag_{tag}";
-        
+
         HashSet<string>? cacheKeys;
         if (_cache.TryGetValue(tagKey, out cacheKeys) && cacheKeys != null)
         {
             return cacheKeys;
         }
-        
+
         return Enumerable.Empty<string>();
     }
 }

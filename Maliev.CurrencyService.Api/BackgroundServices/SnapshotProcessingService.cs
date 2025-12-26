@@ -37,7 +37,7 @@ public class SnapshotProcessingService : BackgroundService
             try
             {
                 var batchIdStr = await _queue.DequeueAsync(stoppingToken);
-                
+
                 if (Guid.TryParse(batchIdStr, out var batchId))
                 {
                     await ProcessBatchAsync(batchId, stoppingToken);
@@ -81,7 +81,7 @@ public class SnapshotProcessingService : BackgroundService
             // accept the request faster. For now, ImportBatchAsync does validation 
             // and saves to Staging, so we just need to verify it's persisted and potentially 
             // update status or do any post-processing.
-            
+
             // Check if we have staged snapshots
             var hasStaged = await context.StagedSnapshots
                 .AnyAsync(s => s.BatchId == batchId, cancellationToken);
@@ -92,19 +92,19 @@ public class SnapshotProcessingService : BackgroundService
                 // or via a BatchStatus table. Since we don't have a specific BatchStatus table
                 // in the current schema (implied by previous context), and the controller 
                 // stub returns "Queued", we are "processing" it by verifying it's ready for promotion.
-                
+
                 // If we implemented a BatchStatus entity, we would update it to 'Completed' here.
                 // For the purpose of the test which checks for "Completed" status,
                 // we assume there's a mechanism to track this.
-                
+
                 // IMPORTANT: The test UserStory4_SnapshotBatchIngestionTests expects to poll 
                 // an endpoint and get "Completed". The implementation in the Controller MUST
                 // be able to read this status.
-                
+
                 // Since we don't have a separate table for Batch Status in the provided code,
                 // we'll rely on the StagedSnapshots being present as "Validated".
                 // We'll treat this background work as "simulated processing delay" + "finalizing".
-                
+
                 _queue.UpdateStatus(batchIdStr, "Completed");
                 _logger.LogInformation("Batch {BatchId} processed successfully and ready for promotion", batchId);
             }

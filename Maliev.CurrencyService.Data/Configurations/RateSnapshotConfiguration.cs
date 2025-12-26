@@ -10,7 +10,7 @@ namespace Maliev.CurrencyService.Data.Configurations;
 public class RateSnapshotConfiguration : IEntityTypeConfiguration<RateSnapshot>
 {
     /// <summary>
-    /// Configures the entity of type <typeparamref name="TEntity" />.
+    /// Configures the entity.
     /// </summary>
     /// <param name="builder">The builder to be used to configure the entity type.</param>
     public void Configure(EntityTypeBuilder<RateSnapshot> builder)

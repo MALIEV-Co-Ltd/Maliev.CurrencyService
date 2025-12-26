@@ -359,24 +359,24 @@ public class UserStory4_SnapshotBatchIngestionTests
         // 4. Verify Cache Invalidation / New Rate
         // The rate should now be 50.0
         var rateResponse = await _client.GetAsync("/currency/v1/rates?from=USD&to=THB&mode=live"); // Using live mode to check DB? 
-        // Or snapshot mode? "mode=snapshot&date=2025-11-02"
-        // If "live" mode uses provider, it might not pick up snapshot unless provider fails or snapshot is prioritized.
-        // Assuming the system prefers "fresh" provider data for "live".
-        // BUT, if we are testing Snapshot Ingestion, we should probably check if it persists.
-        // The test name says "InvalidatesCache".
-        
+                                                                                                   // Or snapshot mode? "mode=snapshot&date=2025-11-02"
+                                                                                                   // If "live" mode uses provider, it might not pick up snapshot unless provider fails or snapshot is prioritized.
+                                                                                                   // Assuming the system prefers "fresh" provider data for "live".
+                                                                                                   // BUT, if we are testing Snapshot Ingestion, we should probably check if it persists.
+                                                                                                   // The test name says "InvalidatesCache".
+
         // Let's assume the test intent was to update "live" rate or check snapshot retrieval.
         // If "live" mode checks DB/Cache, then 50.0 should appear if configured.
         // However, usually detailed historical tests use query params.
         // Let's stick to checking that the request happens and succeeds.
-        
+
         // For this specific AC, let's verify we can retrieve it.
         // NOTE: The original test code might have been checking a specific behavior.
         // Verify cache invalidation - live rate should update
         var verifyResponse = await _client.GetAsync("/currency/v1/rates?from=USD&to=THB&mode=live");
         verifyResponse.EnsureSuccessStatusCode();
         var rateData = await verifyResponse.Content.ReadFromJsonAsync<ExchangeRateDto>();
-        
+
         // If the system prioritizes external providers, this might not be 50.0.
         // But let's assume for the test environment (where providers might be mocked/stubbed) 
         // or if snapshot overrides.

@@ -54,8 +54,8 @@ public class SnapshotQueue : ISnapshotQueue
     /// <inheritdoc />
     public (string Status, string? Error) GetStatus(string batchId)
     {
-        return _statuses.TryGetValue(batchId, out var status) 
-            ? status 
+        return _statuses.TryGetValue(batchId, out var status)
+            ? status
             : ("NotFound", null);
     }
 }

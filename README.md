@@ -33,6 +33,8 @@ The Currency Service is part of the MALIEV microservices ecosystem, providing:
 
 ✅ **High Performance**: Sub-50ms responses for cached queries (p95)
 ✅ **High Availability**: Provider failover <2s, stale cache fallback for resilience
+✅ **Granular Authorization**: 19 permissions and 4 predefined roles via central IAM integration
+✅ **Fail Fast Startup**: Mandatory IAM registration ensures security configuration is valid before accepting traffic
 ✅ **Scalability**: Handles 1000+ concurrent requests with horizontal scaling
 ✅ **Security**: JWT authentication, rate limiting, input validation, audit logging
 ✅ **Observability**: Prometheus metrics, health checks, structured logging, correlation IDs
@@ -211,21 +213,36 @@ curl "http://localhost:5000/currencies/v1/currencies/country/TH"
 
 ### Snapshot Management (Admin)
 
-| Method | Endpoint | Description | Auth |
-|--------|----------|-------------|------|
-| POST | `/currencies/v1/admin/snapshots/ingest?dryRun=false` | Ingest batch snapshots | Admin |
-| GET | `/currencies/v1/admin/snapshots/batch/{batchId}` | Get batch status | Admin |
-| POST | `/currencies/v1/admin/snapshots/batch/{batchId}/promote` | Promote staged batch | Admin |
-| DELETE | `/currencies/v1/admin/snapshots/batch/{batchId}` | Delete staged batch | Admin |
-| GET | `/currencies/v1/admin/snapshots/batches` | List batches | Admin/ReadOnlyAdmin |
+| Method | Endpoint | Permission | Auth |
+|--------|----------|------------|------|
+| POST | `/currencies/v1/admin/snapshots/ingest` | `currency.snapshots.create` | JWT |
+| GET | `/currencies/v1/admin/snapshots/{batchId}/status` | `currency.snapshots.read` | JWT |
+| POST | `/currencies/v1/admin/snapshots/{batchId}/promote` | `currency.snapshots.create` | JWT |
+| GET | `/currencies/v1/admin/snapshots/{batchId}/audit` | `currency.snapshots.audit` | JWT |
+| POST | `/currencies/v1/admin/snapshots/cleanup` | `currency.snapshots.delete` | JWT |
 
 ### Currency Management (Admin)
 
-| Method | Endpoint | Description | Auth |
-|--------|----------|-------------|------|
-| POST | `/currencies/v1/currencies` | Create currency | Admin |
-| PUT | `/currencies/v1/currencies/{id}` | Update currency (requires If-Match) | Admin |
-| DELETE | `/currencies/v1/currencies/{id}` | Delete currency (soft delete) | Admin |
+| Method | Endpoint | Permission | Auth |
+|--------|----------|------------|------|
+| POST | `/currencies/v1/admin/currencies` | `currency.currencies.create` | JWT |
+| PUT | `/currencies/v1/admin/currencies/{id}` | `currency.currencies.update` | JWT |
+| DELETE | `/currencies/v1/admin/currencies/{id}` | `currency.currencies.delete` | JWT |
+| POST | `/currencies/v1/admin/currencies/{id}/activate` | `currency.currencies.activate` | JWT |
+
+### System & Maintenance (Admin)
+
+| Method | Endpoint | Permission | Auth |
+|--------|----------|------------|------|
+| POST | `/currencies/v1/rates/refresh` | `currency.system.refresh-rates` | JWT |
+| POST | `/currencies/v1/system/rebuild-cache` | `currency.system.rebuild-cache` | JWT |
+| GET | `/currencies/v1/system/stats` | `currency.system.view-stats` | JWT |
+
+### Rate Limiting
+
+The service implements service-level rate limiting using `AspNetCore.RateLimiting`:
+- **Anonymous Users**: IP-based limiting (100 req/min)
+- **Authenticated Users**: Identity-based limiting (1000 req/min)
 
 ### Health & Observability
 
@@ -236,6 +253,22 @@ curl "http://localhost:5000/currencies/v1/currencies/country/TH"
 | GET | `/metrics` | Prometheus metrics endpoint |
 
 **Interactive API Docs**: `http://localhost:5000/scalar/v1`
+
+---
+
+## Authorization (IAM Integration)
+
+The service integrates with a central **IAM (Identity and Access Management)** service for permission-based authorization.
+
+### Key Concepts
+
+- **Permissions**: Granular capabilities (e.g., `currency.currencies.create`) defined in the service and registered with IAM on startup.
+- **Roles**: Collections of permissions (e.g., `currency-admin`, `currency-manager`, `currency-operator`, `currency-viewer`).
+- **JWT Claims**: The service expects a `permissions` claim array in the JWT token for authorization checks.
+
+### Feature Flag
+
+Enforce permission checks by setting `Features:PermissionBasedAuthEnabled` to `true` in configuration. When `false`, the service operates in legacy mode (allowing authorized users without specific permission checks on some endpoints).
 
 ---
 

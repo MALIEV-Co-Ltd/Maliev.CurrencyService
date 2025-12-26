@@ -28,7 +28,7 @@ public class DatabaseMetricsInterceptor : DbCommandInterceptor
         ILogger<DatabaseMetricsInterceptor> logger = null!,
         IDatabaseMetrics metrics = null!)
     {
-        _logger = logger; 
+        _logger = logger;
         _metrics = metrics;
     }
 
@@ -159,8 +159,8 @@ public class DatabaseMetricsInterceptor : DbCommandInterceptor
     private static bool IsMigrationHistoryCheckFailure(DbCommand command, Exception exception)
     {
         // Check for specific Postgres error "42P01" (undefined_table) when querying __EFMigrationsHistory
-        if (exception is Npgsql.PostgresException pgEx && 
-            pgEx.SqlState == "42P01" && 
+        if (exception is Npgsql.PostgresException pgEx &&
+            pgEx.SqlState == "42P01" &&
             command.CommandText.Contains("__EFMigrationsHistory"))
         {
             return true;
@@ -178,20 +178,20 @@ public class DatabaseMetricsInterceptor : DbCommandInterceptor
 
         if (duration.TotalMilliseconds > 100)
         {
-             // Log slow queries (> 100ms threshold)
-             // ... existing logging ...
-             _logger.LogWarning(
-                "Slow database query detected: {Duration}ms, Type: {CommandType}, SQL: {CommandText}",
-                duration.TotalMilliseconds,
-                commandType,
-                command.CommandText);
+            // Log slow queries (> 100ms threshold)
+            // ... existing logging ...
+            _logger.LogWarning(
+               "Slow database query detected: {Duration}ms, Type: {CommandType}, SQL: {CommandText}",
+               duration.TotalMilliseconds,
+               commandType,
+               command.CommandText);
         }
         else if (duration.TotalMilliseconds > 50)
         {
-             _logger.LogInformation(
-                "Database query: {Duration}ms, Type: {CommandType}",
-                duration.TotalMilliseconds,
-                commandType);
+            _logger.LogInformation(
+               "Database query: {Duration}ms, Type: {CommandType}",
+               duration.TotalMilliseconds,
+               commandType);
         }
     }
 

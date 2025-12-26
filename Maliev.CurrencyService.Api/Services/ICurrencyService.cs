@@ -130,4 +130,14 @@ public interface ICurrencyService
     Task<bool> DeleteByIdAsync(
         Guid id,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Activates a currency by ID
+    /// </summary>
+    Task<bool> ActivateAsync(Guid id, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Deactivates a currency by ID
+    /// </summary>
+    Task<bool> DeactivateAsync(Guid id, CancellationToken cancellationToken = default);
 }

@@ -564,6 +564,60 @@ public class CurrencyService : ICurrencyService
     }
 
     /// <summary>
+    /// Activates a currency by ID
+    /// </summary>
+    public async Task<bool> ActivateAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation("Activating currency by ID: {Id}", id);
+
+        var currency = await _context.Currencies
+            .Where(c => c.Id == id)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (currency == null)
+        {
+            _logger.LogWarning("Currency not found with ID: {Id}", id);
+            return false;
+        }
+
+        currency.IsActive = true;
+        currency.UpdatedAt = DateTime.UtcNow;
+
+        await _context.SaveChangesAsync(cancellationToken);
+        await InvalidateCurrencyListCacheAsync(cancellationToken);
+        await InvalidateCountryCacheForCurrencyAsync(currency.Code, cancellationToken);
+
+        return true;
+    }
+
+    /// <summary>
+    /// Deactivates a currency by ID
+    /// </summary>
+    public async Task<bool> DeactivateAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation("Deactivating currency by ID: {Id}", id);
+
+        var currency = await _context.Currencies
+            .Where(c => c.Id == id)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (currency == null)
+        {
+            _logger.LogWarning("Currency not found with ID: {Id}", id);
+            return false;
+        }
+
+        currency.IsActive = false;
+        currency.UpdatedAt = DateTime.UtcNow;
+
+        await _context.SaveChangesAsync(cancellationToken);
+        await InvalidateCurrencyListCacheAsync(cancellationToken);
+        await InvalidateCountryCacheForCurrencyAsync(currency.Code, cancellationToken);
+
+        return true;
+    }
+
+    /// <summary>
     /// Invalidates all currency list cache keys
     /// </summary>
     private async Task InvalidateCurrencyListCacheAsync(CancellationToken cancellationToken)

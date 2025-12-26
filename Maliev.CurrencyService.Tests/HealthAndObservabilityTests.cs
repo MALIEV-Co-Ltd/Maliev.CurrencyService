@@ -5,7 +5,7 @@ using Xunit;
 namespace Maliev.CurrencyService.Tests;
 
 /// <summary>
-/// Health & Observability Tests
+/// Health and Observability Tests
 /// Tests FR-050, FR-051, FR-052, FR-053, FR-054, FR-025 from specification
 /// </summary>
 [Collection("CurrencyService")]

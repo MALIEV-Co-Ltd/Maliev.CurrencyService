@@ -30,7 +30,7 @@ public interface IExchangeRateService
     /// <param name="cancellationToken">A cancellation token.</param>
     /// <returns>A <see cref="ConvertCurrencyResponse"/> if successful, otherwise null.</returns>
     Task<ConvertCurrencyResponse?> ConvertCurrencyAsync(ConvertCurrencyRequest request, CancellationToken cancellationToken = default);
-    
+
     // For testing purposes
     /// <summary>
     /// Retrieves current provider metrics.

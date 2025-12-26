@@ -12,13 +12,13 @@ public class OpenRatesModel
     /// </summary>
     [JsonPropertyName("date")]
     public string? Date { get; set; }
-    
+
     /// <summary>
     /// The base currency for the exchange rates.
     /// </summary>
     [JsonPropertyName("base")]
     public string? Base { get; set; }
-    
+
     /// <summary>
     /// A dictionary of exchange rates where the key is the target currency code and the value is the rate.
     /// </summary>

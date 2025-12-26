@@ -471,7 +471,7 @@ public class CurrenciesController : ControllerBase
                     Message = "Invalid currency creation request",
                     Timestamp = DateTime.UtcNow,
                     CorrelationId = HttpContext.TraceIdentifier,
-                    Details = new Dictionary<string, string[]> 
+                    Details = new Dictionary<string, string[]>
                     {
                         { "validation", validationErrors.ToArray() }
                     }
@@ -557,7 +557,7 @@ public class CurrenciesController : ControllerBase
                     Message = "Invalid currency update request",
                     Timestamp = DateTime.UtcNow,
                     CorrelationId = HttpContext.TraceIdentifier,
-                    Details = new Dictionary<string, string[]> 
+                    Details = new Dictionary<string, string[]>
                     {
                         { "validation", validationErrors.ToArray() }
                     }
@@ -694,7 +694,7 @@ public class CurrenciesController : ControllerBase
                     Message = "Invalid currency update request",
                     Timestamp = DateTime.UtcNow,
                     CorrelationId = HttpContext.TraceIdentifier,
-                    Details = new Dictionary<string, string[]> 
+                    Details = new Dictionary<string, string[]>
                     {
                         { "validation", validationErrors.ToArray() }
                     }

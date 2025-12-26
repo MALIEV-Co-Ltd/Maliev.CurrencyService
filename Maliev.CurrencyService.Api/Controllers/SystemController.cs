@@ -40,12 +40,12 @@ public class SystemController : ControllerBase
     public async Task<IActionResult> RebuildCache(CancellationToken cancellationToken)
     {
         _logger.LogInformation("Admin triggered system cache rebuild");
-        
+
         // Invalidate all caches
         await _cacheService.RemoveByPatternAsync("currency:*", cancellationToken);
         await _cacheService.RemoveByPatternAsync("rate:*", cancellationToken);
         await _cacheService.RemoveByPatternAsync("snapshot:*", cancellationToken);
-        
+
         return Ok(new { message = "Cache rebuild triggered successfully" });
     }
 
@@ -57,7 +57,7 @@ public class SystemController : ControllerBase
     public IActionResult GetStats()
     {
         _logger.LogInformation("Admin viewed system statistics");
-        
+
         // This is a stub for returning high-level stats. 
         // Real metrics are exposed via the /metrics endpoint.
         return Ok(new

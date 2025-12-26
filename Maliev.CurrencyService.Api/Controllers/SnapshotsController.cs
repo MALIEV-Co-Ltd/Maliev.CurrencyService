@@ -85,11 +85,11 @@ public class SnapshotsController : ControllerBase
             // Convert DTOs to internal Request
             var request = new SnapshotBatchRequest
             {
-                Snapshots = snapshots.Select(s => new SnapshotEntry 
-                { 
-                    From = s.From, 
-                    To = s.To, 
-                    Rate = s.Rate 
+                Snapshots = snapshots.Select(s => new SnapshotEntry
+                {
+                    From = s.From,
+                    To = s.To,
+                    Rate = s.Rate
                 }).ToList(),
                 Source = "AdminApi",
                 AutoPromote = false, // Staging mode by default
@@ -108,7 +108,7 @@ public class SnapshotsController : ControllerBase
             // If DryRun is true, we should probably just Validate.
             // But the current controller code did custom validation.
             // Let's keep the custom validation for DryRun as per original logic to avoid breaking FR-028 check
-            
+
             // Validate each snapshot entry (Controller Validation Layer)
             var validationErrors = new List<string>();
             for (int i = 0; i < snapshots.Count; i++)
@@ -165,19 +165,19 @@ public class SnapshotsController : ControllerBase
             // FR-027: Process asynchronously via Service + Queue
             // Service stages the data
             var batchResponse = await _snapshotService.ImportBatchAsync(request, cancellationToken);
-            
+
             if (batchResponse.FailureCount > 0 && batchResponse.Errors != null)
             {
-                 // If service found validation errors (e.g. invalid currency codes), reject
-                 // This effectively implements "All or Nothing" at the service layer too
-                 return BadRequest(new ErrorResponse
-                 {
-                     Error = "BadRequest",
-                     Message = "validation failed for snapshot batch",
-                     Timestamp = DateTime.UtcNow,
-                     CorrelationId = HttpContext.TraceIdentifier,
-                     Details = batchResponse.Errors.ToDictionary(k => k.Key, v => v.Value)
-                 });
+                // If service found validation errors (e.g. invalid currency codes), reject
+                // This effectively implements "All or Nothing" at the service layer too
+                return BadRequest(new ErrorResponse
+                {
+                    Error = "BadRequest",
+                    Message = "validation failed for snapshot batch",
+                    Timestamp = DateTime.UtcNow,
+                    CorrelationId = HttpContext.TraceIdentifier,
+                    Details = batchResponse.Errors.ToDictionary(k => k.Key, v => v.Value)
+                });
             }
 
             // Queue for background proccesing (Promotion check / Finalization)
@@ -333,7 +333,7 @@ public class SnapshotsController : ControllerBase
     public IActionResult GetBatchStatus(string batchId)
     {
         var (status, error) = _snapshotQueue.GetStatus(batchId);
-        
+
         return Ok(new
         {
             BatchId = batchId,
@@ -357,7 +357,7 @@ public class SnapshotsController : ControllerBase
         try
         {
             var auditLog = await _snapshotService.GetBatchAuditAsync(batchId, cancellationToken);
-            
+
             if (auditLog == null)
             {
                 return NotFound(new ErrorResponse

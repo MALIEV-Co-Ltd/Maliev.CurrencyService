@@ -33,7 +33,7 @@ public class FawazahmedApiClient
     {
         var url = $"currencies/{currencyCode.ToLowerInvariant()}.json";
         var response = await _httpClient.GetAsync(url, cancellationToken);
-        
+
         if (!response.IsSuccessStatusCode)
         {
             return null;

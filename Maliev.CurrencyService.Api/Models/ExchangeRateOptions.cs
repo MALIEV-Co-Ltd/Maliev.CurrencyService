@@ -50,27 +50,27 @@ public class ExchangeRateOptions
     /// Gets or sets a value indicating whether dynamic provider prioritization is enabled.
     /// </summary>
     public bool EnableDynamicPrioritization { get; set; } = false;
-    
+
     /// <summary>
     /// Gets or sets the minimum number of requests required for a provider to be included in dynamic prioritization.
     /// </summary>
     public int MinRequestsForPrioritization { get; set; } = 10;
-    
+
     /// <summary>
     /// Gets or sets the weight given to response time when calculating provider priority.
     /// </summary>
     public double ResponseTimeWeight { get; set; } = 0.4;
-    
+
     /// <summary>
     /// Gets or sets the weight given to success rate when calculating provider priority.
     /// </summary>
     public double SuccessRateWeight { get; set; } = 0.3;
-    
+
     /// <summary>
     /// Gets or sets the weight given to error rate when calculating provider priority.
     /// </summary>
     public double ErrorRateWeight { get; set; } = 0.2;
-    
+
     /// <summary>
     /// Gets or sets the weight given to request count when calculating provider priority.
     /// </summary>

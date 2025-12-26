@@ -111,7 +111,7 @@ public class RatesController : ControllerBase
                     Message = "Invalid request parameters",
                     Timestamp = DateTime.UtcNow,
                     CorrelationId = HttpContext.TraceIdentifier,
-                    Details = new Dictionary<string, string[]> 
+                    Details = new Dictionary<string, string[]>
                     {
                         { "validation", validationErrors.ToArray() }
                     }

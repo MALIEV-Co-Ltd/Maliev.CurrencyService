@@ -35,7 +35,7 @@ public class FrankfurterApiClient
     {
         var url = $"latest?from={fromCurrency}&to={toCurrency}";
         var response = await _httpClient.GetAsync(url, cancellationToken);
-        
+
         if (!response.IsSuccessStatusCode)
         {
             return null;
@@ -57,7 +57,7 @@ public class FrankfurterApiClient
         var targets = string.Join(",", toCurrencies);
         var url = $"latest?from={fromCurrency}&to={targets}";
         var response = await _httpClient.GetAsync(url, cancellationToken);
-        
+
         if (!response.IsSuccessStatusCode)
         {
             return null;

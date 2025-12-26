@@ -7,17 +7,17 @@ public static class CurrencyPermissions
     public const string CurrenciesUpdate = "currency.currencies.update";
     public const string CurrenciesDelete = "currency.currencies.delete";
     public const string CurrenciesActivate = "currency.currencies.activate";
-    
+
     public const string RatesRead = "currency.rates.read";
     public const string RatesUpdate = "currency.rates.update";
     public const string RatesBulkUpdate = "currency.rates.bulk-update";
     public const string RatesSetSource = "currency.rates.set-source";
-    
+
     public const string SnapshotsRead = "currency.snapshots.read";
     public const string SnapshotsCreate = "currency.snapshots.create";
     public const string SnapshotsDelete = "currency.snapshots.delete";
     public const string SnapshotsAudit = "currency.snapshots.audit";
-    
+
     public const string SystemRefreshRates = "currency.system.refresh-rates";
     public const string SystemRebuildCache = "currency.system.rebuild-cache";
     public const string SystemViewStats = "currency.system.view-stats";
@@ -51,8 +51,8 @@ public static class CurrencyPredefinedRoles
     {
         RoleId = "currency.viewer",
         Description = "Currency Service Viewer",
-        Permissions = new[] { 
-            CurrencyPermissions.CurrenciesRead, 
+        Permissions = new[] {
+            CurrencyPermissions.CurrenciesRead,
             CurrencyPermissions.RatesRead,
             CurrencyPermissions.SnapshotsRead
         }

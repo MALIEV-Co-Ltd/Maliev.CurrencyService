@@ -269,7 +269,6 @@ public class CurrencyServiceTestFactory : BaseIntegrationTestFactory<Program, Cu
     protected override void ConfigureEnvironmentVariables()
     {
         // Disable IAM registration in tests - uses the service's built-in degraded mode
-        Environment.SetEnvironmentVariable("Features__PermissionBasedAuthEnabled", "false");
     }
 }
 

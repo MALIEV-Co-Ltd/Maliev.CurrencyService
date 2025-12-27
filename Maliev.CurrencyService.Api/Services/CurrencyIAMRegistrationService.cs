@@ -44,16 +44,9 @@ public class CurrencyIAMRegistrationService : IAMRegistrationService
         });
     }
 
-    /// <summary>Registers permissions and roles with IAM if feature is enabled.</summary>
+    /// <summary>Registers permissions and roles with IAM.</summary>
     public async Task RegisterWithCheckAsync(CancellationToken cancellationToken)
     {
-        var iamEnabled = _configuration.GetValue<bool>("Features:PermissionBasedAuthEnabled");
-        if (!iamEnabled)
-        {
-            _logger.LogInformation("IAM registration skipped (PermissionBasedAuthEnabled=false)");
-            return;
-        }
-
         try
         {
             await base.RegisterAsync(cancellationToken);

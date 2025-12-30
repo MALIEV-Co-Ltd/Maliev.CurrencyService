@@ -1,4 +1,3 @@
-
 using Maliev.CurrencyService.Api.Metrics;
 using Maliev.CurrencyService.Api.Services;
 using Maliev.CurrencyService.Api.Services.External;
@@ -22,11 +21,6 @@ builder.AddServiceMeters("currencies-meter"); // Register service meters for Ope
 builder.AddPostgresDbContext<CurrencyDbContext>(connectionName: "CurrencyDbContext"); // PostgreSQL with retry logic
 
 // Add Cache Service (two-tier with Redis or in-memory only)
-// ServiceDefaults 'AddRedisDistributedCache' handles:
-// 1. Connection string 'redis'
-// 2. AddStackExchangeRedisCache
-// 3. Health Checks (tags: redis, ready)
-// 4. In-Memory fallback (AddMemoryCache)
 builder.AddRedisDistributedCache(instanceName: "currency:");
 builder.Services.AddMemoryCache();
 
@@ -46,52 +40,43 @@ if (!builder.Environment.IsProduction())
         description: "Currency and exchange rate service. Provides ISO 4217 currency metadata, country-to-currency resolution, exchange rate snapshots with historical tracking, and administrative endpoints for currency management with optimistic concurrency control.");
 }
 
-
-
-// Add Rate Limiting (disabled in Testing environment to support concurrent test scenarios)
-if (!builder.Environment.IsEnvironment("Testing"))
+// Add Rate Limiting
+builder.Services.AddRateLimiter(options =>
 {
-    builder.Services.AddRateLimiter(options =>
-    {
-        options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
 
-        // Policy for anonymous users (IP-based)
-        options.AddPolicy("PublicApi", httpContext =>
-            RateLimitPartition.GetFixedWindowLimiter(
-                partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "anonymous",
-                factory: _ => new FixedWindowRateLimiterOptions
-                {
-                    PermitLimit = 100,
-                    Window = TimeSpan.FromMinutes(1),
-                    QueueLimit = 20
-                }));
+    // Policy for anonymous users (IP-based)
+    options.AddPolicy("PublicApi", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "anonymous",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 100,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 20
+            }));
 
-        // Policy for authenticated users (Identity-based)
-        options.AddPolicy("AuthenticatedApi", httpContext =>
-            RateLimitPartition.GetFixedWindowLimiter(
-                partitionKey: httpContext.User.Identity?.Name ?? "anonymous",
-                factory: _ => new FixedWindowRateLimiterOptions
-                {
-                    PermitLimit = 1000,
-                    Window = TimeSpan.FromMinutes(1),
-                    QueueLimit = 50
-                }));
-    });
-}
+    // Policy for authenticated users (Identity-based)
+    options.AddPolicy("AuthenticatedApi", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.User.Identity?.Name ?? "anonymous",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 1000,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 50
+            }));
+});
 
-// Add Metrics
 // Add Metrics
 builder.Services.AddSingleton<CurrencyServiceMetrics>();
 // Register IDatabaseMetrics to resolve to the same CurrencyServiceMetrics instance
 builder.Services.AddSingleton<Maliev.CurrencyService.Data.Interceptors.IDatabaseMetrics>(
     sp => sp.GetRequiredService<CurrencyServiceMetrics>());
 
-// Add Data Interceptors (skip in Testing environment to allow simpler DbContext constructor)
-if (!builder.Environment.IsEnvironment("Testing"))
-{
-    builder.Services.AddScoped<Maliev.CurrencyService.Data.Interceptors.DatabaseMetricsInterceptor>();
-    builder.Services.AddScoped<Maliev.CurrencyService.Data.Interceptors.AuditLogInterceptor>();
-}
+// Add Data Interceptors
+builder.Services.AddScoped<Maliev.CurrencyService.Data.Interceptors.DatabaseMetricsInterceptor>();
+builder.Services.AddScoped<Maliev.CurrencyService.Data.Interceptors.AuditLogInterceptor>();
 
 // Add Domain Services
 builder.Services.AddScoped<ICurrencyService, CurrencyService>();
@@ -125,23 +110,11 @@ var metricsService = app.Services.GetRequiredService<CurrencyServiceMetrics>();
 var logger = app.Services.GetRequiredService<ILogger<Program>>();
 
 // Run database migrations on startup
-try
-{
-    await app.MigrateDatabaseAsync<CurrencyDbContext>();
-}
-catch (Exception ex)
-{
-    logger.LogError(ex, "Database migration failed - application may not function correctly");
-    // Don't throw - allow app to start for debugging
-}
+await app.MigrateDatabaseAsync<CurrencyDbContext>();
 
 app.UseStandardMiddleware();
-
 app.UseHttpsRedirection();
-if (!app.Environment.IsEnvironment("Testing"))
-{
-    app.UseRateLimiter();
-}
+app.UseRateLimiter();
 app.UseCors();
 
 // JWT Authentication & Authorization
@@ -152,7 +125,6 @@ app.UseAuthorization();
 app.MapControllers();
 
 // Map Aspire default endpoints (/health, /alive, /metrics)
-// Standardized pattern used throughout MALIEV's services
 app.MapDefaultEndpoints(servicePrefix: "currency");
 
 // Map OpenAPI and Scalar documentation (dev/staging only)

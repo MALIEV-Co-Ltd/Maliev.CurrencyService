@@ -50,7 +50,7 @@ public class RatesController : ControllerBase
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Exchange rate response</returns>
     [HttpGet]
-    [AllowAnonymous]
+    [RequirePermission(CurrencyPermissions.RatesRead)]
     [EnableRateLimiting("PublicApi")]
     [ProducesResponseType(typeof(ExchangeRateResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status304NotModified)]

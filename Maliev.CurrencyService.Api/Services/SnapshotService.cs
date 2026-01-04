@@ -3,6 +3,7 @@ using Maliev.CurrencyService.Api.Models.Snapshots;
 using Maliev.CurrencyService.Data;
 using Maliev.CurrencyService.Data.Models;
 using Microsoft.EntityFrameworkCore;
+using Maliev.Aspire.ServiceDefaults.Caching;
 
 namespace Maliev.CurrencyService.Api.Services;
 

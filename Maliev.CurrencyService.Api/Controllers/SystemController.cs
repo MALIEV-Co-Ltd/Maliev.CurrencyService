@@ -1,7 +1,8 @@
-using Maliev.Aspire.ServiceDefaults.Authorization;
 using Asp.Versioning;
-using Maliev.CurrencyService.Api.Metrics;
+using Maliev.Aspire.ServiceDefaults.Authorization;
 using Maliev.CurrencyService.Api.Services;
+using Maliev.Aspire.ServiceDefaults.Caching;
+using Maliev.CurrencyService.Api.Metrics;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;

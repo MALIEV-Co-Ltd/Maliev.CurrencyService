@@ -27,20 +27,56 @@ public class AuthorizationTests : IClassFixture<BaseIntegrationTestFactory<Progr
     }
 
     [Fact]
-    public async Task ListCurrencies_Anonymous_ReturnsOk()
+    public async Task ListCurrencies_Anonymous_ReturnsUnauthorized()
     {
         // Act
         var response = await _anonymousClient.GetAsync("/currency/v1/currencies");
+
+        // Assert
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetExchangeRate_Anonymous_ReturnsUnauthorized()
+    {
+        // Act
+        var response = await _anonymousClient.GetAsync("/currency/v1/rates?from=USD&to=EUR");
+
+        // Assert
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ListCurrencies_WithPermission_ReturnsOk()
+    {
+        // Arrange
+        var token = _baseFactory.CreateTestJwtToken(additionalClaims: new Dictionary<string, string>
+        {
+            { "permissions", CurrencyPermissions.CurrenciesRead }
+        });
+        var client = _factory.CreateClient();
+        client.DefaultRequestHeaders.Add("Authorization", $"Bearer {token}");
+
+        // Act
+        var response = await client.GetAsync("/currency/v1/currencies");
 
         // Assert
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
     [Fact]
-    public async Task GetExchangeRate_Anonymous_ReturnsOk()
+    public async Task GetExchangeRate_WithPermission_ReturnsOkOrServiceUnavailable()
     {
+        // Arrange
+        var token = _baseFactory.CreateTestJwtToken(additionalClaims: new Dictionary<string, string>
+        {
+            { "permissions", CurrencyPermissions.RatesRead }
+        });
+        var client = _factory.CreateClient();
+        client.DefaultRequestHeaders.Add("Authorization", $"Bearer {token}");
+
         // Act
-        var response = await _anonymousClient.GetAsync("/currency/v1/rates?from=USD&to=EUR");
+        var response = await client.GetAsync("/currency/v1/rates?from=USD&to=EUR");
 
         // Assert
         // Might be 503 if providers are down in test env, but not 401/403
@@ -140,10 +176,18 @@ public class AuthorizationTests : IClassFixture<BaseIntegrationTestFactory<Progr
     }
 
     [Fact]
-    public async Task RateLimiting_Anonymous_HeadersPresent()
+    public async Task RateLimiting_Authenticated_HeadersPresent()
     {
+        // Arrange
+        var token = _baseFactory.CreateTestJwtToken(additionalClaims: new Dictionary<string, string>
+        {
+            { "permissions", CurrencyPermissions.CurrenciesRead }
+        });
+        var client = _factory.CreateClient();
+        client.DefaultRequestHeaders.Add("Authorization", $"Bearer {token}");
+
         // Act
-        var response = await _anonymousClient.GetAsync("/currency/v1/currencies");
+        var response = await client.GetAsync("/currency/v1/currencies");
 
         // Assert
         Assert.True(response.Headers.Contains("X-Correlation-ID"));
@@ -160,8 +204,14 @@ public class AuthorizationTests : IClassFixture<BaseIntegrationTestFactory<Progr
             builder.UseSetting("IAM:Timeout", "100");
         });
 
+        var token = _baseFactory.CreateTestJwtToken(additionalClaims: new Dictionary<string, string>
+        {
+            { "permissions", CurrencyPermissions.CurrenciesRead }
+        });
+
         // Act
         var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Add("Authorization", $"Bearer {token}");
         var response = await client.GetAsync("/currency/v1/currencies");
 
         // Assert

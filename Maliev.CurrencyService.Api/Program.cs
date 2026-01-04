@@ -20,11 +20,10 @@ builder.AddServiceMeters("currencies-meter"); // Register service meters for Ope
 
 builder.AddPostgresDbContext<CurrencyDbContext>(connectionName: "CurrencyDbContext"); // PostgreSQL with retry logic
 
-// Add Cache Service (two-tier with Redis or in-memory only)
+// Add Cache Service (standardized via ServiceDefaults)
 builder.AddRedisDistributedCache(instanceName: "currency:");
 builder.Services.AddMemoryCache();
 
-builder.Services.AddSingleton<ICacheService, RedisCacheService>();
 // --- API Configuration ---
 builder.AddDefaultCors(); // CORS from CORS:AllowedOrigins config
 builder.AddDefaultApiVersioning(); // API versioning with URL segment reader

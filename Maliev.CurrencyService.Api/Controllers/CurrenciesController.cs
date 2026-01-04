@@ -50,7 +50,7 @@ public class CurrenciesController : ControllerBase
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Paginated currency list</returns>
     [HttpGet]
-    [AllowAnonymous]
+    [RequirePermission(CurrencyPermissions.CurrenciesRead)]
     [EnableRateLimiting("PublicApi")]
     [ProducesResponseType(typeof(PaginatedCurrencyResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
@@ -99,12 +99,10 @@ public class CurrenciesController : ControllerBase
     /// <param name="id">Currency unique identifier (GUID)</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Currency details</returns>
+    /// <response code="404">If the currency ID is not found.</response>
     [HttpGet("{id:guid}")]
-    [AllowAnonymous]
-    [EnableRateLimiting("PublicApi")]
+    [RequirePermission(CurrencyPermissions.CurrenciesRead)]
     [ProducesResponseType(typeof(CurrencyResponse), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
-    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status429TooManyRequests)]
     public async Task<ActionResult<CurrencyResponse>> GetCurrencyById(
         Guid id,
         CancellationToken cancellationToken = default)
@@ -159,7 +157,7 @@ public class CurrenciesController : ControllerBase
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Primary currency for the country</returns>
     [HttpGet("~/currency/v{version:apiVersion}/countries/{countryCode}/currency")]
-    [AllowAnonymous]
+    [RequirePermission(CurrencyPermissions.CurrenciesRead)]
     [EnableRateLimiting("PublicApi")]
     [ProducesResponseType(typeof(CurrencyResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
@@ -231,7 +229,7 @@ public class CurrenciesController : ControllerBase
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Primary currency for the country</returns>
     [HttpGet("by-country")]
-    [AllowAnonymous]
+    [RequirePermission(CurrencyPermissions.CurrenciesRead)]
     [EnableRateLimiting("PublicApi")]
     [ProducesResponseType(typeof(CurrencyResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
@@ -305,7 +303,7 @@ public class CurrenciesController : ControllerBase
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Currency details</returns>
     [HttpGet("{code}")]
-    [AllowAnonymous]
+    [RequirePermission(CurrencyPermissions.CurrenciesRead)]
     [EnableRateLimiting("PublicApi")]
     [ProducesResponseType(typeof(CurrencyResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status304NotModified)]

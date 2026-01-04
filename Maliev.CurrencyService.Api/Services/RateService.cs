@@ -125,6 +125,10 @@ public class RateService : IRateService
         var cachedResponse = await _cacheService.GetAsync<ExchangeRateResponse>(cacheKey, cancellationToken);
         if (cachedResponse != null)
         {
+            // Record cache hit metric
+            _metrics.RecordCacheRequest("hit");
+            _metrics.RecordCacheHit();
+
             // Map back to ExchangeRate entity for age calculation
             return new ExchangeRate
             {
@@ -145,6 +149,13 @@ public class RateService : IRateService
             .Where(r => r.FromCurrency == from && r.ToCurrency == to)
             .OrderByDescending(r => r.FetchedAt)
             .FirstOrDefaultAsync(cancellationToken);
+
+        // Record cache miss metric if no cache found
+        if (dbRate == null)
+        {
+            _metrics.RecordCacheRequest("miss");
+            _metrics.RecordCacheMiss();
+        }
 
         return dbRate;
     }
@@ -277,10 +288,14 @@ public class RateService : IRateService
         if (cachedResponse != null)
         {
             _logger.LogDebug("Snapshot cache hit for {From}:{To} on {Date}", from, to, date);
+            _metrics.RecordCacheRequest("hit");
+            _metrics.RecordCacheHit();
             return cachedResponse;
         }
 
         _logger.LogDebug("Snapshot cache miss for {From}:{To} on {Date}", from, to, date);
+        _metrics.RecordCacheRequest("miss");
+        _metrics.RecordCacheMiss();
 
         // Query database for snapshot
         var snapshot = await _context.RateSnapshots

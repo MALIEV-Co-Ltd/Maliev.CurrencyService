@@ -1,8 +1,8 @@
 # Feature Specification: Permission-Based Authorization Migration
 
-**Feature Branch**: `002-iam-integration`  
-**Created**: 2025-12-22  
-**Status**: Draft  
+**Feature Branch**: `002-iam-integration`
+**Created**: 2025-12-22
+**Status**: Draft
 **Input**: User description: "Implement permission-based authorization for CurrencyService"
 
 ## User Scenarios & Testing *(mandatory)*

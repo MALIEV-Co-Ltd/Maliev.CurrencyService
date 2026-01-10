@@ -19,7 +19,7 @@ public class BatchStatus
 
     [Column("status")]
     [Required]
-    [MaxLength(20)]
+    [MaxLength(256)]
     public string Status { get; set; } = "Queued";
 
     [Column("error_message")]

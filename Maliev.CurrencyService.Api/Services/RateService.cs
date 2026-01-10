@@ -22,6 +22,8 @@ public class RateService : IRateService
     private readonly CurrencyDbContext _context;
     private readonly ILogger<RateService> _logger;
     private readonly CurrencyServiceMetrics _metrics;
+    private readonly IHostApplicationLifetime _appLifetime;
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, Task> _refreshTasks = new();
 
     private const string RateCacheKeyPrefix = "rate";
     private const int FreshCacheTtlSeconds = 300; // 5 minutes
@@ -35,18 +37,21 @@ public class RateService : IRateService
     /// <param name="context">The database context.</param>
     /// <param name="logger">The logger.</param>
     /// <param name="metrics">The metrics service.</param>
+    /// <param name="appLifetime">The application lifetime service.</param>
     public RateService(
         ProviderChain providerChain,
         ICacheService cacheService,
         CurrencyDbContext context,
         ILogger<RateService> logger,
-        CurrencyServiceMetrics metrics)
+        CurrencyServiceMetrics metrics,
+        IHostApplicationLifetime appLifetime)
     {
         _providerChain = providerChain;
         _cacheService = cacheService;
         _context = context;
         _logger = logger;
         _metrics = metrics;
+        _appLifetime = appLifetime;
     }
 
     /// <summary>
@@ -87,18 +92,23 @@ public class RateService : IRateService
                 _logger.LogDebug("Serving stale cache for {From}:{To} (age: {Age}s), triggering background refresh",
                     from, to, age.TotalSeconds);
 
-                // Trigger background refresh (fire and forget)
-                _ = Task.Run(async () =>
+                // Trigger background refresh using single-flight pattern
+                var refreshKey = $"refresh:{from}:{to}";
+                _ = _refreshTasks.GetOrAdd(refreshKey, _ => Task.Run(async () =>
                 {
                     try
                     {
-                        await RefreshInBackgroundAsync(from, to, cacheKey, CancellationToken.None);
+                        await RefreshInBackgroundAsync(from, to, cacheKey, _appLifetime.ApplicationStopping);
                     }
                     catch (Exception ex)
                     {
                         _logger.LogError(ex, "Background refresh failed for {From}:{To}", from, to);
                     }
-                });
+                    finally
+                    {
+                        _refreshTasks.TryRemove(refreshKey, out Task? _);
+                    }
+                }, _appLifetime.ApplicationStopping));
 
                 return MapToResponse(cachedRate, isFresh: false, staleAgeSeconds: (int)age.TotalSeconds);
             }
@@ -335,6 +345,65 @@ public class RateService : IRateService
             from, to, date, snapshot.Rate);
 
         return response;
+    }
+
+    /// <inheritdoc />
+    public async Task UpdateRateAsync(string from, string to, decimal rate, CancellationToken cancellationToken = default)
+    {
+        var now = DateTime.UtcNow;
+        var exchangeRate = new ExchangeRate
+        {
+            Id = Guid.NewGuid(),
+            FromCurrency = from.ToUpperInvariant(),
+            ToCurrency = to.ToUpperInvariant(),
+            Rate = rate,
+            Provider = "ManualAdmin",
+            IsTransitive = false,
+            FetchedAt = now,
+            ExpiresAt = now.AddSeconds(FreshCacheTtlSeconds),
+            CreatedAt = now,
+            UpdatedAt = now
+        };
+
+        _context.ExchangeRates.Add(exchangeRate);
+        await _context.SaveChangesAsync(cancellationToken);
+
+        // Invalidate cache
+        var cacheKey = $"{RateCacheKeyPrefix}:{from.ToUpperInvariant()}:{to.ToUpperInvariant()}";
+        await _cacheService.RemoveAsync(cacheKey, cancellationToken);
+
+        _logger.LogInformation("Admin updated rate {From}:{To} to {Rate}", from, to, rate);
+    }
+
+    /// <inheritdoc />
+    public async Task BulkUpdateRatesAsync(List<Models.Rates.UpdateRateRequest> rates, CancellationToken cancellationToken = default)
+    {
+        var now = DateTime.UtcNow;
+        var newRates = rates.Select(r => new ExchangeRate
+        {
+            Id = Guid.NewGuid(),
+            FromCurrency = r.From.ToUpperInvariant(),
+            ToCurrency = r.To.ToUpperInvariant(),
+            Rate = r.Rate,
+            Provider = "ManualAdminBulk",
+            IsTransitive = false,
+            FetchedAt = now,
+            ExpiresAt = now.AddSeconds(FreshCacheTtlSeconds),
+            CreatedAt = now,
+            UpdatedAt = now
+        }).ToList();
+
+        _context.ExchangeRates.AddRange(newRates);
+        await _context.SaveChangesAsync(cancellationToken);
+
+        // Invalidate caches
+        foreach (var r in rates)
+        {
+            var cacheKey = $"{RateCacheKeyPrefix}:{r.From.ToUpperInvariant()}:{r.To.ToUpperInvariant()}";
+            await _cacheService.RemoveAsync(cacheKey, cancellationToken);
+        }
+
+        _logger.LogInformation("Admin bulk updated {Count} rates", rates.Count);
     }
 
     /// <summary>

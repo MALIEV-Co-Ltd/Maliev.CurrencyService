@@ -77,9 +77,9 @@ public class SnapshotProcessingService : BackgroundService
             await Task.Delay(100, cancellationToken);
 
             // In a real implementation we might do more complex validation here
-            // or even move the validation logic from ImportBatchAsync here if we wanted to 
-            // accept the request faster. For now, ImportBatchAsync does validation 
-            // and saves to Staging, so we just need to verify it's persisted and potentially 
+            // or even move the validation logic from ImportBatchAsync here if we wanted to
+            // accept the request faster. For now, ImportBatchAsync does validation
+            // and saves to Staging, so we just need to verify it's persisted and potentially
             // update status or do any post-processing.
 
             // Check if we have staged snapshots
@@ -90,14 +90,14 @@ public class SnapshotProcessingService : BackgroundService
             {
                 // In this architecture, status is tracked via the existence of staged items
                 // or via a BatchStatus table. Since we don't have a specific BatchStatus table
-                // in the current schema (implied by previous context), and the controller 
+                // in the current schema (implied by previous context), and the controller
                 // stub returns "Queued", we are "processing" it by verifying it's ready for promotion.
 
                 // If we implemented a BatchStatus entity, we would update it to 'Completed' here.
                 // For the purpose of the test which checks for "Completed" status,
                 // we assume there's a mechanism to track this.
 
-                // IMPORTANT: The test UserStory4_SnapshotBatchIngestionTests expects to poll 
+                // IMPORTANT: The test UserStory4_SnapshotBatchIngestionTests expects to poll
                 // an endpoint and get "Completed". The implementation in the Controller MUST
                 // be able to read this status.
 

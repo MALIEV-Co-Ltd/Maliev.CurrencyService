@@ -359,6 +359,12 @@ public class CurrencyService : ICurrencyService
         if (request.IsActive.HasValue)
             currency.IsActive = request.IsActive.Value;
 
+        // Apply optimistic concurrency token if provided
+        if (request.Version != null)
+        {
+            _context.Entry(currency).Property("Version").OriginalValue = request.Version;
+        }
+
         currency.UpdatedAt = DateTime.UtcNow;
 
         await _context.SaveChangesAsync(cancellationToken);
@@ -488,6 +494,12 @@ public class CurrencyService : ICurrencyService
 
         if (request.DecimalPlaces.HasValue)
             currency.DecimalPlaces = request.DecimalPlaces.Value;
+
+        // Apply optimistic concurrency token if provided
+        if (request.Version != null)
+        {
+            _context.Entry(currency).Property("Version").OriginalValue = request.Version;
+        }
 
         currency.UpdatedAt = DateTime.UtcNow;
 

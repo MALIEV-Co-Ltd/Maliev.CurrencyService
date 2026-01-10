@@ -1,3 +1,4 @@
+using Maliev.Aspire.ServiceDefaults;
 using Maliev.CurrencyService.Api.Metrics;
 using Maliev.CurrencyService.Api.Services;
 using Maliev.CurrencyService.Api.Services.External;
@@ -23,6 +24,9 @@ builder.AddPostgresDbContext<CurrencyDbContext>(connectionName: "CurrencyDbConte
 // Add Cache Service (standardized via ServiceDefaults)
 builder.AddRedisDistributedCache(instanceName: "currency:");
 builder.Services.AddMemoryCache();
+
+// MassTransit with RabbitMQ
+builder.AddMassTransitWithRabbitMq();
 
 // --- API Configuration ---
 builder.AddDefaultCors(); // CORS from CORS:AllowedOrigins config
@@ -86,9 +90,6 @@ builder.Services.AddScoped<IRateService, RateService>();
 builder.Services.AddHttpClient<FawazahmedProvider>().AddStandardResilienceHandler();
 builder.Services.AddHttpClient<FrankfurterProvider>().AddStandardResilienceHandler();
 
-// IAM Service Client
-builder.AddServiceClient("IAMService");
-
 // Register them as IExchangeRateProvider by resolving the typed client
 builder.Services.AddScoped<IExchangeRateProvider>(sp => sp.GetRequiredService<FawazahmedProvider>());
 builder.Services.AddScoped<IExchangeRateProvider>(sp => sp.GetRequiredService<FrankfurterProvider>());
@@ -97,9 +98,16 @@ builder.Services.AddScoped<ProviderChain>();
 
 builder.Services.AddSingleton<ISnapshotQueue, SnapshotQueue>();
 builder.Services.AddHostedService<SnapshotProcessingService>();
-builder.Services.AddIAMRegistration<CurrencyIAMRegistrationService>();
 
-builder.Services.AddControllers();
+// IAM Registration
+builder.AddIAMServiceClient("currency");
+builder.Services.AddIAMRegistration<CurrencyIAMRegistrationService>("currency");
+
+builder.Services.AddControllers()
+    .ConfigureApiBehaviorOptions(options =>
+    {
+        options.SuppressModelStateInvalidFilter = true;
+    });
 
 var app = builder.Build();
 
@@ -112,7 +120,10 @@ var logger = app.Services.GetRequiredService<ILogger<Program>>();
 await app.MigrateDatabaseAsync<CurrencyDbContext>();
 
 app.UseStandardMiddleware();
-app.UseHttpsRedirection();
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
 app.UseRateLimiter();
 app.UseCors();
 

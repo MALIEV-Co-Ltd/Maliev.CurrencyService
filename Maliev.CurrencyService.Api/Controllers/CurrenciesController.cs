@@ -73,7 +73,7 @@ public class CurrenciesController : ControllerBase
             Response.Headers["Cache-Control"] = "public, max-age=300"; // 5 minutes
 
             // Generate ETag based on result content
-            var etag = GenerateETag(result);
+            var etag = ETagHelper.GenerateETag(result);
             Response.Headers.ETag = $"\"{etag}\"";
 
             return Ok(result);
@@ -131,7 +131,7 @@ public class CurrenciesController : ControllerBase
             Response.Headers["Cache-Control"] = "public, max-age=300"; // 5 minutes
 
             // Generate ETag based on currency content
-            var etag = GenerateETag(currency);
+            var etag = ETagHelper.GenerateETag(currency);
             Response.Headers.ETag = $"\"{etag}\"";
 
             return Ok(currency);
@@ -203,7 +203,7 @@ public class CurrenciesController : ControllerBase
             Response.Headers["Cache-Control"] = "public, max-age=3600"; // 1 hour (country mapping rarely changes)
 
             // Generate ETag based on currency content
-            var etag = GenerateETag(currency);
+            var etag = ETagHelper.GenerateETag(currency);
             Response.Headers.ETag = $"\"{etag}\"";
 
             return Ok(currency);
@@ -277,7 +277,7 @@ public class CurrenciesController : ControllerBase
             Response.Headers["Cache-Control"] = "public, max-age=3600"; // 1 hour (country mapping rarely changes)
 
             // Generate ETag based on currency content
-            var etag = GenerateETag(currency);
+            var etag = ETagHelper.GenerateETag(currency);
             Response.Headers.ETag = $"\"{etag}\"";
 
             return Ok(currency);
@@ -331,7 +331,7 @@ public class CurrenciesController : ControllerBase
             }
 
             // Generate ETag
-            var etag = GenerateETag(currency);
+            var etag = ETagHelper.GenerateETag(currency);
 
             // Check If-None-Match
             if (Request.Headers.IfNoneMatch.Any())
@@ -398,7 +398,7 @@ public class CurrenciesController : ControllerBase
             }
 
             // Generate ETag for optimistic concurrency (FR-006)
-            var etag = GenerateETag(currency);
+            var etag = ETagHelper.GenerateETag(currency);
             Response.Headers.ETag = $"\"{etag}\"";
             Response.Headers["X-Correlation-ID"] = HttpContext.TraceIdentifier;
             Response.Headers["Cache-Control"] = "private, max-age=0"; // Admin endpoint, no caching
@@ -660,7 +660,7 @@ public class CurrenciesController : ControllerBase
             }
 
             // Verify ETag matches current version (FR-006)
-            var currentETag = GenerateETag(currentCurrency);
+            var currentETag = ETagHelper.GenerateETag(currentCurrency);
             if (clientETag != currentETag)
             {
                 return StatusCode(StatusCodes.Status412PreconditionFailed, new ErrorResponse
@@ -713,7 +713,7 @@ public class CurrenciesController : ControllerBase
             }
 
             // Generate new ETag
-            var newETag = GenerateETag(currency);
+            var newETag = ETagHelper.GenerateETag(currency);
             Response.Headers.ETag = $"\"{newETag}\"";
             Response.Headers["X-Correlation-ID"] = HttpContext.TraceIdentifier;
 
@@ -890,20 +890,5 @@ public class CurrenciesController : ControllerBase
         var success = await _currencyService.DeactivateAsync(id, cancellationToken);
         if (!success) return NotFound();
         return Ok();
-    }
-
-    /// <summary>
-    /// Generates ETag for response caching
-    /// </summary>
-    /// <remarks>
-    /// Per contracts/openapi.yaml: ETags enable conditional requests (If-None-Match).
-    /// Uses SHA256 hash of JSON content for deterministic ETags.
-    /// </remarks>
-    private static string GenerateETag(object content)
-    {
-        var json = JsonSerializer.Serialize(content);
-        var bytes = Encoding.UTF8.GetBytes(json);
-        var hash = SHA256.HashData(bytes);
-        return Convert.ToBase64String(hash)[..16]; // First 16 chars of base64 hash
     }
 }

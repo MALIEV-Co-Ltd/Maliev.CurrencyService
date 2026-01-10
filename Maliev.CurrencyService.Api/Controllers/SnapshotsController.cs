@@ -68,6 +68,7 @@ public class SnapshotsController : ControllerBase
         [FromQuery] bool dryRun = false,
         CancellationToken cancellationToken = default)
     {
+        // NOTE: We allow the action to run even if ModelState is invalid to support dryRun validation reports.
         try
         {
             // Validate input
@@ -82,7 +83,21 @@ public class SnapshotsController : ControllerBase
                 });
             }
 
+            // FR-028: In dry-run mode, we want to return OK with validation errors instead of BadRequest
+            var validationErrors = new List<string>();
+            if (!ModelState.IsValid)
+            {
+                foreach (var state in ModelState)
+                {
+                    foreach (var error in state.Value.Errors)
+                    {
+                        validationErrors.Add(error.ErrorMessage);
+                    }
+                }
+            }
+
             // Convert DTOs to internal Request
+            // ... (rest of the mapping)
             var request = new SnapshotBatchRequest
             {
                 Snapshots = snapshots.Select(s => new SnapshotEntry
@@ -110,7 +125,6 @@ public class SnapshotsController : ControllerBase
             // Let's keep the custom validation for DryRun as per original logic to avoid breaking FR-028 check
 
             // Validate each snapshot entry (Controller Validation Layer)
-            var validationErrors = new List<string>();
             for (int i = 0; i < snapshots.Count; i++)
             {
                 var entry = snapshots[i];
@@ -131,13 +145,15 @@ public class SnapshotsController : ControllerBase
             _logger.LogInformation("POST /v1/admin/snapshots/ingest - Count: {Count}, DryRun: {DryRun}",
                 snapshots.Count, dryRun);
 
-            // FR-028: Dry-run mode returns validation report
+            // FR-028: Call service for full validation even in dry-run
+            var batchResponse = await _snapshotService.ImportBatchAsync(request, cancellationToken);
+
             if (dryRun)
             {
                 var report = new ValidationReport
                 {
-                    IsValid = validationErrors.Count == 0,
-                    ValidationErrors = validationErrors,
+                    IsValid = batchResponse.FailureCount == 0,
+                    ValidationErrors = batchResponse.Errors?.SelectMany(e => e.Value).ToList() ?? new List<string>(),
                     RecordCount = snapshots.Count,
                     IsDryRun = true
                 };
@@ -147,7 +163,7 @@ public class SnapshotsController : ControllerBase
             }
 
             // FR-028a: Reject entire batch on any validation error
-            if (validationErrors.Count > 0)
+            if (batchResponse.FailureCount > 0)
             {
                 return BadRequest(new ErrorResponse
                 {
@@ -155,28 +171,7 @@ public class SnapshotsController : ControllerBase
                     Message = "validation failed for snapshot batch",
                     Timestamp = DateTime.UtcNow,
                     CorrelationId = HttpContext.TraceIdentifier,
-                    Details = new Dictionary<string, string[]>
-                    {
-                        { "snapshots", validationErrors.ToArray() }
-                    }
-                });
-            }
-
-            // FR-027: Process asynchronously via Service + Queue
-            // Service stages the data
-            var batchResponse = await _snapshotService.ImportBatchAsync(request, cancellationToken);
-
-            if (batchResponse.FailureCount > 0 && batchResponse.Errors != null)
-            {
-                // If service found validation errors (e.g. invalid currency codes), reject
-                // This effectively implements "All or Nothing" at the service layer too
-                return BadRequest(new ErrorResponse
-                {
-                    Error = "BadRequest",
-                    Message = "validation failed for snapshot batch",
-                    Timestamp = DateTime.UtcNow,
-                    CorrelationId = HttpContext.TraceIdentifier,
-                    Details = batchResponse.Errors.ToDictionary(k => k.Key, v => v.Value)
+                    Details = batchResponse.Errors?.ToDictionary(k => k.Key, v => v.Value)
                 });
             }
 

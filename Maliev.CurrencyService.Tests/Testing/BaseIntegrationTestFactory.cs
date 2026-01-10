@@ -33,6 +33,7 @@ public class BaseIntegrationTestFactory<TProgram, TDbContext> : WebApplicationFa
     private readonly RedisContainer _redisContainer;
     private readonly RabbitMqContainer _rabbitmqContainer;
     private readonly RSA _testRsa;
+    private readonly string _testJwtSecret;
     private bool _containersStarted;
 
     /// <summary>
@@ -56,6 +57,7 @@ public class BaseIntegrationTestFactory<TProgram, TDbContext> : WebApplicationFa
             .Build();
 
         _testRsa = RSA.Create(2048);
+        _testJwtSecret = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
 
         // Set environment variable EARLY so Program.cs picks it up during WebApplication.CreateBuilder
         Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", "Testing");
@@ -128,6 +130,14 @@ public class BaseIntegrationTestFactory<TProgram, TDbContext> : WebApplicationFa
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
+        builder.ConfigureAppConfiguration((context, config) =>
+        {
+            config.AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Jwt:SecurityKey"] = _testJwtSecret
+            });
+        });
+
         builder.ConfigureTestServices(services =>
         {
             // Configure JWT Bearer authentication with test RSA key

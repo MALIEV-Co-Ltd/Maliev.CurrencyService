@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
 
 namespace Maliev.CurrencyService.Api.Models.Snapshots;
@@ -13,18 +14,26 @@ public class SnapshotEntryDto
     /// <summary>
     /// Source currency code (ISO 4217)
     /// </summary>
+    [Required]
+    [StringLength(3, MinimumLength = 3)]
+    [RegularExpression(@"^[A-Z]{3}$")]
     [JsonPropertyName("from")]
     public required string From { get; set; }
 
     /// <summary>
     /// Target currency code (ISO 4217)
     /// </summary>
+    [Required]
+    [StringLength(3, MinimumLength = 3)]
+    [RegularExpression(@"^[A-Z]{3}$")]
     [JsonPropertyName("to")]
     public required string To { get; set; }
 
     /// <summary>
     /// Exchange rate (6 decimal precision per FR-SC-012)
     /// </summary>
+    [Required]
+    [Range(0.000001, 1000000)]
     [JsonPropertyName("rate")]
     public required decimal Rate { get; set; }
 
@@ -34,6 +43,7 @@ public class SnapshotEntryDto
     /// <remarks>
     /// String type allows validation of invalid timestamps during dry-run
     /// </remarks>
+    [Required]
     [JsonPropertyName("timestamp")]
     public required string Timestamp { get; set; }
 }

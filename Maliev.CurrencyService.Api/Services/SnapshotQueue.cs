@@ -1,5 +1,8 @@
 using System.Collections.Concurrent;
 using System.Threading.Channels;
+using Maliev.CurrencyService.Data;
+using Maliev.CurrencyService.Data.Models;
+using Microsoft.EntityFrameworkCore;
 
 namespace Maliev.CurrencyService.Api.Services;
 
@@ -9,20 +12,21 @@ namespace Maliev.CurrencyService.Api.Services;
 public class SnapshotQueue : ISnapshotQueue
 {
     private readonly Channel<string> _queue;
-    private readonly ConcurrentDictionary<string, (string Status, string? Error)> _statuses = new();
+    private readonly IServiceProvider _serviceProvider;
+    private readonly ILogger<SnapshotQueue> _logger;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="SnapshotQueue"/> class.
     /// </summary>
-    public SnapshotQueue()
+    public SnapshotQueue(IServiceProvider serviceProvider, ILogger<SnapshotQueue> logger)
     {
-        // Unbounded channel - in a real production system with massive load, 
-        // we might want a bounded channel, but for this use case unbounded is fine
-        // as batch ingestion volume is expected to be manageable.
+        _serviceProvider = serviceProvider;
+        _logger = logger;
+
         var options = new UnboundedChannelOptions
         {
-            SingleReader = true, // We have one background service reading
-            SingleWriter = false // Multiple concurrent requests can write
+            SingleReader = true,
+            SingleWriter = false
         };
         _queue = Channel.CreateUnbounded<string>(options);
     }
@@ -35,7 +39,21 @@ public class SnapshotQueue : ISnapshotQueue
             throw new ArgumentNullException(nameof(batchId));
         }
 
-        _statuses[batchId] = ("Queued", null);
+        using var scope = _serviceProvider.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<CurrencyDbContext>();
+
+        var status = new BatchStatus
+        {
+            Id = Guid.NewGuid(),
+            BatchId = batchId,
+            Status = "Queued",
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        context.BatchStatuses.Add(status);
+        await context.SaveChangesAsync();
+
         await _queue.Writer.WriteAsync(batchId);
     }
 
@@ -48,14 +66,44 @@ public class SnapshotQueue : ISnapshotQueue
     /// <inheritdoc />
     public void UpdateStatus(string batchId, string status, string? error = null)
     {
-        _statuses[batchId] = (status, error);
+        // Fire and forget update to DB (best effort in background)
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                using var scope = _serviceProvider.CreateScope();
+                var context = scope.ServiceProvider.GetRequiredService<CurrencyDbContext>();
+
+                var batchStatus = await context.BatchStatuses
+                    .FirstOrDefaultAsync(s => s.BatchId == batchId);
+
+                if (batchStatus != null)
+                {
+                    batchStatus.Status = status;
+                    batchStatus.ErrorMessage = error;
+                    batchStatus.UpdatedAt = DateTime.UtcNow;
+                    await context.SaveChangesAsync();
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to update batch status for {BatchId} in background", batchId);
+            }
+        });
     }
 
     /// <inheritdoc />
     public (string Status, string? Error) GetStatus(string batchId)
     {
-        return _statuses.TryGetValue(batchId, out var status)
-            ? status
+        using var scope = _serviceProvider.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<CurrencyDbContext>();
+
+        var batchStatus = context.BatchStatuses
+            .AsNoTracking()
+            .FirstOrDefault(s => s.BatchId == batchId);
+
+        return batchStatus != null
+            ? (batchStatus.Status, batchStatus.ErrorMessage)
             : ("NotFound", null);
     }
 }

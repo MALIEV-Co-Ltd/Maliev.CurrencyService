@@ -21,7 +21,7 @@
 **Alternatives considered**: External Gateway rate limiting (rejected: user specifically requested service-level implementation).
 
 ## IAM API Patterns
-**Decision**: 
+**Decision**:
 - POST `/iam/v1/permissions/register`
 - POST `/iam/v1/roles/register`
 **Rationale**: Standard REST patterns for idempotent resource registration.

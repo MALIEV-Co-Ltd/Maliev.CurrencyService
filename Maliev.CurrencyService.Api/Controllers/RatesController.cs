@@ -170,7 +170,7 @@ public class RatesController : ControllerBase
             }
 
             // Generate ETag
-            var etag = GenerateETag(rateResponse);
+            var etag = ETagHelper.GenerateETag(rateResponse);
 
             // Check conditional GET (If-None-Match)
             if (Request.Headers.IfNoneMatch.Any())
@@ -249,8 +249,7 @@ public class RatesController : ControllerBase
     [EnableRateLimiting("AuthenticatedApi")]
     public async Task<IActionResult> UpdateRate([FromBody] UpdateRateRequest request)
     {
-        // Implementation stub
-        _logger.LogInformation("Admin updating rate {From}:{To} to {Rate}", request.From, request.To, request.Rate);
+        await _rateService.UpdateRateAsync(request.From, request.To, request.Rate);
         return Ok(new { message = "Rate update accepted" });
     }
 
@@ -263,8 +262,7 @@ public class RatesController : ControllerBase
     [EnableRateLimiting("AuthenticatedApi")]
     public async Task<IActionResult> BulkUpdateRates([FromBody] BulkUpdateRatesRequest request)
     {
-        // Implementation stub
-        _logger.LogInformation("Admin bulk updating {Count} rates", request.Rates.Count);
+        await _rateService.BulkUpdateRatesAsync(request.Rates);
         return Ok(new { message = "Bulk update processed" });
     }
 
@@ -294,16 +292,5 @@ public class RatesController : ControllerBase
         // Implementation stub
         _logger.LogInformation("Admin triggering manual rate refresh");
         return Accepted(new { message = "Rate refresh triggered" });
-    }
-
-    /// <summary>
-    /// Generates ETag for response caching
-    /// </summary>
-    private static string GenerateETag(object content)
-    {
-        var json = JsonSerializer.Serialize(content);
-        var bytes = Encoding.UTF8.GetBytes(json);
-        var hash = SHA256.HashData(bytes);
-        return Convert.ToBase64String(hash)[..16]; // First 16 chars of base64 hash
     }
 }

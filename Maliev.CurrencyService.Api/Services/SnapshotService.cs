@@ -213,22 +213,22 @@ public class SnapshotService : ISnapshotService
 
             // Upsert: Delete existing snapshots for same date/pairs, then insert new ones
             var snapshotDate = stagedSnapshots.First().SnapshotDate;
-            var currencyPairs = stagedSnapshots.Select(s => new { s.FromCurrency, s.ToCurrency }).ToList();
+            var fromCodes = stagedSnapshots.Select(p => p.FromCurrency).Distinct().ToList();
+            var toCodes = stagedSnapshots.Select(p => p.ToCurrency).Distinct().ToList();
 
-            foreach (var pair in currencyPairs)
+            var existingToDrop = await _context.RateSnapshots
+                .Where(r => r.SnapshotDate == snapshotDate && fromCodes.Contains(r.FromCurrency) && toCodes.Contains(r.ToCurrency))
+                .ToListAsync(cancellationToken);
+
+            var snapshotsToRemove = existingToDrop
+                .Where(r => stagedSnapshots.Any(p => p.FromCurrency == r.FromCurrency && p.ToCurrency == r.ToCurrency))
+                .ToList();
+
+            if (snapshotsToRemove.Any())
             {
-                var existing = await _context.RateSnapshots
-                    .Where(r => r.FromCurrency == pair.FromCurrency
-                                && r.ToCurrency == pair.ToCurrency
-                                && r.SnapshotDate == snapshotDate)
-                    .ToListAsync(cancellationToken);
-
-                if (existing.Any())
-                {
-                    _context.RateSnapshots.RemoveRange(existing);
-                    _logger.LogDebug("Removed {Count} existing snapshots for {From}:{To} on {Date}",
-                        existing.Count, pair.FromCurrency, pair.ToCurrency, snapshotDate);
-                }
+                _context.RateSnapshots.RemoveRange(snapshotsToRemove);
+                _logger.LogInformation("Removed {Count} existing snapshots for promotion of batch {BatchId}",
+                    snapshotsToRemove.Count, batchId);
             }
 
             // Add new production snapshots

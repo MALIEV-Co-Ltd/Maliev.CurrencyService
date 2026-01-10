@@ -46,4 +46,14 @@ public interface IRateService
         string toCurrency,
         DateOnly date,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Updates a specific exchange rate (admin only).
+    /// </summary>
+    Task UpdateRateAsync(string from, string to, decimal rate, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Bulk updates exchange rates (admin only).
+    /// </summary>
+    Task BulkUpdateRatesAsync(List<Models.Rates.UpdateRateRequest> rates, CancellationToken cancellationToken = default);
 }

@@ -84,6 +84,10 @@ public class CurrencyDbContext : DbContext
     /// Gets or sets the collection of audit logs.
     /// </summary>
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+    /// <summary>
+    /// Gets or sets the collection of batch statuses.
+    /// </summary>
+    public DbSet<BatchStatus> BatchStatuses => Set<BatchStatus>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

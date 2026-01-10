@@ -9,14 +9,14 @@ Migrate the CurrencyService to a permission-based authorization model integrated
 
 ## Technical Context
 
-**Language/Version**: .NET 10  
-**Primary Dependencies**: `Maliev.Aspire.ServiceDefaults` (NuGet), `Microsoft.AspNetCore.Authentication.JwtBearer`, `Microsoft.Extensions.Http.Resilience`  
-**Storage**: PostgreSQL (via EF Core), Redis (via StackExchange.Redis)  
-**Testing**: xUnit, Testcontainers (PostgreSQL, Redis, RabbitMQ)  
+**Language/Version**: .NET 10
+**Primary Dependencies**: `Maliev.Aspire.ServiceDefaults` (NuGet), `Microsoft.AspNetCore.Authentication.JwtBearer`, `Microsoft.Extensions.Http.Resilience`
+**Storage**: PostgreSQL (via EF Core), Redis (via StackExchange.Redis)
+**Testing**: xUnit, Testcontainers (PostgreSQL, Redis, RabbitMQ)
 **Target Platform**: Linux (Docker)
-**Project Type**: ASP.NET Core Web API  
-**Performance Goals**: < 100ms P95 for public rate conversion; negligible overhead for permission checks via local JWT inspection.  
-**Constraints**: Zero warnings, NO AutoMapper, NO FluentValidation, NO FluentAssertions.  
+**Project Type**: ASP.NET Core Web API
+**Performance Goals**: < 100ms P95 for public rate conversion; negligible overhead for permission checks via local JWT inspection.
+**Constraints**: Zero warnings, NO AutoMapper, NO FluentValidation, NO FluentAssertions.
 **Scale/Scope**: 19 permissions, 4 roles, protection across 3 main controllers.
 
 ## Constitution Check

@@ -1,7 +1,8 @@
 namespace Maliev.CurrencyService.Api.Services;
 
 /// <summary>
-/// Defines permission constants for the Currency Service.
+/// Defines granular permission constants for the Currency Service.
+/// Follows GCP-style naming: {service}.{resource}.{action}
 /// </summary>
 public static class CurrencyPermissions
 {
@@ -42,28 +43,32 @@ public static class CurrencyPermissions
     public const string SystemViewStats = "currency.system.view-stats";
 
     /// <summary>
-    /// Gets all defined permissions.
+    /// Collection of all defined currency permissions with descriptions.
     /// </summary>
-    public static string[] All => new[]
+    public static readonly IReadOnlyDictionary<string, string> AllWithDescriptions = new Dictionary<string, string>
     {
-        CurrenciesRead, CurrenciesCreate, CurrenciesUpdate, CurrenciesDelete, CurrenciesActivate,
-        RatesRead, RatesUpdate, RatesBulkUpdate, RatesSetSource,
-        SnapshotsRead, SnapshotsCreate, SnapshotsDelete, SnapshotsAudit,
-        SystemRefreshRates, SystemRebuildCache, SystemViewStats
+        { CurrenciesRead, "Read currency list and details" },
+        { CurrenciesCreate, "Create new currencies" },
+        { CurrenciesUpdate, "Update existing currency information" },
+        { CurrenciesDelete, "Delete currencies" },
+        { CurrenciesActivate, "Activate or deactivate currencies" },
+        { RatesRead, "Read exchange rates" },
+        { RatesUpdate, "Update individual exchange rates" },
+        { RatesBulkUpdate, "Perform bulk update of exchange rates" },
+        { RatesSetSource, "Set official exchange rate data source" },
+        { SnapshotsRead, "Read historical currency snapshots" },
+        { SnapshotsCreate, "Create historical currency snapshots" },
+        { SnapshotsDelete, "Delete historical snapshots" },
+        { SnapshotsAudit, "Audit currency snapshot data" },
+        { SystemRefreshRates, "Manually trigger exchange rate refresh" },
+        { SystemRebuildCache, "Rebuild currency system cache" },
+        { SystemViewStats, "View currency service system statistics" }
     };
-}
 
-/// <summary>
-/// Represents a predefined role with associated permissions.
-/// </summary>
-public class PredefinedRole
-{
-    /// <summary>Gets the unique identifier for the role.</summary>
-    public string RoleId { get; init; } = default!;
-    /// <summary>Gets the description of the role.</summary>
-    public string Description { get; init; } = default!;
-    /// <summary>Gets the permissions assigned to the role.</summary>
-    public string[] Permissions { get; init; } = default!;
+    /// <summary>
+    /// Gets all defined permission codes.
+    /// </summary>
+    public static string[] All => AllWithDescriptions.Keys.ToArray();
 }
 
 /// <summary>
@@ -71,28 +76,22 @@ public class PredefinedRole
 /// </summary>
 public static class CurrencyPredefinedRoles
 {
-    /// <summary>The administrator role with all permissions.</summary>
-    public static readonly PredefinedRole Admin = new()
-    {
-        RoleId = "currency.admin",
-        Description = "Currency Service Administrator",
-        Permissions = CurrencyPermissions.All
-    };
+    /// <summary>Role for administrators with full control.</summary>
+    public const string Admin = "roles.currency.admin";
+    /// <summary>Role for users with read-only access.</summary>
+    public const string Viewer = "roles.currency.viewer";
 
-    /// <summary>The viewer role with read-only permissions.</summary>
-    public static readonly PredefinedRole Viewer = new()
+    /// <summary>
+    /// Collection of all predefined roles for the Currency Service.
+    /// </summary>
+    public static readonly IReadOnlyList<(string RoleId, string Description, string[] Permissions)> All = new List<(string, string, string[])>
     {
-        RoleId = "currency.viewer",
-        Description = "Currency Service Viewer",
-        Permissions = new[] {
+        (Admin, "Full administrative control over currencies and exchange rates", CurrencyPermissions.All),
+        (Viewer, "Read-only access to currency data and exchange rates", new[]
+        {
             CurrencyPermissions.CurrenciesRead,
             CurrencyPermissions.RatesRead,
             CurrencyPermissions.SnapshotsRead
-        }
+        })
     };
-
-    /// <summary>Gets all predefined role IDs.</summary>
-    public static string[] AllRoleIds => new[] { Admin.RoleId, Viewer.RoleId };
-    /// <summary>Gets all predefined roles.</summary>
-    public static PredefinedRole[] All => new[] { Admin, Viewer };
 }

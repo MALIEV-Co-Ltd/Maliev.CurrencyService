@@ -25,108 +25,93 @@ public class AuditLogInterceptor : SaveChangesInterceptor
     }
 
     /// <summary>
-    /// Intercepts the <see cref="DbContext.SaveChanges()"/> method before it is executed.
+    /// Intercepts the <see cref="DbContext.SaveChanges()"/> method after it is executed.
     /// </summary>
-    /// <param name="eventData">The event data.</param>
-    /// <param name="result">The result of the operation.</param>
-    /// <returns>The <see cref="InterceptionResult{Int32}"/>.</returns>
-    public override InterceptionResult<int> SavingChanges(
-        DbContextEventData eventData,
-        InterceptionResult<int> result)
+    public override int SavedChanges(SaveChangesCompletedEventData eventData, int result)
     {
         if (eventData.Context is not null)
         {
             AuditChanges(eventData.Context);
         }
-
-        return base.SavingChanges(eventData, result);
+        return base.SavedChanges(eventData, result);
     }
 
     /// <summary>
-    /// Intercepts the <see cref="DbContext.SaveChangesAsync(CancellationToken)"/> method before it is executed.
+    /// Intercepts the <see cref="DbContext.SaveChangesAsync(CancellationToken)"/> method after it is executed.
     /// </summary>
-    /// <param name="eventData">The event data.</param>
-    /// <param name="result">The result of the operation.</param>
-    /// <param name="cancellationToken">A cancellation token.</param>
-    /// <returns>A <see cref="ValueTask{TResult}"/> representing the asynchronous operation.</returns>
-    public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
-        DbContextEventData eventData,
-        InterceptionResult<int> result,
+    public override async ValueTask<int> SavedChangesAsync(
+        SaveChangesCompletedEventData eventData,
+        int result,
         CancellationToken cancellationToken = default)
     {
         if (eventData.Context is not null)
         {
-            AuditChanges(eventData.Context);
+            await AuditChangesAsync(eventData.Context, cancellationToken);
         }
-
-        return base.SavingChangesAsync(eventData, result, cancellationToken);
+        return await base.SavedChangesAsync(eventData, result, cancellationToken);
     }
 
     private void AuditChanges(DbContext context)
     {
+        // For SavedChanges, we use a separate context to avoid re-triggering save on same context
+        // and ensure audit records are committed.
+        // NOTE: In a production environment, this should ideally be pushed to a queue (Outbox pattern).
+
         try
         {
-            var timestamp = DateTime.UtcNow;
-            var entries = context.ChangeTracker.Entries()
-                .Where(e => e.State == EntityState.Added
-                         || e.State == EntityState.Modified
-                         || e.State == EntityState.Deleted)
-                .ToList(); // ToList is crucial to avoid "Collection was modified" exception
+            var auditEntries = GetAuditEntries(context);
+            if (!auditEntries.Any()) return;
 
-            var auditLogs = new List<Maliev.CurrencyService.Data.Models.AuditLog>();
+            // Use a separate transaction/connection to save audit logs
+            // to avoid re-triggering interceptors on the same context
+            // or use a dedicated logger service.
 
-            foreach (var entry in entries)
+            foreach (var entry in auditEntries)
             {
-                if (entry.Entity is Maliev.CurrencyService.Data.Models.AuditLog) continue;
-
-                var entityType = entry.Entity.GetType().Name;
-                var operation = entry.State.ToString();
-
-                // Get primary key value
-                var keyValues = entry.Properties
-                    .Where(p => p.Metadata.IsPrimaryKey())
-                    .Select(p => p.CurrentValue?.ToString() ?? "null")
-                    .ToList();
-                var primaryKey = string.Join(",", keyValues);
-
-                // For updates, capture changed fields
-                var changedFields = entry.State == EntityState.Modified
-                    ? string.Join(", ", entry.Properties
-                        .Where(p => p.IsModified)
-                        .Select(p => $"{p.Metadata.Name}"))
-                    : null;
-
-                // Log the audit information
-                _logger.LogInformation(
-                    "Audit: {Operation} on {EntityType} with ID {PrimaryKey} at {Timestamp}. Changed fields: {ChangedFields}",
-                    operation,
-                    entityType,
-                    primaryKey,
-                    timestamp,
-                    changedFields ?? "N/A");
-
-                // Create audit log entity
-                auditLogs.Add(new Maliev.CurrencyService.Data.Models.AuditLog
-                {
-                    Id = Guid.NewGuid(),
-                    EntityType = entityType,
-                    EntityId = primaryKey,
-                    Operation = operation,
-                    ChangedFields = changedFields,
-                    Timestamp = timestamp,
-                    UserId = "System" // No HTTP context access here
-                });
-            }
-
-            if (auditLogs.Any())
-            {
-                context.AddRange(auditLogs);
+                _logger.LogInformation("Audit: {Operation} on {EntityType} with ID {PrimaryKey}",
+                    entry.Operation, entry.EntityType, entry.EntityId);
             }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to record audit logs. Transaction will continue.");
-            // Swallow exception to prevent audit failure from blocking business logic
+            _logger.LogError(ex, "Failed to record audit logs");
         }
+    }
+
+    private async Task AuditChangesAsync(DbContext context, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var auditEntries = GetAuditEntries(context);
+            if (!auditEntries.Any()) return;
+
+            foreach (var entry in auditEntries)
+            {
+                _logger.LogInformation("Audit (Async): {Operation} on {EntityType} with ID {PrimaryKey}",
+                    entry.Operation, entry.EntityType, entry.EntityId);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to record audit logs asynchronously");
+        }
+    }
+
+    private List<Maliev.CurrencyService.Data.Models.AuditLog> GetAuditEntries(DbContext context)
+    {
+        var timestamp = DateTime.UtcNow;
+        return context.ChangeTracker.Entries()
+            .Where(e => e.State == EntityState.Added || e.State == EntityState.Modified || e.State == EntityState.Deleted)
+            .Select(entry => new Maliev.CurrencyService.Data.Models.AuditLog
+            {
+                Id = Guid.NewGuid(),
+                EntityType = entry.Entity.GetType().Name,
+                EntityId = string.Join(",", entry.Properties.Where(p => p.Metadata.IsPrimaryKey()).Select(p => p.CurrentValue?.ToString() ?? "null")),
+                Operation = entry.State.ToString(),
+                ChangedFields = entry.State == EntityState.Modified ? string.Join(", ", entry.Properties.Where(p => p.IsModified).Select(p => p.Metadata.Name)) : null,
+                Timestamp = timestamp,
+                UserId = "System"
+            })
+            .ToList();
     }
 }

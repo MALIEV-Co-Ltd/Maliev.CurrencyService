@@ -59,7 +59,7 @@ public class SystemController : ControllerBase
     {
         _logger.LogInformation("Admin viewed system statistics");
 
-        // This is a stub for returning high-level stats. 
+        // This is a stub for returning high-level stats.
         // Real metrics are exposed via the /metrics endpoint.
         return Ok(new
         {

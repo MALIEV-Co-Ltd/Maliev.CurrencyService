@@ -7,6 +7,10 @@ using Maliev.CurrencyService.Api.BackgroundServices;
 using Microsoft.Extensions.Logging;
 using System.Threading.RateLimiting;
 
+// ASPIRE DEBUG: This line runs before anything else
+Console.WriteLine($"[{DateTime.UtcNow:O}] ASPIRE_DEBUG: Currency Service process started");
+Console.Out.Flush();
+
 // Initialize bootstrap logging
 using var loggerFactory = LoggerFactory.Create(logBuilder => logBuilder.AddConsole());
 var bootstrapLogger = loggerFactory.CreateLogger("Program");
@@ -155,6 +159,9 @@ try
 catch (Exception ex)
 {
     Log.HostTerminated(bootstrapLogger, ex, "Currency Service");
+    // Force flush to ensure Aspire captures the error before process exits
+    Console.Out.Flush();
+    Console.Error.Flush();
     throw;
 }
 finally

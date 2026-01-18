@@ -44,7 +44,7 @@ public class ProviderChain
     /// <param name="toCurrency">Target currency</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Exchange rate or null if unavailable from all providers</returns>
-    public async Task<ExchangeRate?> GetRateAsync(
+    public virtual async Task<ExchangeRate?> GetRateAsync(
         string fromCurrency,
         string toCurrency,
         CancellationToken cancellationToken = default)

@@ -2,7 +2,6 @@ using Maliev.CurrencyService.Api.Metrics;
 using Maliev.CurrencyService.Data.Models;
 using System.Diagnostics;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 
 namespace Maliev.CurrencyService.Api.Services.External;
 

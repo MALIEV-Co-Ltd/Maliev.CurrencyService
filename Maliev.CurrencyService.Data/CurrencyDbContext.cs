@@ -1,6 +1,6 @@
+using Maliev.Aspire.ServiceDefaults.Database;
 using Maliev.CurrencyService.Data.Models;
 using Microsoft.EntityFrameworkCore;
-using Maliev.Aspire.ServiceDefaults.Database;
 
 namespace Maliev.CurrencyService.Data;
 

@@ -1,10 +1,10 @@
+using Maliev.Aspire.ServiceDefaults.Caching;
 using Maliev.CurrencyService.Api.Metrics;
 using Maliev.CurrencyService.Api.Models.Rates;
 using Maliev.CurrencyService.Api.Services.External;
 using Maliev.CurrencyService.Data;
 using Maliev.CurrencyService.Data.Models;
 using Microsoft.EntityFrameworkCore;
-using Maliev.Aspire.ServiceDefaults.Caching;
 
 namespace Maliev.CurrencyService.Api.Services;
 

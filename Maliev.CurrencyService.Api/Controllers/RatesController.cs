@@ -1,14 +1,11 @@
 using Asp.Versioning;
-using Maliev.CurrencyService.Api.Models.Common;
 using Maliev.Aspire.ServiceDefaults.Authorization;
-using Maliev.CurrencyService.Api.Services;
+using Maliev.CurrencyService.Api.Models.Common;
 using Maliev.CurrencyService.Api.Models.Rates;
+using Maliev.CurrencyService.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
-using System.Security.Cryptography;
-using System.Text;
-using System.Text.Json;
 
 namespace Maliev.CurrencyService.Api.Controllers;
 

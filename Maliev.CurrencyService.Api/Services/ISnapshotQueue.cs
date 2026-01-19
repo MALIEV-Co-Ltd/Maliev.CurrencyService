@@ -1,5 +1,3 @@
-using System.Threading.Channels;
-
 namespace Maliev.CurrencyService.Api.Services;
 
 /// <summary>

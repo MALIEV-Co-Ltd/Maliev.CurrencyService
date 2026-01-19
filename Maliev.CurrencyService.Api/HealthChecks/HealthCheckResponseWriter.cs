@@ -1,5 +1,5 @@
-using System.Text.Json;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using System.Text.Json;
 
 namespace Maliev.CurrencyService.Api.HealthChecks;
 

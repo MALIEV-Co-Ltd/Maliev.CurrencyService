@@ -1,5 +1,5 @@
-using System.Diagnostics.Metrics;
 using Maliev.CurrencyService.Data.Interceptors;
+using System.Diagnostics.Metrics;
 
 namespace Maliev.CurrencyService.Api.Metrics;
 

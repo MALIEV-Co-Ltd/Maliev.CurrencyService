@@ -1,5 +1,3 @@
-using System.ComponentModel.DataAnnotations;
-
 namespace Maliev.CurrencyService.Api.Models;
 
 /// <summary>

@@ -1,8 +1,7 @@
-using System.Collections.Concurrent;
-using System.Threading.Channels;
 using Maliev.CurrencyService.Data;
 using Maliev.CurrencyService.Data.Models;
 using Microsoft.EntityFrameworkCore;
+using System.Threading.Channels;
 
 namespace Maliev.CurrencyService.Api.Services;
 

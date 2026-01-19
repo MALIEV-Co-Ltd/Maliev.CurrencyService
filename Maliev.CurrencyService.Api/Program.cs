@@ -1,10 +1,8 @@
-using Maliev.Aspire.ServiceDefaults;
+using Maliev.CurrencyService.Api.BackgroundServices;
 using Maliev.CurrencyService.Api.Metrics;
 using Maliev.CurrencyService.Api.Services;
 using Maliev.CurrencyService.Api.Services.External;
 using Maliev.CurrencyService.Data;
-using Maliev.CurrencyService.Api.BackgroundServices;
-using Microsoft.Extensions.Logging;
 using System.Threading.RateLimiting;
 
 // ASPIRE DEBUG: This line runs before anything else

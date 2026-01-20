@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="Maliev.CurrencyService.Api/Maliev.CurrencyService.Api.csproj" />
+  <Project Path="Maliev.CurrencyService.Data/Maliev.CurrencyService.Data.csproj" />
+  <Project Path="Maliev.CurrencyService.Tests/Maliev.CurrencyService.Tests.csproj" />
+</Solution>

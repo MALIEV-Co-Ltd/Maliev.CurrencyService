@@ -1,4 +1,5 @@
 using Asp.Versioning;
+using Maliev.Aspire.ServiceDefaults;
 using Maliev.Aspire.ServiceDefaults.Authorization;
 using Maliev.Aspire.ServiceDefaults.Caching;
 using Maliev.CurrencyService.Api.Metrics;
@@ -15,7 +16,7 @@ namespace Maliev.CurrencyService.Api.Controllers;
 [Route("currency/v{version:apiVersion}/system")]
 [Produces("application/json")]
 [Authorize]
-[EnableRateLimiting("AuthenticatedApi")]
+[EnableRateLimiting(RateLimitPolicies.Admin)]
 public class SystemController : ControllerBase
 {
     private readonly ICacheService _cacheService;

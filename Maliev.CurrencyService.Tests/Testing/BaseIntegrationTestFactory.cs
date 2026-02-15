@@ -1,5 +1,7 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Diagnostics.CodeAnalysis;
+using System.Text;
+using Moq;
 using MassTransit;
 using Microsoft.Extensions.Configuration;
 using System.Security.Claims;
@@ -51,6 +53,8 @@ public class BaseIntegrationTestFactory<TProgram, TDbContext> : WebApplicationFa
 
         // Set environment variable EARLY so Program.cs picks it up during WebApplication.CreateBuilder
         Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", "Testing");
+        Environment.SetEnvironmentVariable("CORS__AllowedOrigins__0", "http://localhost:3000");
+        Environment.SetEnvironmentVariable("CORS_ALLOWED_ORIGINS", "http://localhost:3000");
     }
 
     public async Task InitializeAsync()
@@ -143,10 +147,12 @@ public class BaseIntegrationTestFactory<TProgram, TDbContext> : WebApplicationFa
             InitializeAsync().GetAwaiter().GetResult();
         }
 
-        // Export RSA public key for JWT validation
-        var rsaParams = _testRsa.ExportParameters(false);
-        Environment.SetEnvironmentVariable("JWT_PUBLIC_KEY_MODULUS", Convert.ToBase64String(rsaParams.Modulus!));
-        Environment.SetEnvironmentVariable("JWT_PUBLIC_KEY_EXPONENT", Convert.ToBase64String(rsaParams.Exponent!));
+        // Export RSA public key for JWT validation in PEM format
+        var publicKeyPem = _testRsa.ExportRSAPublicKeyPem();
+        var publicKeyBase64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(publicKeyPem));
+
+        Environment.SetEnvironmentVariable("Jwt__PublicKey", publicKeyBase64);
+        Environment.SetEnvironmentVariable("Jwt:PublicKey", publicKeyBase64);
 
         // Allow derived classes to set additional environment variables
         ConfigureEnvironmentVariables();
@@ -163,7 +169,16 @@ public class BaseIntegrationTestFactory<TProgram, TDbContext> : WebApplicationFa
                 ["Jwt:SecurityKey"] = _testJwtSecret,
                 [$"ConnectionStrings:{DbConnectionStringName}"] = _postgresContainer!.GetConnectionString(),
                 ["ConnectionStrings:redis"] = _redisContainer!.GetConnectionString(),
-                ["ConnectionStrings:rabbitmq"] = _rabbitmqContainer!.GetConnectionString()
+                ["ConnectionStrings:rabbitmq"] = _rabbitmqContainer!.GetConnectionString(),
+                ["CORS:AllowedOrigins:0"] = "http://localhost:3000",
+                ["CORS_ALLOWED_ORIGINS"] = "http://localhost:3000",
+                ["RateLimiting:PermitLimit"] = "10000",
+                ["RateLimiting:WindowMinutes"] = "1",
+                ["RateLimiting:Admin:PermitLimit"] = "10000",
+                ["RateLimiting:Auth:PermitLimit"] = "10000",
+                ["RateLimiting:Public:PermitLimit"] = "10000",
+                ["IAM:RegistrationDelaySeconds"] = "0",
+                ["Features:FailOpenOnIAMError"] = "true"
             });
         });
 
@@ -182,12 +197,21 @@ public class BaseIntegrationTestFactory<TProgram, TDbContext> : WebApplicationFa
                     ValidIssuer = "test-issuer",
                     ValidAudience = "test-audience",
                     IssuerSigningKey = new RsaSecurityKey(_testRsa),
-                    ClockSkew = TimeSpan.Zero // No clock skew for tests
+                    ClockSkew = TimeSpan.Zero
                 };
             });
 
             // Add MassTransit test harness for testing message publishing/consuming
             services.AddMassTransitTestHarness();
+
+            // Mock IAM service client
+            services.AddScoped<Maliev.Aspire.ServiceDefaults.IAM.IIamServiceClient>(sp =>
+            {
+                var mockIam = new Moq.Mock<Maliev.Aspire.ServiceDefaults.IAM.IIamServiceClient>();
+                mockIam.Setup(x => x.CheckPermissionAsync(Moq.It.IsAny<string>(), Moq.It.IsAny<string>(), Moq.It.IsAny<string?>(), Moq.It.IsAny<CancellationToken>()))
+                    .ReturnsAsync(false); // Return false to force fallback to JWT claims in tests
+                return mockIam.Object;
+            });
 
             // Allow derived classes to add additional test services
             ConfigureAdditionalServices(services);

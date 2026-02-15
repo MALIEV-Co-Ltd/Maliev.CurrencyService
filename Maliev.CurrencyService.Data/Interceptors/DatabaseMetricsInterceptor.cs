@@ -176,10 +176,9 @@ public class DatabaseMetricsInterceptor : DbCommandInterceptor
         _metrics?.RecordDatabaseQuery(commandType);
         _metrics?.RecordDatabaseQueryDuration(commandType, duration.TotalSeconds);
 
-        if (duration.TotalMilliseconds > 100)
+        if (duration.TotalMilliseconds > 100 && command.CommandText != "SELECT 1")
         {
             // Log slow queries (> 100ms threshold)
-            // ... existing logging ...
             _logger.LogWarning(
                "Slow database query detected: {Duration}ms, Type: {CommandType}, SQL: {CommandText}",
                duration.TotalMilliseconds,

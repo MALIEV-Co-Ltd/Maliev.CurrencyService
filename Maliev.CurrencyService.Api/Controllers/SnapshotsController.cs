@@ -1,4 +1,5 @@
 using Asp.Versioning;
+using Maliev.Aspire.ServiceDefaults;
 using Maliev.Aspire.ServiceDefaults.Authorization;
 using Maliev.CurrencyService.Api.Models.Common;
 using Maliev.CurrencyService.Api.Models.Snapshots;
@@ -21,7 +22,7 @@ namespace Maliev.CurrencyService.Api.Controllers;
 [Route("currency/v{version:apiVersion}/admin/snapshots")]
 [Produces("application/json")]
 [Authorize] // Requires JWT authentication
-[EnableRateLimiting("AuthenticatedApi")]
+[EnableRateLimiting(RateLimitPolicies.Batch)]
 public class SnapshotsController : ControllerBase
 {
     private readonly ISnapshotService _snapshotService;

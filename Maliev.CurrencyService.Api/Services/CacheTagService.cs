@@ -62,7 +62,8 @@ public class CacheTagService : ICacheTagService
                 cacheKeys.Add(cacheKey);
                 _cache.Set(tagKey, cacheKeys, new MemoryCacheEntryOptions
                 {
-                    Priority = CacheItemPriority.NeverRemove
+                    Priority = CacheItemPriority.NeverRemove,
+                    Size = 1 // Required when SizeLimit is set
                 });
             }
             else

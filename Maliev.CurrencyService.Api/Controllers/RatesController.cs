@@ -1,4 +1,5 @@
 using Asp.Versioning;
+using Maliev.Aspire.ServiceDefaults;
 using Maliev.Aspire.ServiceDefaults.Authorization;
 using Maliev.CurrencyService.Api.Models.Common;
 using Maliev.CurrencyService.Api.Models.Rates;
@@ -48,7 +49,7 @@ public class RatesController : ControllerBase
     /// <returns>Exchange rate response</returns>
     [HttpGet]
     [RequirePermission(CurrencyPermissions.RatesRead)]
-    [EnableRateLimiting("PublicApi")]
+    [EnableRateLimiting(RateLimitPolicies.Public)]
     [ProducesResponseType(typeof(ExchangeRateResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status304NotModified)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
@@ -243,7 +244,7 @@ public class RatesController : ControllerBase
     [HttpPut]
     [Authorize]
     [RequirePermission(CurrencyPermissions.RatesUpdate)]
-    [EnableRateLimiting("AuthenticatedApi")]
+    [EnableRateLimiting(RateLimitPolicies.Api)]
     public async Task<IActionResult> UpdateRate([FromBody] UpdateRateRequest request)
     {
         await _rateService.UpdateRateAsync(request.From, request.To, request.Rate);
@@ -256,7 +257,7 @@ public class RatesController : ControllerBase
     [HttpPost("bulk-update")]
     [Authorize]
     [RequirePermission(CurrencyPermissions.RatesBulkUpdate)]
-    [EnableRateLimiting("AuthenticatedApi")]
+    [EnableRateLimiting(RateLimitPolicies.Api)]
     public async Task<IActionResult> BulkUpdateRates([FromBody] BulkUpdateRatesRequest request)
     {
         await _rateService.BulkUpdateRatesAsync(request.Rates);
@@ -269,7 +270,7 @@ public class RatesController : ControllerBase
     [HttpPost("set-source")]
     [Authorize]
     [RequirePermission(CurrencyPermissions.RatesSetSource)]
-    [EnableRateLimiting("AuthenticatedApi")]
+    [EnableRateLimiting(RateLimitPolicies.Api)]
     public async Task<IActionResult> SetRateSource([FromBody] SetRateSourceRequest request)
     {
         // Implementation stub
@@ -283,7 +284,7 @@ public class RatesController : ControllerBase
     [HttpPost("refresh")]
     [Authorize]
     [RequirePermission(CurrencyPermissions.SystemRefreshRates)]
-    [EnableRateLimiting("AuthenticatedApi")]
+    [EnableRateLimiting(RateLimitPolicies.Api)]
     public async Task<IActionResult> RefreshRatesFromProvider()
     {
         // Implementation stub

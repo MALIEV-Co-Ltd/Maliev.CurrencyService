@@ -1,14 +1,9 @@
+using Maliev.Aspire.ServiceDefaults;
 using Maliev.CurrencyService.Api.BackgroundServices;
 using Maliev.CurrencyService.Api.Metrics;
 using Maliev.CurrencyService.Api.Services;
 using Maliev.CurrencyService.Api.Services.External;
 using Maliev.CurrencyService.Data;
-using System.Threading.RateLimiting;
-
-// ASPIRE DEBUG: This line runs before anything else
-Console.WriteLine($"[{DateTime.UtcNow:O}] ASPIRE_DEBUG: Currency Service process started");
-Console.Out.Flush();
-
 // Initialize bootstrap logging
 using var loggerFactory = LoggerFactory.Create(logBuilder => logBuilder.AddConsole());
 var bootstrapLogger = loggerFactory.CreateLogger("Program");
@@ -33,18 +28,19 @@ try
     builder.AddPostgresDbContext<CurrencyDbContext>(connectionName: "CurrencyDbContext"); // PostgreSQL with retry logic
 
     // Add Cache Service (standardized via ServiceDefaults)
-    builder.AddRedisDistributedCache(instanceName: "currency:");
+    builder.AddStandardCache("currency:"); // Redis + in-memory fallback, memory-optimized
     builder.Services.AddMemoryCache();
 
     // MassTransit with RabbitMQ
     builder.AddMassTransitWithRabbitMq();
 
     // --- API Configuration ---
-    builder.AddDefaultCors(); // CORS from CORS:AllowedOrigins config
+    builder.AddStandardCors(); // CORS with fail-fast validation
     builder.AddDefaultApiVersioning(); // API versioning with URL segment reader
 
     // JWT Authentication (tests override via PostConfigureAll with dynamic RSA keys)
     builder.AddJwtAuthentication();
+    builder.Services.AddPermissionAuthorization();
 
     // Add OpenAPI (must be in Program.cs for XML comments to work via source generator)
     if (!builder.Environment.IsProduction())
@@ -55,33 +51,7 @@ try
     }
 
     // Add Rate Limiting
-    builder.Services.AddRateLimiter(options =>
-    {
-        options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-
-        // Policy for anonymous users (IP-based)
-        options.AddPolicy("PublicApi", httpContext =>
-            RateLimitPartition.GetFixedWindowLimiter(
-                partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "anonymous",
-                factory: _ => new FixedWindowRateLimiterOptions
-                {
-                    PermitLimit = 100,
-                    Window = TimeSpan.FromMinutes(1),
-                    QueueLimit = 20
-                }));
-
-        // Policy for authenticated users (Identity-based)
-        options.AddPolicy("AuthenticatedApi", httpContext =>
-            RateLimitPartition.GetFixedWindowLimiter(
-                partitionKey: httpContext.User.Identity?.Name ?? "anonymous",
-                factory: _ => new FixedWindowRateLimiterOptions
-                {
-                    PermitLimit = 1000,
-                    Window = TimeSpan.FromMinutes(1),
-                    QueueLimit = 50
-                }));
-    });
-
+    builder.AddStandardRateLimiting(); // Memory-optimized for low-spec nodes
     // Add Metrics
     builder.Services.AddSingleton<CurrencyServiceMetrics>();
     // Register IDatabaseMetrics to resolve to the same CurrencyServiceMetrics instance

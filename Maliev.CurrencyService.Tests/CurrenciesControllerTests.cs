@@ -191,4 +191,202 @@ public class CurrenciesControllerTests
         var objectResult = Assert.IsAssignableFrom<ObjectResult>(result.Result);
         Assert.Equal(StatusCodes.Status412PreconditionFailed, objectResult.StatusCode);
     }
+
+    [Fact]
+    public async Task UpdateById_MissingIfMatchHeader_ReturnsPreconditionFailed()
+    {
+        var id = Guid.NewGuid();
+        var request = new Maliev.CurrencyService.Api.Models.Currencies.UpdateCurrencyRequest { Symbol = "$", Name = "Dollar", DecimalPlaces = 2 };
+        // No If-Match header set
+        var result = await _controller.UpdateById(id, request);
+        var objectResult = Assert.IsAssignableFrom<ObjectResult>(result.Result);
+        Assert.Equal(StatusCodes.Status412PreconditionFailed, objectResult.StatusCode);
+    }
+
+    [Fact]
+    public async Task UpdateById_Exception_Returns500()
+    {
+        var id = Guid.NewGuid();
+        var request = new Maliev.CurrencyService.Api.Models.Currencies.UpdateCurrencyRequest { Symbol = "$", Name = "Dollar", DecimalPlaces = 2 };
+        var response = new CurrencyResponse { Id = id, Code = "USD", Symbol = "$", Name = "Dollar", DecimalPlaces = 2, IsActive = true, IsPrimary = false };
+        _currencyServiceMock.Setup(s => s.GetByIdAsync(id, It.IsAny<CancellationToken>())).ReturnsAsync(response);
+        _currencyServiceMock.Setup(s => s.UpdateByIdAsync(id, request, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new Exception("DB error"));
+
+        var etag = ETagHelper.GenerateETag(response);
+        _controller.Request.Headers.IfMatch = $"\"{etag}\"";
+
+        var result = await _controller.UpdateById(id, request);
+        var objectResult = Assert.IsAssignableFrom<ObjectResult>(result.Result);
+        Assert.Equal(StatusCodes.Status500InternalServerError, objectResult.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetCurrencyByCountry_InvalidIsoFormat_ReturnsBadRequest()
+    {
+        var result = await _controller.GetCurrencyByCountry("X"); // single char - invalid
+        var objectResult = Assert.IsAssignableFrom<ObjectResult>(result.Result);
+        Assert.Equal(StatusCodes.Status400BadRequest, objectResult.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetCurrencyByCountry_NotFound_ReturnsNotFound()
+    {
+        _currencyServiceMock.Setup(s => s.GetByCountryCodeAsync("ZZ", It.IsAny<CancellationToken>()))
+            .ReturnsAsync((CurrencyResponse?)null);
+        var result = await _controller.GetCurrencyByCountry("ZZ");
+        var objectResult = Assert.IsAssignableFrom<ObjectResult>(result.Result);
+        Assert.Equal(StatusCodes.Status404NotFound, objectResult.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetCurrencyByCountry_Exception_Returns500()
+    {
+        _currencyServiceMock.Setup(s => s.GetByCountryCodeAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new Exception("DB error"));
+        var result = await _controller.GetCurrencyByCountry("TH");
+        var objectResult = Assert.IsAssignableFrom<ObjectResult>(result.Result);
+        Assert.Equal(StatusCodes.Status500InternalServerError, objectResult.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetById_NotFound_ReturnsNotFound()
+    {
+        var id = Guid.NewGuid();
+        _currencyServiceMock.Setup(s => s.GetByIdAsync(id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((CurrencyResponse?)null);
+        var result = await _controller.GetById(id);
+        var objectResult = Assert.IsAssignableFrom<ObjectResult>(result.Result);
+        Assert.Equal(StatusCodes.Status404NotFound, objectResult.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetById_Exception_Returns500()
+    {
+        var id = Guid.NewGuid();
+        _currencyServiceMock.Setup(s => s.GetByIdAsync(id, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new Exception("DB error"));
+        var result = await _controller.GetById(id);
+        var objectResult = Assert.IsAssignableFrom<ObjectResult>(result.Result);
+        Assert.Equal(StatusCodes.Status500InternalServerError, objectResult.StatusCode);
+    }
+
+    [Fact]
+    public async Task DeleteById_NotFound_ReturnsNotFound()
+    {
+        var id = Guid.NewGuid();
+        _currencyServiceMock.Setup(s => s.DeleteByIdAsync(id, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+        var result = await _controller.DeleteById(id);
+        var objectResult = Assert.IsAssignableFrom<ObjectResult>(result);
+        Assert.Equal(StatusCodes.Status404NotFound, objectResult.StatusCode);
+    }
+
+    [Fact]
+    public async Task DeleteById_WithDependencies_ReturnsConflict()
+    {
+        var id = Guid.NewGuid();
+        _currencyServiceMock.Setup(s => s.DeleteByIdAsync(id, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("Cannot delete: has dependencies"));
+        var result = await _controller.DeleteById(id);
+        var objectResult = Assert.IsAssignableFrom<ObjectResult>(result);
+        Assert.Equal(StatusCodes.Status409Conflict, objectResult.StatusCode);
+    }
+
+    [Fact]
+    public async Task DeleteById_Exception_Returns500()
+    {
+        var id = Guid.NewGuid();
+        _currencyServiceMock.Setup(s => s.DeleteByIdAsync(id, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new Exception("Unexpected error"));
+        var result = await _controller.DeleteById(id);
+        var objectResult = Assert.IsAssignableFrom<ObjectResult>(result);
+        Assert.Equal(StatusCodes.Status500InternalServerError, objectResult.StatusCode);
+    }
+
+    [Fact]
+    public async Task Delete_NotFound_ReturnsNotFound()
+    {
+        _currencyServiceMock.Setup(s => s.DeleteAsync("XXX", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+        var result = await _controller.Delete("XXX");
+        var objectResult = Assert.IsAssignableFrom<ObjectResult>(result);
+        Assert.Equal(StatusCodes.Status404NotFound, objectResult.StatusCode);
+    }
+
+    [Fact]
+    public async Task Delete_Exception_Returns500()
+    {
+        _currencyServiceMock.Setup(s => s.DeleteAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new Exception("DB error"));
+        var result = await _controller.Delete("USD");
+        var objectResult = Assert.IsAssignableFrom<ObjectResult>(result);
+        Assert.Equal(StatusCodes.Status500InternalServerError, objectResult.StatusCode);
+    }
+
+    [Fact]
+    public async Task ListCurrencies_Exception_Returns500()
+    {
+        _currencyServiceMock.Setup(s => s.GetAllAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool?>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new Exception("DB error"));
+        var result = await _controller.ListCurrencies();
+        var objectResult = Assert.IsAssignableFrom<ObjectResult>(result.Result);
+        Assert.Equal(StatusCodes.Status500InternalServerError, objectResult.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetByCode_WithMatchingETag_Returns304()
+    {
+        var code = "USD";
+        var response = new CurrencyResponse { Code = code, Symbol = "$", Name = "Dollar", DecimalPlaces = 2, IsActive = true, IsPrimary = false };
+        _currencyServiceMock.Setup(s => s.GetByCodeAsync(code, It.IsAny<CancellationToken>())).ReturnsAsync(response);
+
+        var etag = ETagHelper.GenerateETag(response);
+        _controller.Request.Headers.IfNoneMatch = $"\"{etag}\"";
+
+        var result = await _controller.GetByCode(code);
+        var statusResult = Assert.IsAssignableFrom<StatusCodeResult>(result.Result);
+        Assert.Equal(StatusCodes.Status304NotModified, statusResult.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetByCode_Exception_Returns500()
+    {
+        _currencyServiceMock.Setup(s => s.GetByCodeAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new Exception("DB error"));
+        var result = await _controller.GetByCode("USD");
+        var objectResult = Assert.IsAssignableFrom<ObjectResult>(result.Result);
+        Assert.Equal(StatusCodes.Status500InternalServerError, objectResult.StatusCode);
+    }
+
+    [Fact]
+    public async Task CreateAdmin_ValidationError_ReturnsBadRequest()
+    {
+        var request = new Maliev.CurrencyService.Api.Models.Currencies.CreateCurrencyRequest { Code = "US", Symbol = "$", Name = "Dollar", DecimalPlaces = 2 }; // code not 3 chars
+        var result = await _controller.CreateAdmin(request);
+        var objectResult = Assert.IsAssignableFrom<ObjectResult>(result.Result);
+        Assert.Equal(StatusCodes.Status400BadRequest, objectResult.StatusCode);
+    }
+
+    [Fact]
+    public async Task CreateAdmin_AlreadyExists_ReturnsConflict()
+    {
+        var request = new Maliev.CurrencyService.Api.Models.Currencies.CreateCurrencyRequest { Code = "USD", Symbol = "$", Name = "Dollar", DecimalPlaces = 2 };
+        _currencyServiceMock.Setup(s => s.CreateAsync(It.IsAny<Maliev.CurrencyService.Api.Models.Currencies.CreateCurrencyRequest>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("Currency USD already exists"));
+        var result = await _controller.CreateAdmin(request);
+        var objectResult = Assert.IsAssignableFrom<ObjectResult>(result.Result);
+        Assert.Equal(StatusCodes.Status409Conflict, objectResult.StatusCode);
+    }
+
+    [Fact]
+    public async Task CreateAdmin_Exception_Returns500()
+    {
+        var request = new Maliev.CurrencyService.Api.Models.Currencies.CreateCurrencyRequest { Code = "EUR", Symbol = "€", Name = "Euro", DecimalPlaces = 2 };
+        _currencyServiceMock.Setup(s => s.CreateAsync(It.IsAny<Maliev.CurrencyService.Api.Models.Currencies.CreateCurrencyRequest>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new Exception("DB error"));
+        var result = await _controller.CreateAdmin(request);
+        var objectResult = Assert.IsAssignableFrom<ObjectResult>(result.Result);
+        Assert.Equal(StatusCodes.Status500InternalServerError, objectResult.StatusCode);
+    }
 }

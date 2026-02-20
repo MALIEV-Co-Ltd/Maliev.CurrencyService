@@ -126,4 +126,145 @@ public class SnapshotsControllerTests
         var okResult = Assert.IsType<OkObjectResult>(result);
         Assert.Equal(auditLog, okResult.Value);
     }
+
+    [Fact]
+    public async Task GetBatchAudit_NotFound_ReturnsNotFound()
+    {
+        var batchId = Guid.NewGuid().ToString();
+        _snapshotServiceMock.Setup(s => s.GetBatchAuditAsync(batchId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Maliev.CurrencyService.Api.Models.Snapshots.SnapshotAuditLog?)null);
+
+        var result = await _controller.GetBatchAudit(batchId);
+
+        var objectResult = Assert.IsAssignableFrom<ObjectResult>(result);
+        Assert.Equal(StatusCodes.Status404NotFound, objectResult.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetBatchAudit_Exception_Returns500()
+    {
+        _snapshotServiceMock.Setup(s => s.GetBatchAuditAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new Exception("DB error"));
+
+        var result = await _controller.GetBatchAudit("some-id");
+
+        var objectResult = Assert.IsAssignableFrom<ObjectResult>(result);
+        Assert.Equal(StatusCodes.Status500InternalServerError, objectResult.StatusCode);
+    }
+
+    [Fact]
+    public async Task PromoteBatch_NotFound_ReturnsNotFound()
+    {
+        var batchId = Guid.NewGuid().ToString();
+        _snapshotServiceMock.Setup(s => s.PromoteBatchAsync(batchId, null, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+
+        var result = await _controller.PromoteBatch(batchId);
+
+        var objectResult = Assert.IsAssignableFrom<ObjectResult>(result);
+        Assert.Equal(StatusCodes.Status404NotFound, objectResult.StatusCode);
+    }
+
+    [Fact]
+    public async Task PromoteBatch_Exception_Returns500()
+    {
+        _snapshotServiceMock.Setup(s => s.PromoteBatchAsync(It.IsAny<string>(), null, It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new Exception("DB error"));
+
+        var result = await _controller.PromoteBatch("some-id");
+
+        var objectResult = Assert.IsAssignableFrom<ObjectResult>(result);
+        Assert.Equal(StatusCodes.Status500InternalServerError, objectResult.StatusCode);
+    }
+
+    [Fact]
+    public async Task CleanupOldSnapshots_Exception_Returns500()
+    {
+        _snapshotServiceMock.Setup(s => s.CleanupOldSnapshotsAsync(It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new Exception("Storage error"));
+
+        var result = await _controller.CleanupOldSnapshots();
+
+        var objectResult = Assert.IsAssignableFrom<ObjectResult>(result);
+        Assert.Equal(StatusCodes.Status500InternalServerError, objectResult.StatusCode);
+    }
+
+    [Fact]
+    public async Task ImportBatch_EmptyList_ReturnsBadRequest()
+    {
+        var result = await _controller.ImportBatch(new List<SnapshotEntryDto>());
+        var objectResult = Assert.IsAssignableFrom<ObjectResult>(result);
+        Assert.Equal(StatusCodes.Status400BadRequest, objectResult.StatusCode);
+    }
+
+    [Fact]
+    public async Task ImportBatch_DryRun_ReturnsValidationReport()
+    {
+        var snapshots = new List<SnapshotEntryDto>
+        {
+            new() { From = "USD", To = "EUR", Rate = 0.85m, Timestamp = DateTime.UtcNow.ToString("O") }
+        };
+        var batchResponse = new SnapshotBatchResponse
+        {
+            BatchId = Guid.NewGuid().ToString(),
+            SuccessCount = 1,
+            FailureCount = 0,
+            Status = "staged",
+            SnapshotDate = DateOnly.FromDateTime(DateTime.UtcNow),
+            ProcessedAt = DateTime.UtcNow,
+            Source = "AdminApi"
+        };
+        _snapshotServiceMock.Setup(s => s.ImportBatchAsync(It.IsAny<SnapshotBatchRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(batchResponse);
+
+        var result = await _controller.ImportBatch(snapshots, dryRun: true);
+
+        var okResult = Assert.IsType<OkObjectResult>(result);
+        var report = Assert.IsType<ValidationReport>(okResult.Value);
+        Assert.True(report.IsValid);
+        Assert.True(report.IsDryRun);
+    }
+
+    [Fact]
+    public async Task ImportBatch_WithValidationErrors_ReturnsBadRequest()
+    {
+        var snapshots = new List<SnapshotEntryDto>
+        {
+            new() { From = "USD", To = "EUR", Rate = 0.85m, Timestamp = DateTime.UtcNow.ToString("O") }
+        };
+        var batchResponse = new SnapshotBatchResponse
+        {
+            BatchId = Guid.NewGuid().ToString(),
+            SuccessCount = 0,
+            FailureCount = 1,
+            Status = "failed",
+            SnapshotDate = DateOnly.FromDateTime(DateTime.UtcNow),
+            ProcessedAt = DateTime.UtcNow,
+            Source = "AdminApi",
+            Errors = new Dictionary<string, string[]> { { "0", new[] { "Invalid entry" } } }
+        };
+        _snapshotServiceMock.Setup(s => s.ImportBatchAsync(It.IsAny<SnapshotBatchRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(batchResponse);
+
+        var result = await _controller.ImportBatch(snapshots);
+
+        var objectResult = Assert.IsAssignableFrom<ObjectResult>(result);
+        Assert.Equal(StatusCodes.Status400BadRequest, objectResult.StatusCode);
+    }
+
+    [Fact]
+    public async Task ImportBatch_Exception_Returns500()
+    {
+        var snapshots = new List<SnapshotEntryDto>
+        {
+            new() { From = "USD", To = "EUR", Rate = 0.85m, Timestamp = DateTime.UtcNow.ToString("O") }
+        };
+        _snapshotServiceMock.Setup(s => s.ImportBatchAsync(It.IsAny<SnapshotBatchRequest>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new Exception("DB error"));
+
+        var result = await _controller.ImportBatch(snapshots);
+
+        var objectResult = Assert.IsAssignableFrom<ObjectResult>(result);
+        Assert.Equal(StatusCodes.Status500InternalServerError, objectResult.StatusCode);
+    }
 }

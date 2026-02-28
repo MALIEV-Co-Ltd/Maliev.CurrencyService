@@ -1,6 +1,6 @@
 using Maliev.CurrencyService.Api.Controllers;
-using Maliev.CurrencyService.Api.Models.Rates;
-using Maliev.CurrencyService.Api.Services;
+using Maliev.CurrencyService.Application.DTOs.Rates;
+using Maliev.CurrencyService.Application.Interfaces;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;

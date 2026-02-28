@@ -1,7 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using System.Net;
 using System.Net.Http.Json;
-using Maliev.CurrencyService.Api.Models.Rates;
+using Maliev.CurrencyService.Application.DTOs.Rates;
 using Maliev.CurrencyService.Api.Models.Snapshots;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -92,10 +92,10 @@ public class BackgroundAndFailureTests
     {
         // 1. Manually insert an old snapshot into the DB
         using var scope = _fixture.Factory.Services.CreateScope();
-        var context = scope.ServiceProvider.GetRequiredService<Maliev.CurrencyService.Data.CurrencyDbContext>();
+        var context = scope.ServiceProvider.GetRequiredService<Maliev.CurrencyService.Infrastructure.Persistence.CurrencyDbContext>();
 
         var oldDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-100));
-        var oldSnapshot = new Maliev.CurrencyService.Data.Models.RateSnapshot
+        var oldSnapshot = new Maliev.CurrencyService.Domain.Entities.RateSnapshot
         {
             Id = Guid.NewGuid(),
             BatchId = Guid.NewGuid(),

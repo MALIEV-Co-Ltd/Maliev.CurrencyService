@@ -1,21 +1,30 @@
-using Maliev.CurrencyService.Data;
+using Maliev.CurrencyService.Infrastructure.Persistence;
+using Maliev.CurrencyService.Tests.Testing;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
 
 namespace Maliev.CurrencyService.Tests.Infrastructure;
 
-public class ModelIntegrityTests
+/// <summary>
+/// Verifies EF Core model integrity using a real PostgreSQL connection via Testcontainers.
+/// </summary>
+public class ModelIntegrityTests : IClassFixture<BaseIntegrationTestFactory<Program, CurrencyDbContext>>
 {
-    [Fact]
-    public void Model_ShouldNotHavePendingChanges()
+    private readonly BaseIntegrationTestFactory<Program, CurrencyDbContext> _factory;
+
+    /// <summary>Initializes a new instance of the <see cref="ModelIntegrityTests"/> class.</summary>
+    public ModelIntegrityTests(BaseIntegrationTestFactory<Program, CurrencyDbContext> factory)
     {
-        var options = new DbContextOptionsBuilder<CurrencyDbContext>()
-            .UseNpgsql("Host=localhost;Database=ModelCheck")
-            .Options;
+        _factory = factory;
+    }
 
-        using var context = new CurrencyDbContext(options);
-        var hasChanges = context.Database.HasPendingModelChanges();
+    /// <summary>Database should have no pending EF Core migrations after startup.</summary>
+    [Fact]
+    public async Task Model_ShouldNotHavePendingMigrations()
+    {
+        using var context = _factory.CreateDbContext();
+        var pendingMigrations = await context.Database.GetPendingMigrationsAsync();
 
-        Assert.False(hasChanges, "Run 'dotnet ef migrations add <Name> --project Maliev.CurrencyService.Data --startup-project Maliev.CurrencyService.Api'");
+        Assert.Empty(pendingMigrations);
     }
 }

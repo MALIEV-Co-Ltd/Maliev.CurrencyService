@@ -1,7 +1,8 @@
 using System.Net;
 using System.Text.Json;
 using Maliev.CurrencyService.Api.Metrics;
-using Maliev.CurrencyService.Api.Services.External;
+using Maliev.CurrencyService.Application.Interfaces;
+using Maliev.CurrencyService.Infrastructure.Services.External;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Moq;
@@ -141,12 +142,12 @@ public class ProviderTests
         var provider1Mock = new Mock<IExchangeRateProvider>();
         provider1Mock.Setup(p => p.ProviderName).Returns("P1");
         provider1Mock.Setup(p => p.GetRateAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((Maliev.CurrencyService.Data.Models.ExchangeRate?)null);
+            .ReturnsAsync((Maliev.CurrencyService.Domain.Entities.ExchangeRate?)null);
 
         var provider2Mock = new Mock<IExchangeRateProvider>();
         provider2Mock.Setup(p => p.ProviderName).Returns("P2");
         provider2Mock.Setup(p => p.GetRateAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new Maliev.CurrencyService.Data.Models.ExchangeRate
+            .ReturnsAsync(new Maliev.CurrencyService.Domain.Entities.ExchangeRate
             {
                 Rate = 1.2m,
                 Provider = "P2",
@@ -179,11 +180,11 @@ public class ProviderTests
 
         // Return null for direct GBP:JPY
         providerMock.Setup(p => p.GetRateAsync("GBP", "JPY", It.IsAny<CancellationToken>()))
-            .ReturnsAsync((Maliev.CurrencyService.Data.Models.ExchangeRate?)null);
+            .ReturnsAsync((Maliev.CurrencyService.Domain.Entities.ExchangeRate?)null);
 
         // Return rates for transitive calculation via USD
         providerMock.Setup(p => p.GetRateAsync("GBP", "USD", It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new Maliev.CurrencyService.Data.Models.ExchangeRate
+            .ReturnsAsync(new Maliev.CurrencyService.Domain.Entities.ExchangeRate
             {
                 FromCurrency = "GBP",
                 ToCurrency = "USD",
@@ -195,7 +196,7 @@ public class ProviderTests
                 UpdatedAt = DateTime.UtcNow
             });
         providerMock.Setup(p => p.GetRateAsync("USD", "JPY", It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new Maliev.CurrencyService.Data.Models.ExchangeRate
+            .ReturnsAsync(new Maliev.CurrencyService.Domain.Entities.ExchangeRate
             {
                 FromCurrency = "USD",
                 ToCurrency = "JPY",

@@ -1,5 +1,5 @@
-using Maliev.CurrencyService.Api.Services;
-using Maliev.CurrencyService.Data;
+using Maliev.CurrencyService.Application.Interfaces;
+using Maliev.CurrencyService.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
 namespace Maliev.CurrencyService.Api.BackgroundServices;

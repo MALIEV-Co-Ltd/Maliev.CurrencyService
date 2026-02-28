@@ -1,7 +1,7 @@
-using Maliev.CurrencyService.Api;
-using Maliev.CurrencyService.Data;
-using Maliev.CurrencyService.Data.Interceptors;
-using Maliev.CurrencyService.Data.Models;
+using Maliev.CurrencyService.Domain.Entities;
+using Maliev.CurrencyService.Domain.Interfaces;
+using Maliev.CurrencyService.Infrastructure.Persistence;
+using Maliev.CurrencyService.Infrastructure.Persistence.Interceptors;
 using Maliev.CurrencyService.Tests.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;

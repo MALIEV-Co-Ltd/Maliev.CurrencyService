@@ -1,7 +1,7 @@
 using Maliev.CurrencyService.Api.Controllers;
 using Maliev.CurrencyService.Api.Models.Common;
-using Maliev.CurrencyService.Api.Models.Currencies;
-using Maliev.CurrencyService.Api.Services;
+using Maliev.CurrencyService.Application.DTOs.Currencies;
+using Maliev.CurrencyService.Application.Interfaces;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -50,9 +50,9 @@ public class CurrenciesControllerTests
     [Fact]
     public async Task CreateAdmin_ReturnsCreated()
     {
-        var request = new Maliev.CurrencyService.Api.Models.Currencies.CreateCurrencyRequest { Code = "EUR", Symbol = "€", Name = "Euro", DecimalPlaces = 2 };
+        var request = new Maliev.CurrencyService.Application.DTOs.Currencies.CreateCurrencyRequest { Code = "EUR", Symbol = "€", Name = "Euro", DecimalPlaces = 2 };
         var response = new CurrencyResponse { Id = Guid.NewGuid(), Code = "EUR", Symbol = "€", Name = "Euro", DecimalPlaces = 2, IsActive = true, IsPrimary = false };
-        _currencyServiceMock.Setup(s => s.CreateAsync(It.IsAny<Maliev.CurrencyService.Api.Models.Currencies.CreateCurrencyRequest>(), It.IsAny<CancellationToken>())).ReturnsAsync(response);
+        _currencyServiceMock.Setup(s => s.CreateAsync(It.IsAny<Maliev.CurrencyService.Application.DTOs.Currencies.CreateCurrencyRequest>(), It.IsAny<CancellationToken>())).ReturnsAsync(response);
         var result = await _controller.CreateAdmin(request);
         Assert.IsType<CreatedAtActionResult>(result.Result);
     }
@@ -98,7 +98,7 @@ public class CurrenciesControllerTests
     public async Task UpdateById_ReturnsOk()
     {
         var id = Guid.NewGuid();
-        var request = new Maliev.CurrencyService.Api.Models.Currencies.UpdateCurrencyRequest { Symbol = "$", Name = "Dollar", DecimalPlaces = 2 };
+        var request = new Maliev.CurrencyService.Application.DTOs.Currencies.UpdateCurrencyRequest { Symbol = "$", Name = "Dollar", DecimalPlaces = 2 };
         var response = new CurrencyResponse { Id = id, Code = "USD", Symbol = "$", Name = "Dollar", DecimalPlaces = 2, IsActive = true, IsPrimary = false };
         _currencyServiceMock.Setup(s => s.GetByIdAsync(id, It.IsAny<CancellationToken>())).ReturnsAsync(response);
         _currencyServiceMock.Setup(s => s.UpdateByIdAsync(id, request, It.IsAny<CancellationToken>())).ReturnsAsync(response);
@@ -133,7 +133,7 @@ public class CurrenciesControllerTests
     public async Task UpdateById_NotFound_ReturnsNotFound()
     {
         var id = Guid.NewGuid();
-        var request = new Maliev.CurrencyService.Api.Models.Currencies.UpdateCurrencyRequest();
+        var request = new Maliev.CurrencyService.Application.DTOs.Currencies.UpdateCurrencyRequest();
         _currencyServiceMock.Setup(s => s.GetByIdAsync(id, It.IsAny<CancellationToken>())).ReturnsAsync((CurrencyResponse?)null);
 
         // Add If-Match to pass that check
@@ -148,7 +148,7 @@ public class CurrenciesControllerTests
     public async Task UpdateById_Conflict_ReturnsConflict()
     {
         var id = Guid.NewGuid();
-        var request = new Maliev.CurrencyService.Api.Models.Currencies.UpdateCurrencyRequest
+        var request = new Maliev.CurrencyService.Application.DTOs.Currencies.UpdateCurrencyRequest
         {
             Name = "Conflict",
             Symbol = "$",
@@ -172,7 +172,7 @@ public class CurrenciesControllerTests
     public async Task UpdateById_PreconditionFailed_WhenETagMismatch()
     {
         var id = Guid.NewGuid();
-        var request = new Maliev.CurrencyService.Api.Models.Currencies.UpdateCurrencyRequest();
+        var request = new Maliev.CurrencyService.Application.DTOs.Currencies.UpdateCurrencyRequest();
         var response = new CurrencyResponse
         {
             Id = id,
@@ -196,7 +196,7 @@ public class CurrenciesControllerTests
     public async Task UpdateById_MissingIfMatchHeader_ReturnsPreconditionFailed()
     {
         var id = Guid.NewGuid();
-        var request = new Maliev.CurrencyService.Api.Models.Currencies.UpdateCurrencyRequest { Symbol = "$", Name = "Dollar", DecimalPlaces = 2 };
+        var request = new Maliev.CurrencyService.Application.DTOs.Currencies.UpdateCurrencyRequest { Symbol = "$", Name = "Dollar", DecimalPlaces = 2 };
         // No If-Match header set
         var result = await _controller.UpdateById(id, request);
         var objectResult = Assert.IsAssignableFrom<ObjectResult>(result.Result);
@@ -207,7 +207,7 @@ public class CurrenciesControllerTests
     public async Task UpdateById_Exception_Returns500()
     {
         var id = Guid.NewGuid();
-        var request = new Maliev.CurrencyService.Api.Models.Currencies.UpdateCurrencyRequest { Symbol = "$", Name = "Dollar", DecimalPlaces = 2 };
+        var request = new Maliev.CurrencyService.Application.DTOs.Currencies.UpdateCurrencyRequest { Symbol = "$", Name = "Dollar", DecimalPlaces = 2 };
         var response = new CurrencyResponse { Id = id, Code = "USD", Symbol = "$", Name = "Dollar", DecimalPlaces = 2, IsActive = true, IsPrimary = false };
         _currencyServiceMock.Setup(s => s.GetByIdAsync(id, It.IsAny<CancellationToken>())).ReturnsAsync(response);
         _currencyServiceMock.Setup(s => s.UpdateByIdAsync(id, request, It.IsAny<CancellationToken>()))
@@ -362,7 +362,7 @@ public class CurrenciesControllerTests
     [Fact]
     public async Task CreateAdmin_ValidationError_ReturnsBadRequest()
     {
-        var request = new Maliev.CurrencyService.Api.Models.Currencies.CreateCurrencyRequest { Code = "US", Symbol = "$", Name = "Dollar", DecimalPlaces = 2 }; // code not 3 chars
+        var request = new Maliev.CurrencyService.Application.DTOs.Currencies.CreateCurrencyRequest { Code = "US", Symbol = "$", Name = "Dollar", DecimalPlaces = 2 }; // code not 3 chars
         var result = await _controller.CreateAdmin(request);
         var objectResult = Assert.IsAssignableFrom<ObjectResult>(result.Result);
         Assert.Equal(StatusCodes.Status400BadRequest, objectResult.StatusCode);
@@ -371,8 +371,8 @@ public class CurrenciesControllerTests
     [Fact]
     public async Task CreateAdmin_AlreadyExists_ReturnsConflict()
     {
-        var request = new Maliev.CurrencyService.Api.Models.Currencies.CreateCurrencyRequest { Code = "USD", Symbol = "$", Name = "Dollar", DecimalPlaces = 2 };
-        _currencyServiceMock.Setup(s => s.CreateAsync(It.IsAny<Maliev.CurrencyService.Api.Models.Currencies.CreateCurrencyRequest>(), It.IsAny<CancellationToken>()))
+        var request = new Maliev.CurrencyService.Application.DTOs.Currencies.CreateCurrencyRequest { Code = "USD", Symbol = "$", Name = "Dollar", DecimalPlaces = 2 };
+        _currencyServiceMock.Setup(s => s.CreateAsync(It.IsAny<Maliev.CurrencyService.Application.DTOs.Currencies.CreateCurrencyRequest>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new InvalidOperationException("Currency USD already exists"));
         var result = await _controller.CreateAdmin(request);
         var objectResult = Assert.IsAssignableFrom<ObjectResult>(result.Result);
@@ -382,8 +382,8 @@ public class CurrenciesControllerTests
     [Fact]
     public async Task CreateAdmin_Exception_Returns500()
     {
-        var request = new Maliev.CurrencyService.Api.Models.Currencies.CreateCurrencyRequest { Code = "EUR", Symbol = "€", Name = "Euro", DecimalPlaces = 2 };
-        _currencyServiceMock.Setup(s => s.CreateAsync(It.IsAny<Maliev.CurrencyService.Api.Models.Currencies.CreateCurrencyRequest>(), It.IsAny<CancellationToken>()))
+        var request = new Maliev.CurrencyService.Application.DTOs.Currencies.CreateCurrencyRequest { Code = "EUR", Symbol = "€", Name = "Euro", DecimalPlaces = 2 };
+        _currencyServiceMock.Setup(s => s.CreateAsync(It.IsAny<Maliev.CurrencyService.Application.DTOs.Currencies.CreateCurrencyRequest>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new Exception("DB error"));
         var result = await _controller.CreateAdmin(request);
         var objectResult = Assert.IsAssignableFrom<ObjectResult>(result.Result);

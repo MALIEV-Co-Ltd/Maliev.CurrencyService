@@ -1,5 +1,5 @@
 using Maliev.CurrencyService.Api.BackgroundServices;
-using Maliev.CurrencyService.Api.Services;
+using Maliev.CurrencyService.Application.Interfaces;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Moq;

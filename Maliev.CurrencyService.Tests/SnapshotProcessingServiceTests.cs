@@ -1,7 +1,8 @@
 using Maliev.CurrencyService.Api.BackgroundServices;
-using Maliev.CurrencyService.Api.Services;
-using Maliev.CurrencyService.Data;
-using Maliev.CurrencyService.Data.Models;
+using Maliev.CurrencyService.Application.Interfaces;
+using Maliev.CurrencyService.Domain.Entities;
+using Maliev.CurrencyService.Infrastructure.Persistence;
+using Maliev.CurrencyService.Tests.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -10,17 +11,39 @@ using Xunit;
 
 namespace Maliev.CurrencyService.Tests;
 
-public class SnapshotProcessingServiceTests
+/// <summary>
+/// Tests for <see cref="SnapshotProcessingService"/> using real PostgreSQL via Testcontainers.
+/// </summary>
+public class SnapshotProcessingServiceTests : IClassFixture<BaseIntegrationTestFactory<Program, CurrencyDbContext>>, IAsyncLifetime
 {
+    private readonly BaseIntegrationTestFactory<Program, CurrencyDbContext> _factory;
+
+    /// <summary>Initializes a new instance of the <see cref="SnapshotProcessingServiceTests"/> class.</summary>
+    public SnapshotProcessingServiceTests(BaseIntegrationTestFactory<Program, CurrencyDbContext> factory)
+    {
+        _factory = factory;
+    }
+
+    /// <inheritdoc/>
+    public async Task InitializeAsync()
+    {
+        await _factory.CleanDatabaseAsync();
+    }
+
+    /// <inheritdoc/>
+    public Task DisposeAsync() => Task.CompletedTask;
+
+    /// <summary>SnapshotProcessingService processes a queued batch successfully.</summary>
     [Fact]
     public async Task SnapshotProcessingService_ProcessesBatch()
     {
         // Arrange
+        var connectionString = _factory.Services.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>()
+            ["ConnectionStrings:CurrencyDbContext"]
+            ?? throw new InvalidOperationException("CurrencyDbContext connection string not found.");
+
         var services = new ServiceCollection();
-        var options = new DbContextOptionsBuilder<CurrencyDbContext>()
-            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
-            .Options;
-        services.AddScoped(_ => new CurrencyDbContext(options));
+        services.AddDbContext<CurrencyDbContext>(options => options.UseNpgsql(connectionString));
         var serviceProvider = services.BuildServiceProvider();
 
         var queueMock = new Mock<ISnapshotQueue>();
@@ -32,8 +55,9 @@ public class SnapshotProcessingServiceTests
             .ThrowsAsync(new OperationCanceledException()); // To break the loop
 
         // Add staged data
-        using (var context = new CurrencyDbContext(options))
+        using (var scope = serviceProvider.CreateScope())
         {
+            var context = scope.ServiceProvider.GetRequiredService<CurrencyDbContext>();
             context.StagedSnapshots.Add(new StagedSnapshot
             {
                 Id = Guid.NewGuid(),

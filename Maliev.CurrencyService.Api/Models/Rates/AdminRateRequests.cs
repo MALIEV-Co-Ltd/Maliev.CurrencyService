@@ -1,15 +1,6 @@
-namespace Maliev.CurrencyService.Api.Models.Rates;
+using Maliev.CurrencyService.Application.DTOs.Rates;
 
-/// <summary>Request to update a single exchange rate.</summary>
-public class UpdateRateRequest
-{
-    /// <summary>The source currency code.</summary>
-    public required string From { get; set; }
-    /// <summary>The target currency code.</summary>
-    public required string To { get; set; }
-    /// <summary>The new exchange rate value.</summary>
-    public required decimal Rate { get; set; }
-}
+namespace Maliev.CurrencyService.Api.Models.Rates;
 
 /// <summary>Request to update multiple exchange rates in a single batch.</summary>
 public class BulkUpdateRatesRequest

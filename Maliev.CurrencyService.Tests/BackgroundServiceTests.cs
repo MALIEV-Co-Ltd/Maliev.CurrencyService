@@ -1,7 +1,7 @@
 using Maliev.CurrencyService.Api.BackgroundServices;
 using Maliev.CurrencyService.Api.Metrics;
-using Maliev.CurrencyService.Api.Models.Rates;
-using Maliev.CurrencyService.Api.Services;
+using Maliev.CurrencyService.Application.DTOs.Rates;
+using Maliev.CurrencyService.Application.Interfaces;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -80,7 +80,7 @@ public class BackgroundServiceTests
         mockScope.Setup(s => s.ServiceProvider).Returns(mockServiceProvider.Object);
 
         // Fail for batchId1 when creating scope or getting context
-        mockServiceProvider.Setup(s => s.GetService(typeof(Maliev.CurrencyService.Data.CurrencyDbContext)))
+        mockServiceProvider.Setup(s => s.GetService(typeof(Maliev.CurrencyService.Infrastructure.Persistence.CurrencyDbContext)))
             .Returns<Type>(t =>
             {
                 // This is called inside ProcessBatchAsync

@@ -4,6 +4,8 @@ using Maliev.Aspire.ServiceDefaults.Authorization;
 using Maliev.CurrencyService.Api.Models.Common;
 using Maliev.CurrencyService.Api.Models.Snapshots;
 using Maliev.CurrencyService.Api.Services;
+using Maliev.CurrencyService.Application.DTOs.Snapshots;
+using Maliev.CurrencyService.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;

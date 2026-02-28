@@ -1,8 +1,8 @@
 using System.Net;
 using System.Net.Http.Json;
 using Maliev.CurrencyService.Api.Services;
-using Maliev.CurrencyService.Api.Models.Currencies;
-using Maliev.CurrencyService.Data;
+using Maliev.CurrencyService.Application.DTOs.Currencies;
+using Maliev.CurrencyService.Infrastructure.Persistence;
 using Maliev.CurrencyService.Tests.Testing;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;

@@ -1,4 +1,5 @@
-using Maliev.CurrencyService.Data.Interceptors;
+using Maliev.CurrencyService.Application.Interfaces;
+using Maliev.CurrencyService.Domain.Interfaces;
 using System.Diagnostics.Metrics;
 
 namespace Maliev.CurrencyService.Api.Metrics;
@@ -11,7 +12,7 @@ namespace Maliev.CurrencyService.Api.Metrics;
 /// request rates, provider latency, provider error rates, cache hit/miss ratio,
 /// and background job status.
 /// </remarks>
-public class CurrencyServiceMetrics : IDisposable, IDatabaseMetrics
+public class CurrencyServiceMetrics : IDisposable, IDatabaseMetrics, IProviderMetrics, IRateServiceMetrics
 {
     private readonly Meter _meter;
     private readonly string _environment;

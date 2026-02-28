@@ -1,6 +1,7 @@
 using Maliev.CurrencyService.Api.Controllers;
 using Maliev.CurrencyService.Api.Models.Snapshots;
-using Maliev.CurrencyService.Api.Services;
+using Maliev.CurrencyService.Application.DTOs.Snapshots;
+using Maliev.CurrencyService.Application.Interfaces;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
@@ -108,7 +109,7 @@ public class SnapshotsControllerTests
     {
         // Arrange
         var batchId = Guid.NewGuid().ToString();
-        var auditLog = new Maliev.CurrencyService.Api.Models.Snapshots.SnapshotAuditLog
+        var auditLog = new Maliev.CurrencyService.Application.DTOs.Snapshots.SnapshotAuditLog
         {
             BatchId = batchId,
             Timestamp = DateTime.UtcNow,
@@ -132,7 +133,7 @@ public class SnapshotsControllerTests
     {
         var batchId = Guid.NewGuid().ToString();
         _snapshotServiceMock.Setup(s => s.GetBatchAuditAsync(batchId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync((Maliev.CurrencyService.Api.Models.Snapshots.SnapshotAuditLog?)null);
+            .ReturnsAsync((Maliev.CurrencyService.Application.DTOs.Snapshots.SnapshotAuditLog?)null);
 
         var result = await _controller.GetBatchAudit(batchId);
 
@@ -220,7 +221,7 @@ public class SnapshotsControllerTests
         var result = await _controller.ImportBatch(snapshots, dryRun: true);
 
         var okResult = Assert.IsType<OkObjectResult>(result);
-        var report = Assert.IsType<ValidationReport>(okResult.Value);
+        var report = Assert.IsType<Maliev.CurrencyService.Api.Models.Snapshots.ValidationReport>(okResult.Value);
         Assert.True(report.IsValid);
         Assert.True(report.IsDryRun);
     }

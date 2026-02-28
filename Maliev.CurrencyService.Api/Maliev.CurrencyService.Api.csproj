@@ -19,7 +19,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Maliev.CurrencyService.Data\Maliev.CurrencyService.Data.csproj" />
+    <ProjectReference Include="..\Maliev.CurrencyService.Application\Maliev.CurrencyService.Application.csproj" />
+    <ProjectReference Include="..\Maliev.CurrencyService.Infrastructure\Maliev.CurrencyService.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

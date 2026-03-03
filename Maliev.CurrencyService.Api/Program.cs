@@ -3,6 +3,7 @@ using Maliev.CurrencyService.Api.BackgroundServices;
 using Maliev.CurrencyService.Api.Metrics;
 using Maliev.CurrencyService.Api.Services;
 using Maliev.CurrencyService.Application.Interfaces;
+using Maliev.CurrencyService.Infrastructure.Data.SeedData;
 using Maliev.CurrencyService.Infrastructure.Persistence;
 using Maliev.CurrencyService.Infrastructure.Persistence.Interceptors;
 using Maliev.CurrencyService.Infrastructure.Services;
@@ -108,6 +109,9 @@ try
 
     // Run database migrations on startup
     await app.MigrateDatabaseAsync<CurrencyDbContext>();
+
+    // Seed currency data
+    await app.SeedCurrenciesAsync();
 
     app.UseStandardMiddleware();
     if (!app.Environment.IsDevelopment())

@@ -370,6 +370,7 @@ public class CurrenciesController : ControllerBase
     /// <returns>Currency details with ETag</returns>
     [HttpGet("~/currency/v{version:apiVersion}/admin/currencies/{id:guid}")]
     [Authorize] // Requires JWT authentication
+    [RequirePermission(CurrencyPermissions.CurrenciesRead)]
     [EnableRateLimiting(RateLimitPolicies.Api)]
     [ProducesResponseType(typeof(CurrencyResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]

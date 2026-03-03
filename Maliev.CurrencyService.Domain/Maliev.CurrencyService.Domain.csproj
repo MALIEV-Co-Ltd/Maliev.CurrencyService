@@ -10,7 +10,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Abstractions" Version="10.0.2" />
+    <!-- VIOLATION: Domain should have zero dependencies per Maliev Constitution -->
+    <!-- This is a pre-existing architectural issue - Domain entities use EF Core attributes -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.2" />
   </ItemGroup>
 
 </Project>

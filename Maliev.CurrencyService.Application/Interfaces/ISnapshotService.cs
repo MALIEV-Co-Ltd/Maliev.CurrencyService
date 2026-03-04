@@ -15,6 +15,7 @@ public interface ISnapshotService
     /// Imports a batch of snapshots, optionally promoting directly to production.
     /// </summary>
     /// <param name="request">Batch request with snapshots.</param>
+    /// <param name="submittedBy">The user who submitted the batch.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A <see cref="SnapshotBatchResponse"/> detailing the import operation result.</returns>
     /// <remarks>
@@ -26,6 +27,7 @@ public interface ISnapshotService
     /// </remarks>
     Task<SnapshotBatchResponse> ImportBatchAsync(
         SnapshotBatchRequest request,
+        string? submittedBy = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -33,6 +35,7 @@ public interface ISnapshotService
     /// </summary>
     /// <param name="batchId">The batch ID from the import operation.</param>
     /// <param name="source">Optional source/provider name for the snapshots.</param>
+    /// <param name="submittedBy">The user who promoted the batch.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>True if promotion succeeded, otherwise false.</returns>
     /// <remarks>
@@ -42,6 +45,7 @@ public interface ISnapshotService
     Task<bool> PromoteBatchAsync(
         string batchId,
         string? source = null,
+        string? submittedBy = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>

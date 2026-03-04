@@ -972,7 +972,7 @@ public class TestsExtra2
             };
 
             _snapshotServiceMock
-                .Setup(x => x.ImportBatchAsync(It.IsAny<SnapshotBatchRequest>(), It.IsAny<CancellationToken>()))
+                .Setup(x => x.ImportBatchAsync(It.IsAny<SnapshotBatchRequest>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(batchResponse);
 
             var result = await _controller.ImportBatch(snapshots, true, CancellationToken.None);
@@ -1004,7 +1004,7 @@ public class TestsExtra2
             };
 
             _snapshotServiceMock
-                .Setup(x => x.ImportBatchAsync(It.IsAny<SnapshotBatchRequest>(), It.IsAny<CancellationToken>()))
+                .Setup(x => x.ImportBatchAsync(It.IsAny<SnapshotBatchRequest>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(batchResponse);
 
             var result = await _controller.ImportBatch(snapshots, false, CancellationToken.None);
@@ -1018,7 +1018,7 @@ public class TestsExtra2
         public async Task PromoteBatch_NotFound_Returns404()
         {
             _snapshotServiceMock
-                .Setup(x => x.PromoteBatchAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                .Setup(x => x.PromoteBatchAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(false);
 
             var result = await _controller.PromoteBatch("invalid-batch", CancellationToken.None);
@@ -1032,7 +1032,7 @@ public class TestsExtra2
         public async Task PromoteBatch_Success_ReturnsOk()
         {
             _snapshotServiceMock
-                .Setup(x => x.PromoteBatchAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                .Setup(x => x.PromoteBatchAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(true);
 
             var result = await _controller.PromoteBatch("batch-123", CancellationToken.None);

@@ -23,8 +23,8 @@ public class CurrencyService : ICurrencyService
 
     private const string CurrencyListCacheKeyPrefix = "currency:list";
     private const string CountryCurrencyCacheKeyPrefix = "country:currency";
-    private const int CurrencyListCacheTtlSeconds = 300;
-    private const int CountryCurrencyCacheTtlSeconds = 3600;
+    private static readonly TimeSpan CurrencyListCacheDuration = TimeSpan.FromMinutes(5);
+    private static readonly TimeSpan CountryCurrencyCacheDuration = TimeSpan.FromHours(1);
 
     /// <summary>
     /// Initializes a new instance of the <see cref="CurrencyService"/> class.
@@ -110,7 +110,7 @@ public class CurrencyService : ICurrencyService
         await _cacheService.SetAsync(
             cacheKey,
             response,
-            TimeSpan.FromSeconds(CurrencyListCacheTtlSeconds),
+            CurrencyListCacheDuration,
             cancellationToken);
 
         _logger.LogInformation("Retrieved {Count} currencies for page {Page} (total: {TotalCount})",
@@ -195,7 +195,7 @@ public class CurrencyService : ICurrencyService
         await _cacheService.SetAsync(
             cacheKey,
             currency,
-            TimeSpan.FromSeconds(CountryCurrencyCacheTtlSeconds),
+            CountryCurrencyCacheDuration,
             cancellationToken);
 
         _logger.LogInformation("Resolved country {CountryCode} to currency {CurrencyCode}",

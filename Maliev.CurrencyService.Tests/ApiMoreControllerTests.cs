@@ -353,7 +353,7 @@ public class AdditionalSnapshotsControllerTests
         };
 
         _snapshotServiceMock
-            .Setup(x => x.ImportBatchAsync(It.IsAny<SnapshotBatchRequest>(), It.IsAny<CancellationToken>()))
+            .Setup(x => x.ImportBatchAsync(It.IsAny<SnapshotBatchRequest>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(batchResponse);
 
         var result = await _controller.ImportBatch(snapshots, false, CancellationToken.None);
@@ -381,7 +381,7 @@ public class AdditionalSnapshotsControllerTests
         };
 
         _snapshotServiceMock
-            .Setup(x => x.ImportBatchAsync(It.IsAny<SnapshotBatchRequest>(), It.IsAny<CancellationToken>()))
+            .Setup(x => x.ImportBatchAsync(It.IsAny<SnapshotBatchRequest>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(batchResponse);
 
         var result = await _controller.ImportBatch(snapshots, true, CancellationToken.None);
@@ -413,7 +413,7 @@ public class AdditionalSnapshotsControllerTests
         };
 
         _snapshotServiceMock
-            .Setup(x => x.ImportBatchAsync(It.IsAny<SnapshotBatchRequest>(), It.IsAny<CancellationToken>()))
+            .Setup(x => x.ImportBatchAsync(It.IsAny<SnapshotBatchRequest>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(batchResponse);
 
         var result = await _controller.ImportBatch(snapshots, true, CancellationToken.None);
@@ -428,7 +428,7 @@ public class AdditionalSnapshotsControllerTests
         var batchId = "batch-promote-123";
 
         _snapshotServiceMock
-            .Setup(x => x.PromoteBatchAsync(batchId, null, It.IsAny<CancellationToken>()))
+            .Setup(x => x.PromoteBatchAsync(batchId, null, "System", It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
 
         var result = await _controller.PromoteBatch(batchId, CancellationToken.None);

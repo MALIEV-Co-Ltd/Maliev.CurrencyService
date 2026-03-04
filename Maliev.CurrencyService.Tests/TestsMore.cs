@@ -320,7 +320,7 @@ public class TestsMore
         };
 
         snapshotServiceMock
-            .Setup(x => x.ImportBatchAsync(It.IsAny<SnapshotBatchRequest>(), It.IsAny<CancellationToken>()))
+            .Setup(x => x.ImportBatchAsync(It.IsAny<SnapshotBatchRequest>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(batchResponse);
 
         var controller = new SnapshotsController(snapshotServiceMock.Object, snapshotQueueMock.Object, loggerMock.Object);
@@ -355,7 +355,7 @@ public class TestsMore
         };
 
         snapshotServiceMock
-            .Setup(x => x.ImportBatchAsync(It.IsAny<SnapshotBatchRequest>(), It.IsAny<CancellationToken>()))
+            .Setup(x => x.ImportBatchAsync(It.IsAny<SnapshotBatchRequest>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(batchResponse);
 
         var controller = new SnapshotsController(snapshotServiceMock.Object, snapshotQueueMock.Object, loggerMock.Object);
@@ -383,7 +383,7 @@ public class TestsMore
         var loggerMock = new Mock<ILogger<SnapshotsController>>();
 
         snapshotServiceMock
-            .Setup(x => x.PromoteBatchAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Setup(x => x.PromoteBatchAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(false);
 
         var controller = new SnapshotsController(snapshotServiceMock.Object, snapshotQueueMock.Object, loggerMock.Object);

@@ -57,6 +57,10 @@ public class Currency
     public DateTime UpdatedAt { get; set; }
 
     /// <summary>Gets or sets the concurrency token for optimistic concurrency control.</summary>
-    [Column("version")]
-    public byte[] Version { get; set; } = new byte[8];
+    /// <remarks>
+    /// Uses PostgreSQL native xmin system column for optimistic concurrency.
+    /// This property is not mapped - xmin is accessed via shadow property.
+    /// </remarks>
+    [NotMapped]
+    public uint Version { get; set; }
 }

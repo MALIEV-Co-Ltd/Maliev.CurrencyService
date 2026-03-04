@@ -718,7 +718,7 @@ public class ControllerEdgeTests
             }
         };
 
-        mockService.Setup(x => x.ImportBatchAsync(It.IsAny<SnapshotBatchRequest>(), It.IsAny<CancellationToken>()))
+        mockService.Setup(x => x.ImportBatchAsync(It.IsAny<SnapshotBatchRequest>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(batchResponse);
 
         var result = await controller.ImportBatch(snapshots, false, CancellationToken.None);
@@ -753,7 +753,7 @@ public class ControllerEdgeTests
             Status = "staged"
         };
 
-        mockService.Setup(x => x.ImportBatchAsync(It.IsAny<SnapshotBatchRequest>(), It.IsAny<CancellationToken>()))
+        mockService.Setup(x => x.ImportBatchAsync(It.IsAny<SnapshotBatchRequest>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(batchResponse);
 
         var result = await controller.ImportBatch(snapshots, false, CancellationToken.None);
@@ -788,7 +788,7 @@ public class ControllerEdgeTests
             Status = "staged"
         };
 
-        mockService.Setup(x => x.ImportBatchAsync(It.IsAny<SnapshotBatchRequest>(), It.IsAny<CancellationToken>()))
+        mockService.Setup(x => x.ImportBatchAsync(It.IsAny<SnapshotBatchRequest>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(batchResponse);
 
         var result = await controller.ImportBatch(snapshots, false, CancellationToken.None);
@@ -810,7 +810,7 @@ public class ControllerEdgeTests
 
         var batchId = "batch-123";
 
-        mockService.Setup(x => x.PromoteBatchAsync(batchId, null, It.IsAny<CancellationToken>()))
+        mockService.Setup(x => x.PromoteBatchAsync(batchId, null, "System", It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
 
         await controller.PromoteBatch(batchId, CancellationToken.None);

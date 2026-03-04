@@ -122,7 +122,7 @@ public class AppTests
         var request = new Maliev.CurrencyService.Application.DTOs.Currencies.UpdateCurrencyRequest
         {
             Name = "Euro",
-            Version = new byte[] { 1, 2, 3, 4 }
+            Version = 1
         };
 
         var validationResults = ValidateModel(request);

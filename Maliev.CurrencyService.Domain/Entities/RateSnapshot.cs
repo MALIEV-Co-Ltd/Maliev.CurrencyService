@@ -54,4 +54,9 @@ public class RateSnapshot
     /// <summary>Gets or sets the UTC timestamp when this record was created.</summary>
     [Column("created_at")]
     public DateTime CreatedAt { get; set; }
+
+    /// <summary>Gets or sets the user who submitted this snapshot.</summary>
+    [Column("submitted_by")]
+    [MaxLength(256)]
+    public string? SubmittedBy { get; set; }
 }

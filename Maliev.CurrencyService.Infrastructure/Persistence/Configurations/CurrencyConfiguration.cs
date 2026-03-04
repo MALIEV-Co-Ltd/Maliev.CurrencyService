@@ -60,10 +60,5 @@ public class CurrencyConfiguration : IEntityTypeConfiguration<Currency>
         builder.Property(c => c.UpdatedAt)
             .IsRequired()
             .HasDefaultValueSql("NOW()");
-
-        builder.Property(c => c.Version)
-            .HasColumnName("version")
-            .HasColumnType("bytea")
-            .HasDefaultValue(new byte[8]);
     }
 }

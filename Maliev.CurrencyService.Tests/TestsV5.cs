@@ -477,7 +477,7 @@ public class TestsV5
         var loggerMock = new Mock<ILogger<SnapshotsController>>();
 
         snapshotServiceMock
-            .Setup(s => s.PromoteBatchAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Setup(s => s.PromoteBatchAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(false);
 
         var controller = new SnapshotsController(

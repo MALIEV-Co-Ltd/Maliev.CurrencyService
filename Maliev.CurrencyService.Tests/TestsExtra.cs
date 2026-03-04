@@ -403,14 +403,14 @@ public class TestsExtra
         [Fact]
         public void UpdateCurrencyRequest_Version_CanBeSet()
         {
-            var version = new byte[] { 1, 2, 3, 4 };
+            var version = 1u;
             var request = new Application.DTOs.Currencies.UpdateCurrencyRequest
             {
                 Version = version
             };
 
             Assert.NotNull(request.Version);
-            Assert.Equal(4, request.Version.Length);
+            Assert.Equal(1u, request.Version);
         }
     }
 

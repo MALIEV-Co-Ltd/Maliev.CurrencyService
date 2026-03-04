@@ -765,7 +765,7 @@ public class FinalSnapshotsControllerTests
         };
 
         _snapshotServiceMock
-            .Setup(x => x.ImportBatchAsync(It.IsAny<SnapshotBatchRequest>(), It.IsAny<CancellationToken>()))
+            .Setup(x => x.ImportBatchAsync(It.IsAny<SnapshotBatchRequest>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(batchResponse);
 
         await _controller.ImportBatch(snapshots, false, CancellationToken.None);
@@ -777,7 +777,7 @@ public class FinalSnapshotsControllerTests
     public async Task PromoteBatch_ReturnsCorrelationIdHeader()
     {
         _snapshotServiceMock
-            .Setup(x => x.PromoteBatchAsync(It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .Setup(x => x.PromoteBatchAsync(It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
 
         await _controller.PromoteBatch("batch-123", CancellationToken.None);
@@ -789,7 +789,7 @@ public class FinalSnapshotsControllerTests
     public async Task PromoteBatch_Exception_Returns500()
     {
         _snapshotServiceMock
-            .Setup(x => x.PromoteBatchAsync(It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .Setup(x => x.PromoteBatchAsync(It.IsAny<string>(), It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new Exception("Database error"));
 
         var result = await _controller.PromoteBatch("batch-123", CancellationToken.None);

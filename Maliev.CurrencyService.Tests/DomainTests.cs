@@ -31,7 +31,7 @@ public class DomainTests
         Assert.True(currency.IsActive);
         Assert.False(currency.IsPrimary);
         Assert.NotNull(currency.Version);
-        Assert.Equal(8, currency.Version.Length);
+        Assert.Equal(0u, currency.Version);
     }
 
     [Fact]
@@ -50,7 +50,7 @@ public class DomainTests
             IsPrimary = true,
             CreatedAt = now,
             UpdatedAt = now,
-            Version = new byte[8]
+            Version = 0
         };
 
         Assert.Equal(id, currency.Id);

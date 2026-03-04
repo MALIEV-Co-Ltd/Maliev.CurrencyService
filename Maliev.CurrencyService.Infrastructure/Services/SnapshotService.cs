@@ -47,10 +47,12 @@ public class SnapshotService : ISnapshotService
     /// Imports a batch of snapshots, optionally promoting directly to production.
     /// </summary>
     /// <param name="request">The batch request containing snapshots.</param>
+    /// <param name="submittedBy">The user who submitted the batch.</param>
     /// <param name="cancellationToken">A cancellation token.</param>
     /// <returns>A <see cref="SnapshotBatchResponse"/> detailing the import operation result.</returns>
     public async Task<SnapshotBatchResponse> ImportBatchAsync(
         SnapshotBatchRequest request,
+        string? submittedBy = null,
         CancellationToken cancellationToken = default)
     {
         var batchId = Guid.NewGuid();
@@ -101,7 +103,8 @@ public class SnapshotService : ISnapshotService
                     SnapshotDate = request.SnapshotDate,
                     Status = "Validated",
                     ValidationError = null,
-                    CreatedAt = DateTime.UtcNow
+                    CreatedAt = DateTime.UtcNow,
+                    SubmittedBy = submittedBy ?? "System"
                 };
 
                 stagedSnapshots.Add(stagedSnapshot);
@@ -130,7 +133,7 @@ public class SnapshotService : ISnapshotService
         if (request.AutoPromote && stagedSnapshots.Any())
         {
             _logger.LogInformation("Auto-promoting batch {BatchId}", batchId);
-            var promoted = await PromoteBatchAsync(batchId.ToString(), request.Source, cancellationToken);
+            var promoted = await PromoteBatchAsync(batchId.ToString(), request.Source, submittedBy, cancellationToken);
             status = promoted ? "promoted" : "partial";
         }
 
@@ -157,11 +160,13 @@ public class SnapshotService : ISnapshotService
     /// </summary>
     /// <param name="batchId">The unique identifier of the batch to promote.</param>
     /// <param name="source">Optional source/provider name for the snapshots.</param>
+    /// <param name="submittedBy">The user who promoted the batch.</param>
     /// <param name="cancellationToken">A cancellation token.</param>
     /// <returns>True if promotion succeeded, otherwise false.</returns>
     public async Task<bool> PromoteBatchAsync(
         string batchId,
         string? source = null,
+        string? submittedBy = null,
         CancellationToken cancellationToken = default)
     {
         if (!Guid.TryParse(batchId, out var parsedBatchId))
@@ -307,7 +312,7 @@ public class SnapshotService : ISnapshotService
         {
             var first = await _context.RateSnapshots
                 .Where(r => r.BatchId == parsedBatchId)
-                .Select(r => new { r.CreatedAt, r.Source })
+                .Select(r => new { r.CreatedAt, r.Source, r.SubmittedBy })
                 .FirstAsync(cancellationToken);
 
             return new SnapshotAuditLog
@@ -316,7 +321,7 @@ public class SnapshotService : ISnapshotService
                 Timestamp = first.CreatedAt,
                 RecordCount = promotedCount,
                 Source = first.Source ?? "Unknown",
-                SubmittedBy = "Admin"
+                SubmittedBy = first.SubmittedBy ?? "System"
             };
         }
 
@@ -328,7 +333,7 @@ public class SnapshotService : ISnapshotService
         {
             var first = await _context.StagedSnapshots
                 .Where(s => s.BatchId == parsedBatchId)
-                .Select(s => new { s.CreatedAt })
+                .Select(s => new { s.CreatedAt, s.SubmittedBy })
                 .FirstAsync(cancellationToken);
 
             return new SnapshotAuditLog
@@ -337,7 +342,7 @@ public class SnapshotService : ISnapshotService
                 Timestamp = first.CreatedAt,
                 RecordCount = stagedCount,
                 Source = "Staging",
-                SubmittedBy = "Admin"
+                SubmittedBy = first.SubmittedBy ?? "System"
             };
         }
 

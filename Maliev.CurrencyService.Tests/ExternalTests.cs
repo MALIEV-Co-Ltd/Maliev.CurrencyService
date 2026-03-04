@@ -474,7 +474,7 @@ public class ExternalTests
             IsPrimary = true,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow,
-            Version = new byte[8]
+            Version = 0
         };
 
         Assert.Equal("USD", currency.Code);

@@ -27,5 +27,6 @@ public class UpdateCurrencyRequest
     public bool? IsActive { get; set; }
 
     /// <summary>Gets or sets the current version for optimistic concurrency control (optional; ETag/If-Match is preferred).</summary>
-    public byte[]? Version { get; set; }
+    /// <remarks>Uses PostgreSQL xmin system column as unsigned integer.</remarks>
+    public uint? Version { get; set; }
 }

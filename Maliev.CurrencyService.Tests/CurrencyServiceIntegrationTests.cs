@@ -64,7 +64,7 @@ public class CurrencyServiceIntegrationTests : IClassFixture<BaseIntegrationTest
             IsPrimary = false,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow,
-            Version = new byte[8]
+            Version = 0
         };
         _context.Currencies.Add(usd);
         await _context.SaveChangesAsync();
@@ -82,8 +82,8 @@ public class CurrencyServiceIntegrationTests : IClassFixture<BaseIntegrationTest
         var service = CreateService();
 
         _context.Currencies.AddRange(
-            new Currency { Code = "USD", Symbol = "$", Name = "US Dollar", DecimalPlaces = 2, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow, Version = new byte[8] },
-            new Currency { Code = "EUR", Symbol = "€", Name = "Euro", DecimalPlaces = 2, IsActive = false, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow, Version = new byte[8] }
+            new Currency { Code = "USD", Symbol = "$", Name = "US Dollar", DecimalPlaces = 2, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow, Version = 0 },
+            new Currency { Code = "EUR", Symbol = "€", Name = "Euro", DecimalPlaces = 2, IsActive = false, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow, Version = 0 }
         );
         await _context.SaveChangesAsync();
 
@@ -108,7 +108,7 @@ public class CurrencyServiceIntegrationTests : IClassFixture<BaseIntegrationTest
             IsPrimary = true,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow,
-            Version = new byte[8]
+            Version = 0
         };
         _context.Currencies.Add(currency);
         await _context.SaveChangesAsync();
@@ -143,7 +143,7 @@ public class CurrencyServiceIntegrationTests : IClassFixture<BaseIntegrationTest
             IsActive = true,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow,
-            Version = new byte[8]
+            Version = 0
         };
         _context.Currencies.Add(currency);
         await _context.SaveChangesAsync();
@@ -188,7 +188,7 @@ public class CurrencyServiceIntegrationTests : IClassFixture<BaseIntegrationTest
             IsActive = true,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow,
-            Version = new byte[8]
+            Version = 0
         };
         _context.Currencies.Add(currency);
         await _context.SaveChangesAsync();
@@ -220,7 +220,7 @@ public class CurrencyServiceIntegrationTests : IClassFixture<BaseIntegrationTest
             IsActive = true,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow,
-            Version = new byte[8]
+            Version = 0
         };
         _context.Currencies.Add(currency);
         await _context.SaveChangesAsync();
@@ -244,7 +244,7 @@ public class CurrencyServiceIntegrationTests : IClassFixture<BaseIntegrationTest
             IsActive = true,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow,
-            Version = new byte[8]
+            Version = 0
         };
         var countryMapping = new CountryCurrency
         {
@@ -278,7 +278,7 @@ public class CurrencyServiceIntegrationTests : IClassFixture<BaseIntegrationTest
             IsActive = false,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow,
-            Version = new byte[8]
+            Version = 0
         };
         _context.Currencies.Add(currency);
         await _context.SaveChangesAsync();
@@ -304,7 +304,7 @@ public class CurrencyServiceIntegrationTests : IClassFixture<BaseIntegrationTest
             IsActive = true,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow,
-            Version = new byte[8]
+            Version = 0
         };
         _context.Currencies.Add(currency);
         await _context.SaveChangesAsync();
@@ -388,7 +388,7 @@ public class DomainEntityTests
             IsPrimary = false,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow,
-            Version = new byte[8]
+            Version = 0
         };
 
         Assert.Equal("EUR", currency.Code);
@@ -525,7 +525,7 @@ public class DtoTests
     [Fact]
     public void UpdateCurrencyRequest_WithVersion_CanBeSet()
     {
-        var version = new byte[] { 1, 2, 3 };
+        var version = 1u;
         var request = new AppUpdateCurrencyRequest
         {
             Name = "Updated",
@@ -533,7 +533,7 @@ public class DtoTests
         };
 
         Assert.NotNull(request.Version);
-        Assert.Equal(3, request.Version.Length);
+        Assert.Equal(1u, request.Version);
     }
 
     [Fact]

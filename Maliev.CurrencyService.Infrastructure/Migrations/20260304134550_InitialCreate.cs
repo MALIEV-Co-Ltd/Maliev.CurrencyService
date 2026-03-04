@@ -1,8 +1,9 @@
+﻿using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-namespace Maliev.CurrencyService.Infrastructure.Persistence.Migrations
+namespace Maliev.CurrencyService.Infrastructure.Migrations
 {
     /// <inheritdoc />
     public partial class InitialCreate : Migration
@@ -28,6 +29,22 @@ namespace Maliev.CurrencyService.Infrastructure.Persistence.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "batch_statuses",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    batch_id = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false),
+                    status = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false),
+                    error_message = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: true),
+                    created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    updated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("pk_batch_statuses", x => x.id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "currencies",
                 columns: table => new
                 {
@@ -40,7 +57,7 @@ namespace Maliev.CurrencyService.Infrastructure.Persistence.Migrations
                     is_primary = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
                     created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "NOW()"),
                     updated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "NOW()"),
-                    version = table.Column<byte[]>(type: "bytea", nullable: false, defaultValue: new byte[] { 0, 0, 0, 0, 0, 0, 0, 0 })
+                    xmin = table.Column<uint>(type: "xid", rowVersion: true, nullable: false)
                 },
                 constraints: table =>
                 {
@@ -80,7 +97,8 @@ namespace Maliev.CurrencyService.Infrastructure.Persistence.Migrations
                     rate = table.Column<decimal>(type: "numeric(18,6)", precision: 18, scale: 6, nullable: false),
                     snapshot_date = table.Column<DateOnly>(type: "date", nullable: false),
                     source = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true),
-                    created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "NOW()")
+                    created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "NOW()"),
+                    submitted_by = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: true)
                 },
                 constraints: table =>
                 {
@@ -99,7 +117,8 @@ namespace Maliev.CurrencyService.Infrastructure.Persistence.Migrations
                     snapshot_date = table.Column<DateOnly>(type: "date", nullable: false),
                     status = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false, defaultValue: "Pending"),
                     validation_error = table.Column<string>(type: "text", maxLength: 256, nullable: true),
-                    created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "NOW()")
+                    created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "NOW()"),
+                    submitted_by = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: true)
                 },
                 constraints: table =>
                 {
@@ -204,6 +223,9 @@ namespace Maliev.CurrencyService.Infrastructure.Persistence.Migrations
         {
             migrationBuilder.DropTable(
                 name: "audit_logs");
+
+            migrationBuilder.DropTable(
+                name: "batch_statuses");
 
             migrationBuilder.DropTable(
                 name: "country_currencies");

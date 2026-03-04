@@ -1,4 +1,4 @@
-using Maliev.CurrencyService.Api.Services;
+using Maliev.CurrencyService.Application.Interfaces;
 
 namespace Maliev.CurrencyService.Api.BackgroundServices;
 

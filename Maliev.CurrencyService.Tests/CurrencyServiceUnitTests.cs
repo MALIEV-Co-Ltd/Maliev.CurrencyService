@@ -1,43 +1,52 @@
 using Maliev.Aspire.ServiceDefaults.Caching;
-using Maliev.CurrencyService.Api.Models.Currencies;
-using Maliev.CurrencyService.Api.Services;
-using Maliev.CurrencyService.Data;
-using Maliev.CurrencyService.Data.Models;
+using Maliev.CurrencyService.Application.DTOs.Currencies;
+using Maliev.CurrencyService.Application.Interfaces;
+using Maliev.CurrencyService.Domain.Entities;
+using Maliev.CurrencyService.Infrastructure.Persistence;
+using CurrencyServiceImpl = Maliev.CurrencyService.Infrastructure.Services.CurrencyService;
+using Maliev.CurrencyService.Tests.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Moq;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using Xunit;
 
 namespace Maliev.CurrencyService.Tests;
 
-public class CurrencyServiceUnitTests : IDisposable
+/// <summary>
+/// Unit tests for <see cref="CurrencyService"/> using real PostgreSQL via Testcontainers.
+/// </summary>
+public class CurrencyServiceUnitTests : IClassFixture<BaseIntegrationTestFactory<Program, CurrencyDbContext>>, IAsyncLifetime
 {
-    private readonly CurrencyDbContext _context;
-    private readonly Mock<ICacheService> _cacheMock;
-    private readonly Mock<ILogger<Api.Services.CurrencyService>> _loggerMock;
-    private readonly Api.Services.CurrencyService _currencyService;
+    private readonly BaseIntegrationTestFactory<Program, CurrencyDbContext> _factory;
+    private CurrencyDbContext _context = null!;
 
-    public CurrencyServiceUnitTests()
+    /// <summary>Initializes a new instance of the <see cref="CurrencyServiceUnitTests"/> class.</summary>
+    public CurrencyServiceUnitTests(BaseIntegrationTestFactory<Program, CurrencyDbContext> factory)
     {
-        var options = new DbContextOptionsBuilder<CurrencyDbContext>()
-            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
-            .Options;
-        _context = new CurrencyDbContext(options);
-        _cacheMock = new Mock<ICacheService>();
-        _loggerMock = new Mock<ILogger<Api.Services.CurrencyService>>();
-        _currencyService = new Api.Services.CurrencyService(_context, _cacheMock.Object, _loggerMock.Object);
+        _factory = factory;
     }
 
-    public void Dispose()
+    /// <inheritdoc/>
+    public async Task InitializeAsync()
     {
-        _context.Dispose();
+        await _factory.CleanDatabaseAsync();
+        _context = _factory.CreateDbContext();
     }
 
+    /// <inheritdoc/>
+    public async Task DisposeAsync()
+    {
+        await _context.DisposeAsync();
+    }
+
+    private CurrencyServiceImpl CreateService()
+    {
+        var cacheMock = new Mock<ICacheService>();
+        var loggerMock = new Mock<ILogger<CurrencyServiceImpl>>();
+        return new CurrencyServiceImpl(_context, cacheMock.Object, loggerMock.Object);
+    }
+
+    /// <summary>GetByCodeAsync returns the currency when it exists.</summary>
     [Fact]
     public async Task GetByCodeAsync_Should_Return_Currency_When_Exists()
     {
@@ -46,24 +55,30 @@ public class CurrencyServiceUnitTests : IDisposable
         _context.Currencies.Add(currency);
         await _context.SaveChangesAsync();
 
+        var service = CreateService();
+
         // Act
-        var result = await _currencyService.GetByCodeAsync("USD");
+        var result = await service.GetByCodeAsync("USD");
 
         // Assert
         Assert.NotNull(result);
         Assert.Equal("USD", result!.Code);
     }
 
+    /// <summary>GetByCodeAsync returns null when currency does not exist.</summary>
     [Fact]
     public async Task GetByCodeAsync_Should_Return_Null_When_Not_Exists()
     {
+        var service = CreateService();
+
         // Act
-        var result = await _currencyService.GetByCodeAsync("XYZ");
+        var result = await service.GetByCodeAsync("XYZ");
 
         // Assert
         Assert.Null(result);
     }
 
+    /// <summary>GetByCountryCodeAsync returns the currency for a given ISO2 country code.</summary>
     [Fact]
     public async Task GetByCountryCodeAsync_Should_Return_Currency_For_Iso2()
     {
@@ -74,14 +89,17 @@ public class CurrencyServiceUnitTests : IDisposable
         _context.CountryCurrencies.Add(mapping);
         await _context.SaveChangesAsync();
 
+        var service = CreateService();
+
         // Act
-        var result = await _currencyService.GetByCountryCodeAsync("TH");
+        var result = await service.GetByCountryCodeAsync("TH");
 
         // Assert
         Assert.NotNull(result);
         Assert.Equal("THB", result!.Code);
     }
 
+    /// <summary>CreateAsync throws when currency already exists.</summary>
     [Fact]
     public async Task CreateAsync_Should_Throw_If_Already_Exists()
     {
@@ -90,12 +108,14 @@ public class CurrencyServiceUnitTests : IDisposable
         _context.Currencies.Add(currency);
         await _context.SaveChangesAsync();
 
-        var request = new Maliev.CurrencyService.Api.Models.Currencies.CreateCurrencyRequest { Code = "USD", Name = "New Dollar", Symbol = "$", DecimalPlaces = 2 };
+        var request = new Application.DTOs.Currencies.CreateCurrencyRequest { Code = "USD", Name = "New Dollar", Symbol = "$", DecimalPlaces = 2 };
+        var service = CreateService();
 
         // Act & Assert
-        await Assert.ThrowsAsync<InvalidOperationException>(() => _currencyService.CreateAsync(request));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.CreateAsync(request));
     }
 
+    /// <summary>ActivateAsync sets IsActive to true.</summary>
     [Fact]
     public async Task ActivateAsync_Should_Set_IsActive_True()
     {
@@ -105,8 +125,10 @@ public class CurrencyServiceUnitTests : IDisposable
         _context.Currencies.Add(currency);
         await _context.SaveChangesAsync();
 
+        var service = CreateService();
+
         // Act
-        var result = await _currencyService.ActivateAsync(id);
+        var result = await service.ActivateAsync(id);
 
         // Assert
         Assert.True(result);
@@ -114,6 +136,7 @@ public class CurrencyServiceUnitTests : IDisposable
         Assert.True(updated!.IsActive);
     }
 
+    /// <summary>DeactivateAsync sets IsActive to false.</summary>
     [Fact]
     public async Task DeactivateAsync_Should_Set_IsActive_False()
     {
@@ -123,8 +146,10 @@ public class CurrencyServiceUnitTests : IDisposable
         _context.Currencies.Add(currency);
         await _context.SaveChangesAsync();
 
+        var service = CreateService();
+
         // Act
-        var result = await _currencyService.DeactivateAsync(id);
+        var result = await service.DeactivateAsync(id);
 
         // Assert
         Assert.True(result);

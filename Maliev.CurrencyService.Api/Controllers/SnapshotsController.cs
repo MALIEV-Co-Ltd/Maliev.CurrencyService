@@ -4,6 +4,8 @@ using Maliev.Aspire.ServiceDefaults.Authorization;
 using Maliev.CurrencyService.Api.Models.Common;
 using Maliev.CurrencyService.Api.Models.Snapshots;
 using Maliev.CurrencyService.Api.Services;
+using Maliev.CurrencyService.Application.DTOs.Snapshots;
+using Maliev.CurrencyService.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -146,8 +148,10 @@ public class SnapshotsController : ControllerBase
             _logger.LogInformation("POST /v1/admin/snapshots/ingest - Count: {Count}, DryRun: {DryRun}",
                 snapshots.Count, dryRun);
 
+            var submittedBy = User.Identity?.Name ?? "System";
+
             // FR-028: Call service for full validation even in dry-run
-            var batchResponse = await _snapshotService.ImportBatchAsync(request, cancellationToken);
+            var batchResponse = await _snapshotService.ImportBatchAsync(request, submittedBy, cancellationToken);
 
             if (dryRun)
             {
@@ -231,7 +235,8 @@ public class SnapshotsController : ControllerBase
         {
             _logger.LogInformation("POST /v1/admin/snapshots/{BatchId}/promote", batchId);
 
-            var success = await _snapshotService.PromoteBatchAsync(batchId, null, cancellationToken);
+            var submittedBy = User.Identity?.Name ?? "System";
+            var success = await _snapshotService.PromoteBatchAsync(batchId, null, submittedBy, cancellationToken);
 
             if (!success)
             {

@@ -2,8 +2,9 @@ using Asp.Versioning;
 using Maliev.Aspire.ServiceDefaults;
 using Maliev.Aspire.ServiceDefaults.Authorization;
 using Maliev.CurrencyService.Api.Models.Common;
-using Maliev.CurrencyService.Api.Models.Currencies;
 using Maliev.CurrencyService.Api.Services;
+using Maliev.CurrencyService.Application.DTOs.Currencies;
+using Maliev.CurrencyService.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -369,6 +370,7 @@ public class CurrenciesController : ControllerBase
     /// <returns>Currency details with ETag</returns>
     [HttpGet("~/currency/v{version:apiVersion}/admin/currencies/{id:guid}")]
     [Authorize] // Requires JWT authentication
+    [RequirePermission(CurrencyPermissions.CurrenciesRead)]
     [EnableRateLimiting(RateLimitPolicies.Api)]
     [ProducesResponseType(typeof(CurrencyResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]

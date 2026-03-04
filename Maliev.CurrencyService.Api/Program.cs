@@ -2,8 +2,13 @@ using Maliev.Aspire.ServiceDefaults;
 using Maliev.CurrencyService.Api.BackgroundServices;
 using Maliev.CurrencyService.Api.Metrics;
 using Maliev.CurrencyService.Api.Services;
-using Maliev.CurrencyService.Api.Services.External;
-using Maliev.CurrencyService.Data;
+using Maliev.CurrencyService.Application.Interfaces;
+using Maliev.CurrencyService.Infrastructure.Data.SeedData;
+using Maliev.CurrencyService.Infrastructure.Persistence;
+using Maliev.CurrencyService.Infrastructure.Persistence.Interceptors;
+using Maliev.CurrencyService.Infrastructure.Services;
+using Maliev.CurrencyService.Infrastructure.Services.External;
+
 // Initialize bootstrap logging
 using var loggerFactory = LoggerFactory.Create(logBuilder => logBuilder.AddConsole());
 var bootstrapLogger = loggerFactory.CreateLogger("Program");
@@ -19,6 +24,7 @@ try
 
     // --- Infrastructure & Observability ---
     builder.AddServiceDefaults(); // OpenTelemetry, health checks, resilience
+    builder.AddDefaultApiVersioning(); // API versioning with URL segment reader
     builder.AddStandardMiddleware(options =>
     {
         options.EnableRequestLogging = true;
@@ -36,7 +42,6 @@ try
 
     // --- API Configuration ---
     builder.AddStandardCors(); // CORS with fail-fast validation
-    builder.AddDefaultApiVersioning(); // API versioning with URL segment reader
 
     // JWT Authentication (tests override via PostConfigureAll with dynamic RSA keys)
     builder.AddJwtAuthentication();
@@ -55,12 +60,17 @@ try
     // Add Metrics
     builder.Services.AddSingleton<CurrencyServiceMetrics>();
     // Register IDatabaseMetrics to resolve to the same CurrencyServiceMetrics instance
-    builder.Services.AddSingleton<Maliev.CurrencyService.Data.Interceptors.IDatabaseMetrics>(
+    builder.Services.AddSingleton<Maliev.CurrencyService.Domain.Interfaces.IDatabaseMetrics>(
+        sp => sp.GetRequiredService<CurrencyServiceMetrics>());
+    // Register IProviderMetrics and IRateServiceMetrics to resolve to the same CurrencyServiceMetrics instance
+    builder.Services.AddSingleton<IProviderMetrics>(
+        sp => sp.GetRequiredService<CurrencyServiceMetrics>());
+    builder.Services.AddSingleton<IRateServiceMetrics>(
         sp => sp.GetRequiredService<CurrencyServiceMetrics>());
 
     // Add Data Interceptors
-    builder.Services.AddScoped<Maliev.CurrencyService.Data.Interceptors.DatabaseMetricsInterceptor>();
-    builder.Services.AddScoped<Maliev.CurrencyService.Data.Interceptors.AuditLogInterceptor>();
+    builder.Services.AddScoped<DatabaseMetricsInterceptor>();
+    builder.Services.AddScoped<AuditLogInterceptor>();
 
     // Add Domain Services
     builder.Services.AddScoped<ICurrencyService, CurrencyService>();
@@ -99,6 +109,9 @@ try
 
     // Run database migrations on startup
     await app.MigrateDatabaseAsync<CurrencyDbContext>();
+
+    // Seed currency data
+    await app.SeedCurrenciesAsync();
 
     app.UseStandardMiddleware();
     if (!app.Environment.IsDevelopment())

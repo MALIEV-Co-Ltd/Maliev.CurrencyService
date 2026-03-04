@@ -13,7 +13,9 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
 COPY ["Maliev.CurrencyService.Api/Maliev.CurrencyService.Api.csproj", "Maliev.CurrencyService.Api/"]
-COPY ["Maliev.CurrencyService.Data/Maliev.CurrencyService.Data.csproj", "Maliev.CurrencyService.Data/"]
+COPY ["Maliev.CurrencyService.Application/Maliev.CurrencyService.Application.csproj", "Maliev.CurrencyService.Application/"]
+COPY ["Maliev.CurrencyService.Domain/Maliev.CurrencyService.Domain.csproj", "Maliev.CurrencyService.Domain/"]
+COPY ["Maliev.CurrencyService.Infrastructure/Maliev.CurrencyService.Infrastructure.csproj", "Maliev.CurrencyService.Infrastructure/"]
 COPY ["nuget.config", "."]
 RUN --mount=type=secret,id=nuget_username \
   --mount=type=secret,id=nuget_password \

@@ -1,9 +1,11 @@
 using Maliev.Aspire.ServiceDefaults.Caching;
 using Maliev.CurrencyService.Api.Metrics;
-using Maliev.CurrencyService.Api.Models.Snapshots;
-using Maliev.CurrencyService.Api.Services;
-using Maliev.CurrencyService.Data;
-using Maliev.CurrencyService.Data.Models;
+using Maliev.CurrencyService.Application.DTOs.Snapshots;
+using Maliev.CurrencyService.Application.Interfaces;
+using Maliev.CurrencyService.Domain.Entities;
+using Maliev.CurrencyService.Infrastructure.Persistence;
+using Maliev.CurrencyService.Infrastructure.Services;
+using Maliev.CurrencyService.Tests.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -12,19 +14,21 @@ using Xunit;
 
 namespace Maliev.CurrencyService.Tests;
 
-public class SnapshotServiceTests
+/// <summary>
+/// Unit tests for <see cref="SnapshotService"/> using real PostgreSQL via Testcontainers.
+/// </summary>
+public class SnapshotServiceTests : IClassFixture<BaseIntegrationTestFactory<Program, CurrencyDbContext>>, IAsyncLifetime
 {
+    private readonly BaseIntegrationTestFactory<Program, CurrencyDbContext> _factory;
     private readonly Mock<ICacheService> _cacheServiceMock;
     private readonly Mock<ILogger<SnapshotService>> _loggerMock;
     private readonly CurrencyServiceMetrics _metrics;
-    private readonly CurrencyDbContext _context;
+    private CurrencyDbContext _context = null!;
 
-    public SnapshotServiceTests()
+    /// <summary>Initializes a new instance of the <see cref="SnapshotServiceTests"/> class.</summary>
+    public SnapshotServiceTests(BaseIntegrationTestFactory<Program, CurrencyDbContext> factory)
     {
-        var options = new DbContextOptionsBuilder<CurrencyDbContext>()
-            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
-            .Options;
-        _context = new CurrencyDbContext(options);
+        _factory = factory;
 
         var configMock = new Mock<IConfiguration>();
         configMock.Setup(c => c["ASPNETCORE_ENVIRONMENT"]).Returns("Test");
@@ -33,6 +37,23 @@ public class SnapshotServiceTests
         _loggerMock = new Mock<ILogger<SnapshotService>>();
     }
 
+    /// <inheritdoc/>
+    public async Task InitializeAsync()
+    {
+        await _factory.CleanDatabaseAsync();
+        _context = _factory.CreateDbContext();
+    }
+
+    /// <inheritdoc/>
+    public async Task DisposeAsync()
+    {
+        await _context.DisposeAsync();
+    }
+
+    private SnapshotService CreateService() =>
+        new SnapshotService(_context, _cacheServiceMock.Object, _loggerMock.Object, _metrics);
+
+    /// <summary>ImportBatchAsync stages valid snapshots.</summary>
     [Fact]
     public async Task ImportBatchAsync_StagesValidSnapshots()
     {
@@ -50,13 +71,14 @@ public class SnapshotServiceTests
             }
         };
 
-        var service = new SnapshotService(_context, _cacheServiceMock.Object, _loggerMock.Object, _metrics);
+        var service = CreateService();
         var result = await service.ImportBatchAsync(request);
 
         Assert.Equal(1, result.SuccessCount);
         Assert.Equal(0, result.FailureCount);
     }
 
+    /// <summary>PromoteBatchAsync moves staged snapshots to production.</summary>
     [Fact]
     public async Task PromoteBatchAsync_MovesToProduction()
     {
@@ -74,7 +96,7 @@ public class SnapshotServiceTests
         });
         await _context.SaveChangesAsync();
 
-        var service = new SnapshotService(_context, _cacheServiceMock.Object, _loggerMock.Object, _metrics);
+        var service = CreateService();
         var success = await service.PromoteBatchAsync(batchId.ToString(), "Manual");
 
         Assert.True(success);
@@ -84,6 +106,7 @@ public class SnapshotServiceTests
         Assert.Equal(0, stagedCount);
     }
 
+    /// <summary>GetBatchAuditAsync returns the audit log for a batch.</summary>
     [Fact]
     public async Task GetBatchAuditAsync_ReturnsAuditLog()
     {
@@ -101,7 +124,7 @@ public class SnapshotServiceTests
         });
         await _context.SaveChangesAsync();
 
-        var service = new SnapshotService(_context, _cacheServiceMock.Object, _loggerMock.Object, _metrics);
+        var service = CreateService();
         var audit = await service.GetBatchAuditAsync(batchId.ToString());
 
         Assert.NotNull(audit);

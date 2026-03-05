@@ -473,11 +473,11 @@ public class ExternalTests
             IsActive = true,
             IsPrimary = true,
             CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow,
-            Version = 0
+            UpdatedAt = DateTime.UtcNow
         };
 
         Assert.Equal("USD", currency.Code);
+
         Assert.Equal("$", currency.Symbol);
         Assert.Equal("United States Dollar", currency.Name);
         Assert.Equal(2, currency.DecimalPlaces);

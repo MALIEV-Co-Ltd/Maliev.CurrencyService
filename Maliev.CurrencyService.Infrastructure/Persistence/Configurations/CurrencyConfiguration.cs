@@ -60,5 +60,9 @@ public class CurrencyConfiguration : IEntityTypeConfiguration<Currency>
         builder.Property(c => c.UpdatedAt)
             .IsRequired()
             .HasDefaultValueSql("NOW()");
+
+        builder.Property<uint>("xmin")
+            .HasColumnType("xid")
+            .IsRowVersion();
     }
 }

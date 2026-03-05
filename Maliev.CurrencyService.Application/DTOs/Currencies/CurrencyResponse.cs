@@ -43,4 +43,7 @@ public class CurrencyResponse
 
     /// <summary>Gets or sets the UTC timestamp when the currency was last updated.</summary>
     public DateTime UpdatedAt { get; init; }
+
+    /// <summary>Gets or sets the ETag for optimistic concurrency control (based on PostgreSQL xmin).</summary>
+    public string? ETag { get; init; }
 }

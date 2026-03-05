@@ -50,7 +50,7 @@ public class AdditionalRatesControllerTests
             .Setup(x => x.GetLiveRateAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(rateResponse);
 
-        var expectedEtag = Maliev.CurrencyService.Api.Models.Common.ETagHelper.GenerateETag(rateResponse);
+        var expectedEtag = Maliev.CurrencyService.Application.Common.ETagHelper.GenerateETag(rateResponse);
         _controller.Request.Headers.IfNoneMatch = $"\"{expectedEtag}\"";
 
         var result = await _controller.GetExchangeRate("USD", "EUR", "live", null, CancellationToken.None);
@@ -252,7 +252,8 @@ public class AdditionalCurrenciesControllerTests
             IsActive = true,
             IsPrimary = true,
             CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
+            UpdatedAt = DateTime.UtcNow,
+            ETag = "test-xmin-exception"
         };
 
         _currencyServiceMock
@@ -264,8 +265,7 @@ public class AdditionalCurrenciesControllerTests
             .Setup(x => x.UpdateByIdAsync(id, It.IsAny<Application.DTOs.Currencies.UpdateCurrencyRequest>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new Exception("Database connection failed"));
 
-        var etag = Maliev.CurrencyService.Api.Models.Common.ETagHelper.GenerateETag(existingCurrency);
-        _controller.Request.Headers.IfMatch = $"\"{etag}\"";
+        _controller.Request.Headers.IfMatch = "\"test-xmin-exception\"";
 
         var result = await _controller.UpdateById(id, request, CancellationToken.None);
 

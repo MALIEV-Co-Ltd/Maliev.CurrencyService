@@ -25,8 +25,4 @@ public class UpdateCurrencyRequest
 
     /// <summary>Gets or sets the active status of the currency.</summary>
     public bool? IsActive { get; set; }
-
-    /// <summary>Gets or sets the current version for optimistic concurrency control (optional; ETag/If-Match is preferred).</summary>
-    /// <remarks>Uses PostgreSQL xmin system column as unsigned integer.</remarks>
-    public uint? Version { get; set; }
 }

@@ -117,20 +117,6 @@ public class AppTests
     }
 
     [Fact]
-    public void UpdateCurrencyRequest_WithVersion_PassesValidation()
-    {
-        var request = new Maliev.CurrencyService.Application.DTOs.Currencies.UpdateCurrencyRequest
-        {
-            Name = "Euro",
-            Version = 1
-        };
-
-        var validationResults = ValidateModel(request);
-
-        Assert.Empty(validationResults);
-    }
-
-    [Fact]
     public void UpdateCurrencyRequest_DecimalPlacesOutOfRange_FailsValidation()
     {
         var request = new Maliev.CurrencyService.Application.DTOs.Currencies.UpdateCurrencyRequest

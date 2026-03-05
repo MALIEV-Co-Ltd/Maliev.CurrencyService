@@ -55,12 +55,4 @@ public class Currency
     /// <summary>Gets or sets the UTC timestamp when this record was last updated.</summary>
     [Column("updated_at")]
     public DateTime UpdatedAt { get; set; }
-
-    /// <summary>Gets or sets the concurrency token for optimistic concurrency control.</summary>
-    /// <remarks>
-    /// Uses PostgreSQL native xmin system column for optimistic concurrency.
-    /// This property is not mapped - xmin is accessed via shadow property.
-    /// </remarks>
-    [NotMapped]
-    public uint Version { get; set; }
 }

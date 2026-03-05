@@ -3,6 +3,7 @@ using Maliev.Aspire.ServiceDefaults;
 using Maliev.Aspire.ServiceDefaults.Authorization;
 using Maliev.CurrencyService.Api.Models.Common;
 using Maliev.CurrencyService.Api.Services;
+using Maliev.CurrencyService.Application.Common;
 using Maliev.CurrencyService.Application.DTOs.Currencies;
 using Maliev.CurrencyService.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;
@@ -129,9 +130,11 @@ public class CurrenciesController : ControllerBase
             Response.Headers["X-Correlation-ID"] = HttpContext.TraceIdentifier;
             Response.Headers["Cache-Control"] = "public, max-age=300"; // 5 minutes
 
-            // Generate ETag based on currency content
-            var etag = ETagHelper.GenerateETag(currency);
-            Response.Headers.ETag = $"\"{etag}\"";
+            // Use ETag from xmin (already set by service)
+            if (!string.IsNullOrEmpty(currency.ETag))
+            {
+                Response.Headers.ETag = $"\"{currency.ETag}\"";
+            }
 
             return Ok(currency);
         }
@@ -201,9 +204,11 @@ public class CurrenciesController : ControllerBase
             Response.Headers["X-Correlation-ID"] = HttpContext.TraceIdentifier;
             Response.Headers["Cache-Control"] = "public, max-age=3600"; // 1 hour (country mapping rarely changes)
 
-            // Generate ETag based on currency content
-            var etag = ETagHelper.GenerateETag(currency);
-            Response.Headers.ETag = $"\"{etag}\"";
+            // Use ETag from xmin (already set by service)
+            if (!string.IsNullOrEmpty(currency.ETag))
+            {
+                Response.Headers.ETag = $"\"{currency.ETag}\"";
+            }
 
             return Ok(currency);
         }
@@ -275,9 +280,11 @@ public class CurrenciesController : ControllerBase
             Response.Headers["X-Correlation-ID"] = HttpContext.TraceIdentifier;
             Response.Headers["Cache-Control"] = "public, max-age=3600"; // 1 hour (country mapping rarely changes)
 
-            // Generate ETag based on currency content
-            var etag = ETagHelper.GenerateETag(currency);
-            Response.Headers.ETag = $"\"{etag}\"";
+            // Use ETag from xmin (already set by service)
+            if (!string.IsNullOrEmpty(currency.ETag))
+            {
+                Response.Headers.ETag = $"\"{currency.ETag}\"";
+            }
 
             return Ok(currency);
         }
@@ -329,11 +336,11 @@ public class CurrenciesController : ControllerBase
                 });
             }
 
-            // Generate ETag
-            var etag = ETagHelper.GenerateETag(currency);
+            // Use ETag from xmin (already set by service)
+            var etag = currency.ETag;
 
             // Check If-None-Match
-            if (Request.Headers.IfNoneMatch.Any())
+            if (Request.Headers.IfNoneMatch.Any() && !string.IsNullOrEmpty(etag))
             {
                 var clientETag = Request.Headers.IfNoneMatch.First()?.Trim('"');
                 if (clientETag == etag)
@@ -342,7 +349,10 @@ public class CurrenciesController : ControllerBase
                 }
             }
 
-            Response.Headers.ETag = $"\"{etag}\"";
+            if (!string.IsNullOrEmpty(etag))
+            {
+                Response.Headers.ETag = $"\"{etag}\"";
+            }
             Response.Headers["X-Correlation-ID"] = HttpContext.TraceIdentifier;
             Response.Headers["Cache-Control"] = "public, max-age=300"; // 5 minutes
 
@@ -397,9 +407,11 @@ public class CurrenciesController : ControllerBase
                 });
             }
 
-            // Generate ETag for optimistic concurrency (FR-006)
-            var etag = ETagHelper.GenerateETag(currency);
-            Response.Headers.ETag = $"\"{etag}\"";
+            // Use ETag from xmin (already set by service)
+            if (!string.IsNullOrEmpty(currency.ETag))
+            {
+                Response.Headers.ETag = $"\"{currency.ETag}\"";
+            }
             Response.Headers["X-Correlation-ID"] = HttpContext.TraceIdentifier;
             Response.Headers["Cache-Control"] = "private, max-age=0"; // Admin endpoint, no caching
 
@@ -660,8 +672,7 @@ public class CurrenciesController : ControllerBase
             }
 
             // Verify ETag matches current version (FR-006)
-            var currentETag = ETagHelper.GenerateETag(currentCurrency);
-            if (clientETag != currentETag)
+            if (clientETag != currentCurrency.ETag)
             {
                 return StatusCode(StatusCodes.Status412PreconditionFailed, new ErrorResponse
                 {
@@ -712,9 +723,11 @@ public class CurrenciesController : ControllerBase
                 });
             }
 
-            // Generate new ETag
-            var newETag = ETagHelper.GenerateETag(currency);
-            Response.Headers.ETag = $"\"{newETag}\"";
+            // Use new ETag from xmin (already set by service)
+            if (!string.IsNullOrEmpty(currency.ETag))
+            {
+                Response.Headers.ETag = $"\"{currency.ETag}\"";
+            }
             Response.Headers["X-Correlation-ID"] = HttpContext.TraceIdentifier;
 
             return Ok(currency);

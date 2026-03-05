@@ -3,6 +3,7 @@ using Maliev.CurrencyService.Api.Models;
 using Maliev.CurrencyService.Api.Models.Common;
 using Maliev.CurrencyService.Api.Models.Snapshots;
 using Maliev.CurrencyService.Api.Models.Rates;
+using Maliev.CurrencyService.Application.Common;
 using Maliev.CurrencyService.Application.DTOs.Currencies;
 using Maliev.CurrencyService.Application.DTOs.Rates;
 using Maliev.CurrencyService.Application.Interfaces;
@@ -107,15 +108,15 @@ public class CurrenciesControllerEdgeCaseTests
             IsActive = true,
             IsPrimary = true,
             CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
+            UpdatedAt = DateTime.UtcNow,
+            ETag = "test-xmin-123"
         };
 
         _currencyServiceMock
             .Setup(x => x.GetByCodeAsync("USD", It.IsAny<CancellationToken>()))
             .ReturnsAsync(expectedCurrency);
 
-        var etag = ETagHelper.GenerateETag(expectedCurrency);
-        _controller.Request.Headers.IfNoneMatch = $"\"{etag}\"";
+        _controller.Request.Headers.IfNoneMatch = "\"test-xmin-123\"";
 
         var result = await _controller.GetByCode("USD", CancellationToken.None);
 
@@ -137,7 +138,8 @@ public class CurrenciesControllerEdgeCaseTests
             IsActive = true,
             IsPrimary = true,
             CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
+            UpdatedAt = DateTime.UtcNow,
+            ETag = "test-xmin-123"
         };
 
         _currencyServiceMock
@@ -183,7 +185,8 @@ public class CurrenciesControllerEdgeCaseTests
             IsActive = true,
             IsPrimary = true,
             CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
+            UpdatedAt = DateTime.UtcNow,
+            ETag = "test-xmin-final-valid"
         };
 
         var request = new Application.DTOs.Currencies.UpdateCurrencyRequest
@@ -203,7 +206,8 @@ public class CurrenciesControllerEdgeCaseTests
             IsActive = true,
             IsPrimary = true,
             CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
+            UpdatedAt = DateTime.UtcNow,
+            ETag = "test-xmin-final-updated"
         };
 
         _currencyServiceMock
@@ -214,8 +218,7 @@ public class CurrenciesControllerEdgeCaseTests
             .Setup(x => x.UpdateByIdAsync(id, request, It.IsAny<CancellationToken>()))
             .ReturnsAsync(updatedCurrency);
 
-        var existingEtag = ETagHelper.GenerateETag(existingCurrency);
-        _controller.Request.Headers.IfMatch = $"\"{existingEtag}\"";
+        _controller.Request.Headers.IfMatch = "\"test-xmin-final-valid\"";
 
         var result = await _controller.UpdateById(id, request, CancellationToken.None);
 
@@ -238,7 +241,8 @@ public class CurrenciesControllerEdgeCaseTests
             IsActive = true,
             IsPrimary = true,
             CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
+            UpdatedAt = DateTime.UtcNow,
+            ETag = "test-xmin-final-invalid"
         };
 
         _currencyServiceMock
@@ -252,8 +256,7 @@ public class CurrenciesControllerEdgeCaseTests
             DecimalPlaces = -1
         };
 
-        var existingEtag = ETagHelper.GenerateETag(existingCurrency);
-        _controller.Request.Headers.IfMatch = $"\"{existingEtag}\"";
+        _controller.Request.Headers.IfMatch = "\"test-xmin-final-invalid\"";
 
         var result = await _controller.UpdateById(id, request, CancellationToken.None);
 

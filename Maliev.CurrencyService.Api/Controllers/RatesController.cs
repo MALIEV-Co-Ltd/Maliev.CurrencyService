@@ -4,6 +4,7 @@ using Maliev.Aspire.ServiceDefaults.Authorization;
 using Maliev.CurrencyService.Api.Models.Common;
 using Maliev.CurrencyService.Api.Models.Rates;
 using Maliev.CurrencyService.Api.Services;
+using Maliev.CurrencyService.Application.Common;
 using Maliev.CurrencyService.Application.DTOs.Rates;
 using Maliev.CurrencyService.Application.Interfaces;
 using Microsoft.AspNetCore.Authorization;

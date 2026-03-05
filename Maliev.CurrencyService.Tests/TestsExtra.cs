@@ -380,7 +380,6 @@ public class TestsExtra
             Assert.Null(request.Symbol);
             Assert.Null(request.DecimalPlaces);
             Assert.Null(request.IsActive);
-            Assert.Null(request.Version);
         }
 
         [Fact]
@@ -398,19 +397,6 @@ public class TestsExtra
             Assert.Equal("Euro Updated", request.Name);
             Assert.Equal(2, request.DecimalPlaces);
             Assert.False(request.IsActive);
-        }
-
-        [Fact]
-        public void UpdateCurrencyRequest_Version_CanBeSet()
-        {
-            var version = 1u;
-            var request = new Application.DTOs.Currencies.UpdateCurrencyRequest
-            {
-                Version = version
-            };
-
-            Assert.NotNull(request.Version);
-            Assert.Equal(1u, request.Version);
         }
     }
 

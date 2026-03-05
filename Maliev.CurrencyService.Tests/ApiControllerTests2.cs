@@ -392,7 +392,37 @@ public class CurrenciesControllerTests2
             IsActive = true,
             IsPrimary = true,
             CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
+            UpdatedAt = DateTime.UtcNow,
+            ETag = "test-etag"
+        };
+
+        _currencyServiceMock
+            .Setup(x => x.GetByCodeAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(expectedCurrency);
+
+        _controller.Request.Headers.IfNoneMatch = "\"test-etag\"";
+
+        var result = await _controller.GetByCode("USD", CancellationToken.None);
+
+        Assert.IsType<StatusCodeResult>(result.Result);
+        Assert.Equal(304, (result.Result as StatusCodeResult)?.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetByCode_NoETag_ReturnsOk()
+    {
+        var expectedCurrency = new CurrencyResponse
+        {
+            Id = Guid.NewGuid(),
+            Code = "USD",
+            Symbol = "$",
+            Name = "US Dollar",
+            DecimalPlaces = 2,
+            IsActive = true,
+            IsPrimary = true,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow,
+            ETag = "test-xmin-noetag"
         };
 
         _currencyServiceMock

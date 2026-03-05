@@ -1,4 +1,5 @@
 using Maliev.Aspire.ServiceDefaults.Caching;
+using Maliev.CurrencyService.Application.Common;
 using Maliev.CurrencyService.Application.DTOs.Currencies;
 using Maliev.CurrencyService.Application.Interfaces;
 using Maliev.CurrencyService.Domain.Entities;
@@ -181,7 +182,8 @@ public class CurrencyService : ICurrencyService
                 IsActive = c.IsActive,
                 IsPrimary = c.IsPrimary,
                 CreatedAt = c.CreatedAt,
-                UpdatedAt = c.UpdatedAt
+                UpdatedAt = c.UpdatedAt,
+                ETag = ETagHelper.GenerateETagFromXmin(EF.Property<uint>(c, "xmin"))
             })
             .FirstOrDefaultAsync(cancellationToken);
 
@@ -235,7 +237,8 @@ public class CurrencyService : ICurrencyService
                 IsActive = c.IsActive,
                 IsPrimary = c.IsPrimary,
                 CreatedAt = c.CreatedAt,
-                UpdatedAt = c.UpdatedAt
+                UpdatedAt = c.UpdatedAt,
+                ETag = ETagHelper.GenerateETagFromXmin(EF.Property<uint>(c, "xmin"))
             })
             .FirstOrDefaultAsync(cancellationToken);
     }
@@ -282,6 +285,8 @@ public class CurrencyService : ICurrencyService
 
         _logger.LogInformation("Created currency: {Code}", normalizedCode);
 
+        var etag = GetETag(currency);
+
         return new CurrencyResponse
         {
             Id = currency.Id,
@@ -292,7 +297,8 @@ public class CurrencyService : ICurrencyService
             IsActive = currency.IsActive,
             IsPrimary = currency.IsPrimary,
             CreatedAt = currency.CreatedAt,
-            UpdatedAt = currency.UpdatedAt
+            UpdatedAt = currency.UpdatedAt,
+            ETag = etag
         };
     }
 
@@ -334,11 +340,6 @@ public class CurrencyService : ICurrencyService
         if (request.IsActive.HasValue)
             currency.IsActive = request.IsActive.Value;
 
-        if (request.Version != null)
-        {
-            _context.Entry(currency).Property("Version").OriginalValue = request.Version;
-        }
-
         currency.UpdatedAt = DateTime.UtcNow;
 
         await _context.SaveChangesAsync(cancellationToken);
@@ -347,6 +348,8 @@ public class CurrencyService : ICurrencyService
         await InvalidateCountryCacheForCurrencyAsync(normalizedCode, cancellationToken);
 
         _logger.LogInformation("Updated currency: {Code}", normalizedCode);
+
+        var etag = GetETag(currency);
 
         return new CurrencyResponse
         {
@@ -358,7 +361,8 @@ public class CurrencyService : ICurrencyService
             IsActive = currency.IsActive,
             IsPrimary = currency.IsPrimary,
             CreatedAt = currency.CreatedAt,
-            UpdatedAt = currency.UpdatedAt
+            UpdatedAt = currency.UpdatedAt,
+            ETag = etag
         };
     }
 
@@ -424,7 +428,8 @@ public class CurrencyService : ICurrencyService
                 IsActive = c.IsActive,
                 IsPrimary = c.IsPrimary,
                 CreatedAt = c.CreatedAt,
-                UpdatedAt = c.UpdatedAt
+                UpdatedAt = c.UpdatedAt,
+                ETag = ETagHelper.GenerateETagFromXmin(EF.Property<uint>(c, "xmin"))
             })
             .FirstOrDefaultAsync(cancellationToken);
     }
@@ -462,11 +467,6 @@ public class CurrencyService : ICurrencyService
         if (request.DecimalPlaces.HasValue)
             currency.DecimalPlaces = request.DecimalPlaces.Value;
 
-        if (request.Version != null)
-        {
-            _context.Entry(currency).Property("Version").OriginalValue = request.Version;
-        }
-
         currency.UpdatedAt = DateTime.UtcNow;
 
         await _context.SaveChangesAsync(cancellationToken);
@@ -475,6 +475,8 @@ public class CurrencyService : ICurrencyService
         await InvalidateCountryCacheForCurrencyAsync(currency.Code, cancellationToken);
 
         _logger.LogInformation("Updated currency by ID: {Id} ({Code})", id, currency.Code);
+
+        var etag = GetETag(currency);
 
         return new CurrencyResponse
         {
@@ -486,7 +488,8 @@ public class CurrencyService : ICurrencyService
             IsActive = currency.IsActive,
             IsPrimary = currency.IsPrimary,
             CreatedAt = currency.CreatedAt,
-            UpdatedAt = currency.UpdatedAt
+            UpdatedAt = currency.UpdatedAt,
+            ETag = etag
         };
     }
 
@@ -608,5 +611,11 @@ public class CurrencyService : ICurrencyService
     {
         await _cacheService.RemoveByPatternAsync($"{CountryCurrencyCacheKeyPrefix}:*", cancellationToken);
         _logger.LogDebug("Invalidated country currency cache for {CurrencyCode}", currencyCode);
+    }
+
+    private string GetETag(Currency currency)
+    {
+        var xmin = _context.Entry(currency).Property<uint>("xmin").CurrentValue;
+        return ETagHelper.GenerateETagFromXmin(xmin);
     }
 }

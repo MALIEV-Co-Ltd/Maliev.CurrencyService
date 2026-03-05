@@ -3,6 +3,7 @@ using Maliev.CurrencyService.Api.Models;
 using Maliev.CurrencyService.Api.Models.Common;
 using Maliev.CurrencyService.Api.Models.Rates;
 using Maliev.CurrencyService.Api.Models.Snapshots;
+using Maliev.CurrencyService.Application.Common;
 using Maliev.CurrencyService.Application.DTOs.Currencies;
 using Maliev.CurrencyService.Application.DTOs.Rates;
 using Maliev.CurrencyService.Application.DTOs.Snapshots;
@@ -794,15 +795,15 @@ public class TestsExtra2
                 IsActive = true,
                 IsPrimary = false,
                 CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
+                UpdatedAt = DateTime.UtcNow,
+                ETag = "test-xmin-789"
             };
 
             _currencyServiceMock
                 .Setup(x => x.GetByCodeAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(currency);
 
-            var etag = ETagHelper.GenerateETag(currency);
-            _controller.Request.Headers.IfNoneMatch = $"\"{etag}\"";
+            _controller.Request.Headers.IfNoneMatch = "\"test-xmin-789\"";
 
             var result = await _controller.GetByCode("USD", CancellationToken.None);
 

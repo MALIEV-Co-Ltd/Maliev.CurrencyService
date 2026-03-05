@@ -30,8 +30,6 @@ public class DomainTests
         Assert.Equal(2, currency.DecimalPlaces);
         Assert.True(currency.IsActive);
         Assert.False(currency.IsPrimary);
-        Assert.NotNull(currency.Version);
-        Assert.Equal(0u, currency.Version);
     }
 
     [Fact]
@@ -49,8 +47,7 @@ public class DomainTests
             IsActive = true,
             IsPrimary = true,
             CreatedAt = now,
-            UpdatedAt = now,
-            Version = 0
+            UpdatedAt = now
         };
 
         Assert.Equal(id, currency.Id);
@@ -62,6 +59,7 @@ public class DomainTests
         Assert.True(currency.IsPrimary);
         Assert.Equal(now, currency.CreatedAt);
         Assert.Equal(now, currency.UpdatedAt);
+
     }
 
     [Fact]

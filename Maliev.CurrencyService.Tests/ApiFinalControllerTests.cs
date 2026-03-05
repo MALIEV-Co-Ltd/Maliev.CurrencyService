@@ -368,7 +368,8 @@ public class FinalCurrenciesControllerTests
             IsActive = true,
             IsPrimary = true,
             CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
+            UpdatedAt = DateTime.UtcNow,
+            ETag = "test-xmin-existing"
         };
 
         var updatedCurrency = new CurrencyResponse
@@ -381,7 +382,8 @@ public class FinalCurrenciesControllerTests
             IsActive = true,
             IsPrimary = true,
             CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow.AddMinutes(1)
+            UpdatedAt = DateTime.UtcNow.AddMinutes(1),
+            ETag = "test-xmin-updated"
         };
 
         _currencyServiceMock
@@ -393,8 +395,7 @@ public class FinalCurrenciesControllerTests
             .Setup(x => x.UpdateByIdAsync(id, request, It.IsAny<CancellationToken>()))
             .ReturnsAsync(updatedCurrency);
 
-        var etag = Maliev.CurrencyService.Api.Models.Common.ETagHelper.GenerateETag(existingCurrency);
-        _controller.Request.Headers.IfMatch = $"\"{etag}\"";
+        _controller.Request.Headers.IfMatch = "\"test-xmin-existing\"";
 
         var result = await _controller.UpdateById(id, request, CancellationToken.None);
 
@@ -424,7 +425,8 @@ public class FinalCurrenciesControllerTests
             IsActive = true,
             IsPrimary = true,
             CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
+            UpdatedAt = DateTime.UtcNow,
+            ETag = "test-xmin-existing-2"
         };
 
         var updatedCurrency = new CurrencyResponse
@@ -437,7 +439,8 @@ public class FinalCurrenciesControllerTests
             IsActive = true,
             IsPrimary = true,
             CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow.AddMinutes(1)
+            UpdatedAt = DateTime.UtcNow.AddMinutes(1),
+            ETag = "test-xmin-updated-2"
         };
 
         _currencyServiceMock
@@ -449,8 +452,7 @@ public class FinalCurrenciesControllerTests
             .Setup(x => x.UpdateByIdAsync(id, request, It.IsAny<CancellationToken>()))
             .ReturnsAsync(updatedCurrency);
 
-        var etag = Maliev.CurrencyService.Api.Models.Common.ETagHelper.GenerateETag(existingCurrency);
-        _controller.Request.Headers.IfMatch = $"\"{etag}\"";
+        _controller.Request.Headers.IfMatch = "\"test-xmin-existing-2\"";
 
         await _controller.UpdateById(id, request, CancellationToken.None);
 
@@ -478,15 +480,15 @@ public class FinalCurrenciesControllerTests
             IsActive = true,
             IsPrimary = true,
             CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
+            UpdatedAt = DateTime.UtcNow,
+            ETag = "test-xmin-notfound"
         };
 
         _currencyServiceMock
             .Setup(x => x.GetByIdAsync(id, It.IsAny<CancellationToken>()))
             .ReturnsAsync(existingCurrency);
 
-        var etag = Maliev.CurrencyService.Api.Models.Common.ETagHelper.GenerateETag(existingCurrency);
-        _controller.Request.Headers.IfMatch = $"\"{etag}\"";
+        _controller.Request.Headers.IfMatch = "\"test-xmin-notfound\"";
 
         var result = await _controller.UpdateById(id, request, CancellationToken.None);
 
@@ -508,15 +510,15 @@ public class FinalCurrenciesControllerTests
             IsActive = true,
             IsPrimary = true,
             CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
+            UpdatedAt = DateTime.UtcNow,
+            ETag = "test-xmin-456"
         };
 
         _currencyServiceMock
             .Setup(x => x.GetByCodeAsync("USD", It.IsAny<CancellationToken>()))
             .ReturnsAsync(expectedCurrency);
 
-        var etag = Maliev.CurrencyService.Api.Models.Common.ETagHelper.GenerateETag(expectedCurrency);
-        _controller.Request.Headers.IfNoneMatch = $"\"{etag}\"";
+        _controller.Request.Headers.IfNoneMatch = "\"test-xmin-456\"";
 
         var result = await _controller.GetByCode("USD", CancellationToken.None);
 

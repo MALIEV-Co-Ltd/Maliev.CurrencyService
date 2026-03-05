@@ -92,11 +92,6 @@ public class CurrencyDbContext : DbContext
 
         // Apply PostgreSQL snake_case naming convention globally
         SnakeCaseNamingHelper.ApplySnakeCaseNaming(modelBuilder);
-
-        // Configure xmin as shadow property for optimistic concurrency
-        modelBuilder.Entity<Currency>()
-            .Property<uint>("xmin")
-            .IsRowVersion();
     }
 
     /// <inheritdoc />

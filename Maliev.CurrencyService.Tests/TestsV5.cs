@@ -127,8 +127,8 @@ public class TestsV5
         var obj1 = new { Code = "USD", Name = "US Dollar" };
         var obj2 = new { Code = "USD", Name = "US Dollar" };
 
-        var etag1 = Maliev.CurrencyService.Api.Models.Common.ETagHelper.GenerateETag(obj1);
-        var etag2 = Maliev.CurrencyService.Api.Models.Common.ETagHelper.GenerateETag(obj2);
+        var etag1 = Maliev.CurrencyService.Application.Common.ETagHelper.GenerateETag(obj1);
+        var etag2 = Maliev.CurrencyService.Application.Common.ETagHelper.GenerateETag(obj2);
 
         Assert.Equal(etag1, etag2);
     }
@@ -139,8 +139,8 @@ public class TestsV5
         var obj1 = new { Code = "USD", Name = "US Dollar" };
         var obj2 = new { Code = "EUR", Name = "Euro" };
 
-        var etag1 = Maliev.CurrencyService.Api.Models.Common.ETagHelper.GenerateETag(obj1);
-        var etag2 = Maliev.CurrencyService.Api.Models.Common.ETagHelper.GenerateETag(obj2);
+        var etag1 = Maliev.CurrencyService.Application.Common.ETagHelper.GenerateETag(obj1);
+        var etag2 = Maliev.CurrencyService.Application.Common.ETagHelper.GenerateETag(obj2);
 
         Assert.NotEqual(etag1, etag2);
     }
@@ -149,7 +149,7 @@ public class TestsV5
     public void ETagHelper_GenerateETag_ReturnsValidBase64String()
     {
         var obj = new { Code = "USD" };
-        var etag = Maliev.CurrencyService.Api.Models.Common.ETagHelper.GenerateETag(obj);
+        var etag = Maliev.CurrencyService.Application.Common.ETagHelper.GenerateETag(obj);
 
         Assert.NotEmpty(etag);
         Assert.True(etag.Length <= 16);

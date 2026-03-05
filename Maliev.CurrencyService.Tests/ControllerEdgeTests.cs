@@ -289,7 +289,8 @@ public class ControllerEdgeTests
             IsActive = true,
             IsPrimary = true,
             CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
+            UpdatedAt = DateTime.UtcNow,
+            ETag = "test-xmin-12345"
         };
 
         mock.Setup(x => x.GetByIdAsync(id, It.IsAny<CancellationToken>()))

@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Maliev.CurrencyService.Infrastructure.Migrations
 {
     [DbContext(typeof(CurrencyDbContext))]
-    [Migration("20260304134550_InitialCreate")]
+    [Migration("20260306073859_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />

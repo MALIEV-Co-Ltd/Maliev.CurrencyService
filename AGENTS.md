@@ -81,7 +81,10 @@ dotnet run --project Maliev.CurrencyService.Api/Maliev.CurrencyService.Api.cspro
 ## 4. Database & Data Access
 - **EF Core**: Use `CurrencyDbContext`.
 - **Queries**: Use `AsNoTracking()` for read-only queries to improve performance.
-- **Migrations**: Database migrations run on startup (`app.MigrateDatabaseAsync`).
+- **Migrations**: 
+  - Database migrations run on startup (`app.MigrateDatabaseAsync`).
+  - **Never** add `Microsoft.EntityFrameworkCore.Design` to the Api project. It must only be in the Infrastructure project where migrations live.
+  - To run migrations, use `--startup-project` pointing to **Infrastructure** project.
 
 ## 5. File System Operations
 - **Paths**: Always use **absolute paths** when using tools.

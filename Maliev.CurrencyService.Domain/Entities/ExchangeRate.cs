@@ -1,4 +1,3 @@
-using Microsoft.EntityFrameworkCore;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
@@ -17,7 +16,6 @@ namespace Maliev.CurrencyService.Domain.Entities;
 public class ExchangeRate
 {
     /// <summary>Gets or sets the unique identifier for the exchange rate entry.</summary>
-    [Key]
     [Column("id")]
     public Guid Id { get; set; }
 
@@ -35,7 +33,6 @@ public class ExchangeRate
 
     /// <summary>Gets or sets the exchange rate value.</summary>
     [Column("rate")]
-    [Precision(18, 6)]
     public decimal Rate { get; set; }
 
     /// <summary>Gets or sets the name of the provider that supplied this rate.</summary>

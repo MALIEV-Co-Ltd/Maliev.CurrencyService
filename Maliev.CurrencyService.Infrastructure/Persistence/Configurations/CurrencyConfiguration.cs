@@ -63,6 +63,7 @@ public class CurrencyConfiguration : IEntityTypeConfiguration<Currency>
 
         builder.Property<uint>("xmin")
             .HasColumnType("xid")
-            .IsRowVersion();
+            .ValueGeneratedOnAddOrUpdate()
+            .IsConcurrencyToken();
     }
 }

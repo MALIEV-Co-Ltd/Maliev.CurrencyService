@@ -3,15 +3,34 @@ using Maliev.CurrencyService.Infrastructure.Persistence;
 using Maliev.CurrencyService.Infrastructure.Persistence.Configurations;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Testcontainers.PostgreSql;
 
 namespace Maliev.CurrencyService.Tests;
 
-public class DomainTests
+public class DomainTests : IAsyncLifetime
 {
-    private CurrencyDbContext CreateInMemoryDbContext()
+    private readonly PostgreSqlContainer _dbContainer = 
+                #pragma warning disable CS0618
+        new PostgreSqlBuilder().WithImage("postgres:18-alpine")
+        .Build();
+#pragma warning restore CS0618
+
+    public async Task InitializeAsync()
+    {
+        await _dbContainer.StartAsync();
+        using var context = CreateDbContext();
+        await context.Database.EnsureCreatedAsync();
+    }
+
+    public async Task DisposeAsync()
+    {
+        await _dbContainer.DisposeAsync();
+    }
+
+    private CurrencyDbContext CreateDbContext()
     {
         var options = new DbContextOptionsBuilder<CurrencyDbContext>()
-            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
+            .UseNpgsql(_dbContainer.GetConnectionString())
             .Options;
 
         return new CurrencyDbContext(options);
@@ -65,7 +84,7 @@ public class DomainTests
     [Fact]
     public void Currency_HasRequiredAttributes()
     {
-        var context = CreateInMemoryDbContext();
+        var context = CreateDbContext();
         var model = context.Model;
         var entityType = model.FindEntityType(typeof(Currency));
 
@@ -135,7 +154,7 @@ public class DomainTests
     [Fact]
     public void ExchangeRate_HasRequiredAttributes()
     {
-        var context = CreateInMemoryDbContext();
+        var context = CreateDbContext();
         var model = context.Model;
         var entityType = model.FindEntityType(typeof(ExchangeRate));
 
@@ -195,7 +214,7 @@ public class DomainTests
     [Fact]
     public void CountryCurrency_HasRequiredAttributes()
     {
-        var context = CreateInMemoryDbContext();
+        var context = CreateDbContext();
         var model = context.Model;
         var entityType = model.FindEntityType(typeof(CountryCurrency));
 
@@ -259,7 +278,7 @@ public class DomainTests
     [Fact]
     public void RateSnapshot_HasRequiredAttributes()
     {
-        var context = CreateInMemoryDbContext();
+        var context = CreateDbContext();
         var model = context.Model;
         var entityType = model.FindEntityType(typeof(RateSnapshot));
 
@@ -335,7 +354,7 @@ public class DomainTests
     [Fact]
     public void StagedSnapshot_HasRequiredAttributes()
     {
-        var context = CreateInMemoryDbContext();
+        var context = CreateDbContext();
         var model = context.Model;
         var entityType = model.FindEntityType(typeof(StagedSnapshot));
 
@@ -392,7 +411,7 @@ public class DomainTests
     [Fact]
     public void AuditLog_HasRequiredAttributes()
     {
-        var context = CreateInMemoryDbContext();
+        var context = CreateDbContext();
         var model = context.Model;
         var entityType = model.FindEntityType(typeof(AuditLog));
 
@@ -459,12 +478,12 @@ public class DomainTests
     [Fact]
     public void BatchStatus_HasRequiredAttributes()
     {
-        var context = CreateInMemoryDbContext();
+        var context = CreateDbContext();
         var model = context.Model;
         var entityType = model.FindEntityType(typeof(BatchStatus));
 
         Assert.NotNull(entityType);
-        Assert.Equal("batch_status", entityType.GetTableName());
+        Assert.Equal("batch_statuses", entityType.GetTableName());
 
         var statusProperty = entityType.FindProperty(nameof(BatchStatus.Status));
         Assert.NotNull(statusProperty);
@@ -479,7 +498,7 @@ public class DomainTests
     [Fact]
     public void CurrencyConfiguration_HasCorrectTableName()
     {
-        using var context = CreateInMemoryDbContext();
+        using var context = CreateDbContext();
         var model = context.Model;
         var entityType = model.FindEntityType(typeof(Currency));
 
@@ -490,7 +509,7 @@ public class DomainTests
     [Fact]
     public void CurrencyConfiguration_HasAlternateKeyOnCode()
     {
-        using var context = CreateInMemoryDbContext();
+        using var context = CreateDbContext();
         var model = context.Model;
         var entityType = model.FindEntityType(typeof(Currency));
 
@@ -504,7 +523,7 @@ public class DomainTests
     [Fact]
     public void ExchangeRateConfiguration_HasCompositeIndex()
     {
-        using var context = CreateInMemoryDbContext();
+        using var context = CreateDbContext();
         var model = context.Model;
         var entityType = model.FindEntityType(typeof(ExchangeRate));
 
@@ -516,7 +535,7 @@ public class DomainTests
     [Fact]
     public void CountryCurrencyConfiguration_HasForeignKey()
     {
-        using var context = CreateInMemoryDbContext();
+        using var context = CreateDbContext();
         var model = context.Model;
         var entityType = model.FindEntityType(typeof(CountryCurrency));
 
@@ -531,7 +550,7 @@ public class DomainTests
     [Fact]
     public void RateSnapshotConfiguration_HasUniqueConstraint()
     {
-        using var context = CreateInMemoryDbContext();
+        using var context = CreateDbContext();
         var model = context.Model;
         var entityType = model.FindEntityType(typeof(RateSnapshot));
 
@@ -543,7 +562,7 @@ public class DomainTests
     [Fact]
     public void StagedSnapshotConfiguration_HasDefaultStatus()
     {
-        using var context = CreateInMemoryDbContext();
+        using var context = CreateDbContext();
         var model = context.Model;
         var entityType = model.FindEntityType(typeof(StagedSnapshot));
 
@@ -554,3 +573,7 @@ public class DomainTests
 
     #endregion
 }
+
+
+
+

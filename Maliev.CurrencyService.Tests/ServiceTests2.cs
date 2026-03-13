@@ -14,25 +14,26 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;
+using Testcontainers.PostgreSql;
 
 namespace Maliev.CurrencyService.Tests;
 
-public class RateServiceUnitTestsWithMocks
+public class RateServiceUnitTestsWithMocks : IAsyncLifetime
 {
+    private readonly PostgreSqlContainer _dbContainer = 
+                #pragma warning disable CS0618
+        new PostgreSqlBuilder().WithImage("postgres:18-alpine")
+        .Build();
+
     private readonly Mock<ProviderChain> _providerChainMock;
     private readonly Mock<ICacheService> _cacheServiceMock;
     private readonly Mock<ILogger<RateService>> _loggerMock;
     private readonly CurrencyServiceMetrics _metrics;
     private readonly Mock<IHostApplicationLifetime> _appLifetimeMock;
-    private readonly CurrencyDbContext _context;
+    private CurrencyDbContext _context = null!;
 
     public RateServiceUnitTestsWithMocks()
     {
-        var options = new DbContextOptionsBuilder<CurrencyDbContext>()
-            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
-            .Options;
-        _context = new CurrencyDbContext(options);
-
         var configMock = new Mock<IConfiguration>();
         configMock.Setup(c => c["ASPNETCORE_ENVIRONMENT"]).Returns("Test");
         _metrics = new CurrencyServiceMetrics(configMock.Object);
@@ -44,6 +45,22 @@ public class RateServiceUnitTestsWithMocks
         _cacheServiceMock = new Mock<ICacheService>();
         _loggerMock = new Mock<ILogger<RateService>>();
         _appLifetimeMock = new Mock<IHostApplicationLifetime>();
+    }
+
+    public async Task InitializeAsync()
+    {
+        await _dbContainer.StartAsync();
+        var options = new DbContextOptionsBuilder<CurrencyDbContext>()
+            .UseNpgsql(_dbContainer.GetConnectionString())
+            .Options;
+        _context = new CurrencyDbContext(options);
+        await _context.Database.EnsureCreatedAsync();
+    }
+
+    public async Task DisposeAsync()
+    {
+        if (_context != null) await _context.DisposeAsync();
+        await _dbContainer.DisposeAsync();
     }
 
     private RateService CreateService() =>
@@ -255,26 +272,41 @@ public class RateServiceUnitTestsWithMocks
     }
 }
 
-public class SnapshotServiceUnitTestsWithMocks
+public class SnapshotServiceUnitTestsWithMocks : IAsyncLifetime
 {
+    private readonly PostgreSqlContainer _dbContainer = 
+                new PostgreSqlBuilder().WithImage("postgres:18-alpine")
+        .Build();
+
     private readonly Mock<ICacheService> _cacheServiceMock;
     private readonly Mock<ILogger<SnapshotService>> _loggerMock;
     private readonly CurrencyServiceMetrics _metrics;
-    private readonly CurrencyDbContext _context;
+    private CurrencyDbContext _context = null!;
 
     public SnapshotServiceUnitTestsWithMocks()
     {
-        var options = new DbContextOptionsBuilder<CurrencyDbContext>()
-            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
-            .Options;
-        _context = new CurrencyDbContext(options);
-
         var configMock = new Mock<IConfiguration>();
         configMock.Setup(c => c["ASPNETCORE_ENVIRONMENT"]).Returns("Test");
         _metrics = new CurrencyServiceMetrics(configMock.Object);
 
         _cacheServiceMock = new Mock<ICacheService>();
         _loggerMock = new Mock<ILogger<SnapshotService>>();
+    }
+
+    public async Task InitializeAsync()
+    {
+        await _dbContainer.StartAsync();
+        var options = new DbContextOptionsBuilder<CurrencyDbContext>()
+            .UseNpgsql(_dbContainer.GetConnectionString())
+            .Options;
+        _context = new CurrencyDbContext(options);
+        await _context.Database.EnsureCreatedAsync();
+    }
+
+    public async Task DisposeAsync()
+    {
+        if (_context != null) await _context.DisposeAsync();
+        await _dbContainer.DisposeAsync();
     }
 
     private SnapshotService CreateService() =>
@@ -542,20 +574,37 @@ public class SnapshotServiceUnitTestsWithMocks
     }
 }
 
-public class CurrencyServiceUnitTestsWithMocks
+public class CurrencyServiceUnitTestsWithMocks : IAsyncLifetime
 {
+    private readonly PostgreSqlContainer _dbContainer = 
+                new PostgreSqlBuilder().WithImage("postgres:18-alpine")
+        .Build();
+#pragma warning restore CS0618
+
     private readonly Mock<ICacheService> _cacheServiceMock;
     private readonly Mock<ILogger<Infrastructure.Services.CurrencyService>> _loggerMock;
-    private readonly CurrencyDbContext _context;
+    private CurrencyDbContext _context = null!;
 
     public CurrencyServiceUnitTestsWithMocks()
     {
-        var options = new DbContextOptionsBuilder<CurrencyDbContext>()
-            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
-            .Options;
-        _context = new CurrencyDbContext(options);
         _cacheServiceMock = new Mock<ICacheService>();
         _loggerMock = new Mock<ILogger<Infrastructure.Services.CurrencyService>>();
+    }
+
+    public async Task InitializeAsync()
+    {
+        await _dbContainer.StartAsync();
+        var options = new DbContextOptionsBuilder<CurrencyDbContext>()
+            .UseNpgsql(_dbContainer.GetConnectionString())
+            .Options;
+        _context = new CurrencyDbContext(options);
+        await _context.Database.EnsureCreatedAsync();
+    }
+
+    public async Task DisposeAsync()
+    {
+        if (_context != null) await _context.DisposeAsync();
+        await _dbContainer.DisposeAsync();
     }
 
     private Infrastructure.Services.CurrencyService CreateService() =>
@@ -897,3 +946,7 @@ public class CurrencyServiceUnitTestsWithMocks
         Assert.False(currency!.IsActive);
     }
 }
+
+
+
+

@@ -15,11 +15,18 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;
+using Testcontainers.PostgreSql;
 
 namespace Maliev.CurrencyService.Tests;
 
-public class ServiceTests4
+public class ServiceTests4 : IAsyncLifetime
 {
+    private readonly PostgreSqlContainer _dbContainer = 
+                #pragma warning disable CS0618
+        new PostgreSqlBuilder().WithImage("postgres:18-alpine")
+        .Build();
+#pragma warning restore CS0618
+
     private readonly Mock<ICacheService> _cacheServiceMock;
     private readonly Mock<ILogger<RateService>> _rateLoggerMock;
     private readonly Mock<ILogger<SnapshotService>> _snapshotLoggerMock;
@@ -46,12 +53,24 @@ public class ServiceTests4
         _providerMock.Setup(p => p.ProviderName).Returns("TestProvider");
     }
 
-    private CurrencyDbContext CreateInMemoryContext(string dbName)
+    public async Task InitializeAsync()
+    {
+        await _dbContainer.StartAsync();
+    }
+
+    public async Task DisposeAsync()
+    {
+        await _dbContainer.DisposeAsync();
+    }
+
+    private CurrencyDbContext CreateDbContext()
     {
         var options = new DbContextOptionsBuilder<CurrencyDbContext>()
-            .UseInMemoryDatabase(databaseName: dbName)
+            .UseNpgsql(_dbContainer.GetConnectionString())
             .Options;
-        return new CurrencyDbContext(options);
+        var context = new CurrencyDbContext(options);
+        context.Database.EnsureCreated();
+        return context;
     }
 
     #region RateService Tests
@@ -80,7 +99,7 @@ public class ServiceTests4
             _providerChainLoggerMock.Object,
             (IProviderMetrics)_metrics);
 
-        var context = CreateInMemoryContext("Test_FreshCache");
+        using var context = CreateDbContext();
         var service = new RateService(
             providerChain,
             _cacheServiceMock.Object,
@@ -93,7 +112,6 @@ public class ServiceTests4
 
         Assert.NotNull(result);
         Assert.Equal(0.85m, result.Rate);
-        await context.DisposeAsync();
     }
 
     [Fact]
@@ -120,7 +138,7 @@ public class ServiceTests4
             _providerChainLoggerMock.Object,
             (IProviderMetrics)_metrics);
 
-        var context = CreateInMemoryContext("Test_StaleCache");
+        using var context = CreateDbContext();
         var service = new RateService(
             providerChain,
             _cacheServiceMock.Object,
@@ -133,7 +151,6 @@ public class ServiceTests4
 
         Assert.NotNull(result);
         Assert.Equal(0.84m, result.Rate);
-        await context.DisposeAsync();
     }
 
     [Fact]
@@ -175,7 +192,7 @@ public class ServiceTests4
             _providerChainLoggerMock.Object,
             (IProviderMetrics)_metrics);
 
-        var context = CreateInMemoryContext("Test_FetchFresh");
+        using var context = CreateDbContext();
         var service = new RateService(
             providerChain,
             _cacheServiceMock.Object,
@@ -188,7 +205,6 @@ public class ServiceTests4
 
         Assert.NotNull(result);
         Assert.Equal(0.86m, result.Rate);
-        await context.DisposeAsync();
     }
 
     [Fact]
@@ -205,7 +221,7 @@ public class ServiceTests4
             _providerChainLoggerMock.Object,
             (IProviderMetrics)_metrics);
 
-        var context = CreateInMemoryContext("Test_NoRate");
+        using var context = CreateDbContext();
         var service = new RateService(
             providerChain,
             _cacheServiceMock.Object,
@@ -217,7 +233,6 @@ public class ServiceTests4
         var result = await service.GetLiveRateAsync("XXX", "YYY");
 
         Assert.Null(result);
-        await context.DisposeAsync();
     }
 
     [Fact]
@@ -240,7 +255,7 @@ public class ServiceTests4
             ExpiresAt = DateTime.UtcNow.AddSeconds(300)
         };
 
-        var context = CreateInMemoryContext("Test_DbFallback");
+        using var context = CreateDbContext();
         context.ExchangeRates.Add(dbRate);
         await context.SaveChangesAsync();
 
@@ -261,7 +276,6 @@ public class ServiceTests4
 
         Assert.NotNull(result);
         Assert.Equal(149.5m, result.Rate);
-        await context.DisposeAsync();
     }
 
     [Fact]
@@ -289,7 +303,7 @@ public class ServiceTests4
             _providerChainLoggerMock.Object,
             (IProviderMetrics)_metrics);
 
-        var context = CreateInMemoryContext("Test_SnapshotCacheHit");
+        using var context = CreateDbContext();
         var service = new RateService(
             providerChain,
             _cacheServiceMock.Object,
@@ -302,7 +316,6 @@ public class ServiceTests4
 
         Assert.NotNull(result);
         Assert.Equal(0.91m, result.Rate);
-        await context.DisposeAsync();
     }
 
     [Fact]
@@ -324,7 +337,7 @@ public class ServiceTests4
             .Setup(c => c.GetAsync<ExchangeRateResponse>(cacheKey, It.IsAny<CancellationToken>()))
             .ReturnsAsync((ExchangeRateResponse?)null);
 
-        var context = CreateInMemoryContext("Test_SnapshotDbQuery");
+        using var context = CreateDbContext();
         context.RateSnapshots.Add(dbSnapshot);
         await context.SaveChangesAsync();
 
@@ -345,7 +358,6 @@ public class ServiceTests4
 
         Assert.NotNull(result);
         Assert.Equal(188.5m, result.Rate);
-        await context.DisposeAsync();
     }
 
     [Fact]
@@ -357,7 +369,7 @@ public class ServiceTests4
             .Setup(c => c.GetAsync<ExchangeRateResponse>(cacheKey, It.IsAny<CancellationToken>()))
             .ReturnsAsync((ExchangeRateResponse?)null);
 
-        var context = CreateInMemoryContext("Test_SnapshotNotFound");
+        using var context = CreateDbContext();
 
         var providerChain = new ProviderChain(
             new List<IExchangeRateProvider>(),
@@ -375,7 +387,6 @@ public class ServiceTests4
         var result = await service.GetSnapshotRateAsync("XXX", "YYY", new DateOnly(2024, 1, 1));
 
         Assert.Null(result);
-        await context.DisposeAsync();
     }
 
     [Fact]
@@ -386,7 +397,7 @@ public class ServiceTests4
             _providerChainLoggerMock.Object,
             (IProviderMetrics)_metrics);
 
-        var context = CreateInMemoryContext("Test_UpdateRate");
+        using var context = CreateDbContext();
         var service = new RateService(
             providerChain,
             _cacheServiceMock.Object,
@@ -401,7 +412,6 @@ public class ServiceTests4
         Assert.NotNull(dbRate);
         Assert.Equal(0.92m, dbRate.Rate);
         _cacheServiceMock.Verify(c => c.RemoveAsync("rate:USD:EUR", It.IsAny<CancellationToken>()), Times.Once);
-        await context.DisposeAsync();
     }
 
     [Fact]
@@ -412,7 +422,7 @@ public class ServiceTests4
             _providerChainLoggerMock.Object,
             (IProviderMetrics)_metrics);
 
-        var context = CreateInMemoryContext("Test_BulkUpdate");
+        using var context = CreateDbContext();
         var service = new RateService(
             providerChain,
             _cacheServiceMock.Object,
@@ -433,7 +443,6 @@ public class ServiceTests4
         var count = await context.ExchangeRates.CountAsync();
         Assert.Equal(3, count);
         _cacheServiceMock.Verify(c => c.RemoveAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Exactly(3));
-        await context.DisposeAsync();
     }
 
     #endregion
@@ -443,7 +452,7 @@ public class ServiceTests4
     [Fact]
     public async Task ImportBatchAsync_ValidatesCurrencies_AndStagesSnapshots()
     {
-        var context = CreateInMemoryContext("Test_ImportBatch");
+        using var context = CreateDbContext();
 
         context.Currencies.Add(new Currency { Id = Guid.NewGuid(), Code = "USD", Symbol = "$", Name = "US Dollar", DecimalPlaces = 2, IsActive = true });
         context.Currencies.Add(new Currency { Id = Guid.NewGuid(), Code = "EUR", Symbol = "€", Name = "Euro", DecimalPlaces = 2, IsActive = true });
@@ -475,13 +484,12 @@ public class ServiceTests4
 
         var stagedCount = await context.StagedSnapshots.CountAsync();
         Assert.Equal(2, stagedCount);
-        await context.DisposeAsync();
     }
 
     [Fact]
     public async Task ImportBatchAsync_ReportsFailures_ForInvalidCurrencies()
     {
-        var context = CreateInMemoryContext("Test_ImportBatchInvalid");
+        using var context = CreateDbContext();
 
         context.Currencies.Add(new Currency { Id = Guid.NewGuid(), Code = "USD", Symbol = "$", Name = "US Dollar", DecimalPlaces = 2, IsActive = true });
         context.Currencies.Add(new Currency { Id = Guid.NewGuid(), Code = "EUR", Symbol = "€", Name = "Euro", DecimalPlaces = 2, IsActive = true });
@@ -510,13 +518,12 @@ public class ServiceTests4
         Assert.Equal(1, result.FailureCount);
         Assert.NotNull(result.Errors);
         Assert.True(result.Errors.ContainsKey("INVALID:EUR"));
-        await context.DisposeAsync();
     }
 
     [Fact]
     public async Task ImportBatchAsync_AutoPromotes_WhenRequested()
     {
-        var context = CreateInMemoryContext("Test_ImportBatchAutoPromote");
+        using var context = CreateDbContext();
 
         context.Currencies.Add(new Currency { Id = Guid.NewGuid(), Code = "USD", Symbol = "$", Name = "US Dollar", DecimalPlaces = 2, IsActive = true });
         context.Currencies.Add(new Currency { Id = Guid.NewGuid(), Code = "EUR", Symbol = "€", Name = "Euro", DecimalPlaces = 2, IsActive = true });
@@ -545,13 +552,12 @@ public class ServiceTests4
 
         var productionCount = await context.RateSnapshots.CountAsync();
         Assert.Equal(1, productionCount);
-        await context.DisposeAsync();
     }
 
     [Fact]
     public async Task PromoteBatchAsync_ReturnsFalse_ForInvalidBatchId()
     {
-        var context = CreateInMemoryContext("Test_PromoteInvalidId");
+        using var context = CreateDbContext();
 
         var service = new SnapshotService(
             context,
@@ -562,13 +568,12 @@ public class ServiceTests4
         var result = await service.PromoteBatchAsync("invalid-guid", "TestSource");
 
         Assert.False(result);
-        await context.DisposeAsync();
     }
 
     [Fact]
     public async Task PromoteBatchAsync_ReturnsFalse_WhenNoValidatedSnapshots()
     {
-        var context = CreateInMemoryContext("Test_PromoteNoSnapshots");
+        using var context = CreateDbContext();
 
         var service = new SnapshotService(
             context,
@@ -579,7 +584,6 @@ public class ServiceTests4
         var result = await service.PromoteBatchAsync(Guid.NewGuid().ToString(), "Test");
 
         Assert.False(result);
-        await context.DisposeAsync();
     }
 
     [Fact]
@@ -588,7 +592,7 @@ public class ServiceTests4
         var batchId = Guid.NewGuid();
         var snapshotDate = new DateOnly(2024, 1, 1);
 
-        var context = CreateInMemoryContext("Test_PromoteReplace");
+        using var context = CreateDbContext();
 
         context.RateSnapshots.Add(new RateSnapshot
         {
@@ -634,13 +638,12 @@ public class ServiceTests4
 
         var stagedCount = await context.StagedSnapshots.CountAsync();
         Assert.Equal(0, stagedCount);
-        await context.DisposeAsync();
     }
 
     [Fact]
     public async Task CleanupOldSnapshotsAsync_DeletesSnapshots_OlderThan90Days()
     {
-        var context = CreateInMemoryContext("Test_CleanupOld");
+        using var context = CreateDbContext();
 
         context.RateSnapshots.Add(new RateSnapshot
         {
@@ -678,13 +681,12 @@ public class ServiceTests4
 
         var remainingCount = await context.RateSnapshots.CountAsync();
         Assert.Equal(1, remainingCount);
-        await context.DisposeAsync();
     }
 
     [Fact]
     public async Task CleanupOldSnapshotsAsync_ReturnsZero_WhenNoOldSnapshots()
     {
-        var context = CreateInMemoryContext("Test_CleanupNoOld");
+        using var context = CreateDbContext();
 
         context.RateSnapshots.Add(new RateSnapshot
         {
@@ -708,13 +710,12 @@ public class ServiceTests4
         var deletedCount = await service.CleanupOldSnapshotsAsync();
 
         Assert.Equal(0, deletedCount);
-        await context.DisposeAsync();
     }
 
     [Fact]
     public async Task GetBatchAuditAsync_ReturnsNull_ForInvalidBatchId()
     {
-        var context = CreateInMemoryContext("Test_AuditInvalid");
+        using var context = CreateDbContext();
 
         var service = new SnapshotService(
             context,
@@ -725,14 +726,13 @@ public class ServiceTests4
         var result = await service.GetBatchAuditAsync("invalid-id");
 
         Assert.Null(result);
-        await context.DisposeAsync();
     }
 
     [Fact]
     public async Task GetBatchAuditAsync_ReturnsPromotedAudit_WhenPromoted()
     {
         var batchId = Guid.NewGuid();
-        var context = CreateInMemoryContext("Test_AuditPromoted");
+        using var context = CreateDbContext();
 
         context.RateSnapshots.Add(new RateSnapshot
         {
@@ -759,7 +759,6 @@ public class ServiceTests4
         Assert.NotNull(result);
         Assert.Equal(1, result.RecordCount);
         Assert.Equal("TestSource", result.Source);
-        await context.DisposeAsync();
     }
 
     #endregion
@@ -769,7 +768,7 @@ public class ServiceTests4
     [Fact]
     public async Task GetAllAsync_ReturnsPaginatedResults()
     {
-        var context = CreateInMemoryContext("Test_GetAll");
+        using var context = CreateDbContext();
 
         context.Currencies.Add(new Currency { Id = Guid.NewGuid(), Code = "USD", Name = "US Dollar", Symbol = "$", DecimalPlaces = 2, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow });
         context.Currencies.Add(new Currency { Id = Guid.NewGuid(), Code = "EUR", Name = "Euro", Symbol = "€", DecimalPlaces = 2, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow });
@@ -783,13 +782,12 @@ public class ServiceTests4
         var result = await service.GetAllAsync(page: 1, pageSize: 10);
 
         Assert.Equal(2, result.Items.Count());
-        await context.DisposeAsync();
     }
 
     [Fact]
     public async Task GetAllAsync_FiltersByActiveStatus()
     {
-        var context = CreateInMemoryContext("Test_GetAllActive");
+        using var context = CreateDbContext();
 
         context.Currencies.Add(new Currency { Id = Guid.NewGuid(), Code = "USD", Name = "US Dollar", Symbol = "$", DecimalPlaces = 2, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow });
         context.Currencies.Add(new Currency { Id = Guid.NewGuid(), Code = "GBP", Name = "Pound", Symbol = "£", DecimalPlaces = 2, IsActive = false, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow });
@@ -804,13 +802,12 @@ public class ServiceTests4
 
         Assert.Single(result.Items);
         Assert.Equal("USD", result.Items.First().Code);
-        await context.DisposeAsync();
     }
 
     [Fact]
     public async Task GetByCountryCodeAsync_ReturnsNull_ForInvalidCode()
     {
-        var context = CreateInMemoryContext("Test_CountryInvalid");
+        using var context = CreateDbContext();
 
         var service = new CurrencyServiceImpl(
             context,
@@ -820,13 +817,12 @@ public class ServiceTests4
         var result = await service.GetByCountryCodeAsync("");
 
         Assert.Null(result);
-        await context.DisposeAsync();
     }
 
     [Fact]
     public async Task GetByCountryCodeAsync_ReturnsNull_ForInvalidFormat()
     {
-        var context = CreateInMemoryContext("Test_CountryFormat");
+        using var context = CreateDbContext();
 
         var service = new CurrencyServiceImpl(
             context,
@@ -836,13 +832,12 @@ public class ServiceTests4
         var result = await service.GetByCountryCodeAsync("INVALIDCODE");
 
         Assert.Null(result);
-        await context.DisposeAsync();
     }
 
     [Fact]
     public async Task GetByCountryCodeAsync_ResolvesIso2Code()
     {
-        var context = CreateInMemoryContext("Test_Iso2");
+        using var context = CreateDbContext();
 
         context.Currencies.Add(new Currency { Id = Guid.NewGuid(), Code = "THB", Name = "Thai Baht", Symbol = "฿", DecimalPlaces = 2, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow });
         context.CountryCurrencies.Add(new CountryCurrency { CountryIso2 = "TH", CountryIso3 = "THA", CurrencyCode = "THB", IsPrimary = true });
@@ -857,13 +852,12 @@ public class ServiceTests4
 
         Assert.NotNull(result);
         Assert.Equal("THB", result.Code);
-        await context.DisposeAsync();
     }
 
     [Fact]
     public async Task GetByCountryCodeAsync_ResolvesIso3Code()
     {
-        var context = CreateInMemoryContext("Test_Iso3");
+        using var context = CreateDbContext();
 
         context.Currencies.Add(new Currency { Id = Guid.NewGuid(), Code = "USD", Name = "US Dollar", Symbol = "$", DecimalPlaces = 2, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow });
         context.CountryCurrencies.Add(new CountryCurrency { CountryIso2 = "US", CountryIso3 = "USA", CurrencyCode = "USD", IsPrimary = true });
@@ -878,13 +872,12 @@ public class ServiceTests4
 
         Assert.NotNull(result);
         Assert.Equal("USD", result.Code);
-        await context.DisposeAsync();
     }
 
     [Fact]
     public async Task CreateAsync_ThrowsException_WhenCurrencyExists()
     {
-        var context = CreateInMemoryContext("Test_CreateExists");
+        using var context = CreateDbContext();
 
         context.Currencies.Add(new Currency { Id = Guid.NewGuid(), Code = "USD", Name = "US Dollar", Symbol = "$", DecimalPlaces = 2, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow });
         await context.SaveChangesAsync();
@@ -903,13 +896,12 @@ public class ServiceTests4
         };
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => service.CreateAsync(request));
-        await context.DisposeAsync();
     }
 
     [Fact]
     public async Task CreateAsync_AddsCurrency_AndInvalidatesCache()
     {
-        var context = CreateInMemoryContext("Test_CreateNew");
+        using var context = CreateDbContext();
 
         var service = new CurrencyServiceImpl(
             context,
@@ -933,13 +925,12 @@ public class ServiceTests4
         Assert.Equal(1, dbCount);
 
         _cacheServiceMock.Verify(c => c.RemoveByPatternAsync("currency:list:*", It.IsAny<CancellationToken>()), Times.Once);
-        await context.DisposeAsync();
     }
 
     [Fact]
     public async Task UpdateAsync_ReturnsNull_WhenCurrencyNotFound()
     {
-        var context = CreateInMemoryContext("Test_UpdateNotFound");
+        using var context = CreateDbContext();
 
         var service = new CurrencyServiceImpl(
             context,
@@ -949,13 +940,12 @@ public class ServiceTests4
         var result = await service.UpdateAsync("XXX", new Application.DTOs.Currencies.UpdateCurrencyRequest { Name = "New Name" });
 
         Assert.Null(result);
-        await context.DisposeAsync();
     }
 
     [Fact]
     public async Task UpdateAsync_UpdatesCurrency_AndInvalidatesCache()
     {
-        var context = CreateInMemoryContext("Test_UpdateCurrency");
+        using var context = CreateDbContext();
 
         context.Currencies.Add(new Currency { Id = Guid.NewGuid(), Code = "USD", Name = "US Dollar", Symbol = "$", DecimalPlaces = 2, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow });
         await context.SaveChangesAsync();
@@ -969,13 +959,12 @@ public class ServiceTests4
 
         Assert.NotNull(result);
         Assert.Equal("Updated Dollar", result.Name);
-        await context.DisposeAsync();
     }
 
     [Fact]
     public async Task DeleteAsync_ReturnsFalse_WhenCurrencyNotFound()
     {
-        var context = CreateInMemoryContext("Test_DeleteNotFound");
+        using var context = CreateDbContext();
 
         var service = new CurrencyServiceImpl(
             context,
@@ -985,13 +974,12 @@ public class ServiceTests4
         var result = await service.DeleteAsync("XXX");
 
         Assert.False(result);
-        await context.DisposeAsync();
     }
 
     [Fact]
     public async Task DeleteAsync_SoftDeletesCurrency()
     {
-        var context = CreateInMemoryContext("Test_DeleteSoft");
+        using var context = CreateDbContext();
 
         context.Currencies.Add(new Currency { Id = Guid.NewGuid(), Code = "USD", Name = "US Dollar", Symbol = "$", DecimalPlaces = 2, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow });
         await context.SaveChangesAsync();
@@ -1007,13 +995,12 @@ public class ServiceTests4
 
         var deleted = await context.Currencies.FirstAsync(c => c.Code == "USD");
         Assert.False(deleted.IsActive);
-        await context.DisposeAsync();
     }
 
     [Fact]
     public async Task DeleteByIdAsync_ThrowsException_WhenHasCountryMappings()
     {
-        var context = CreateInMemoryContext("Test_DeleteWithMappings");
+        using var context = CreateDbContext();
 
         var currencyId = Guid.NewGuid();
         context.Currencies.Add(new Currency { Id = currencyId, Code = "USD", Name = "US Dollar", Symbol = "$", DecimalPlaces = 2, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow });
@@ -1026,14 +1013,13 @@ public class ServiceTests4
             _currencyLoggerMock.Object);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => service.DeleteByIdAsync(currencyId));
-        await context.DisposeAsync();
     }
 
     [Fact]
     public async Task GetByIdAsync_ReturnsActiveCurrency()
     {
         var currencyId = Guid.NewGuid();
-        var context = CreateInMemoryContext("Test_GetById");
+        using var context = CreateDbContext();
 
         context.Currencies.Add(new Currency { Id = currencyId, Code = "USD", Name = "US Dollar", Symbol = "$", DecimalPlaces = 2, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow });
         await context.SaveChangesAsync();
@@ -1047,13 +1033,12 @@ public class ServiceTests4
 
         Assert.NotNull(result);
         Assert.Equal(currencyId, result.Id);
-        await context.DisposeAsync();
     }
 
     [Fact]
     public async Task ActivateAsync_ReturnsFalse_WhenNotFound()
     {
-        var context = CreateInMemoryContext("Test_ActivateNotFound");
+        using var context = CreateDbContext();
 
         var service = new CurrencyServiceImpl(
             context,
@@ -1063,13 +1048,12 @@ public class ServiceTests4
         var result = await service.ActivateAsync(Guid.NewGuid());
 
         Assert.False(result);
-        await context.DisposeAsync();
     }
 
     [Fact]
     public async Task DeactivateAsync_ReturnsTrue_WhenSuccessful()
     {
-        var context = CreateInMemoryContext("Test_Deactivate");
+        using var context = CreateDbContext();
 
         var currencyId = Guid.NewGuid();
         context.Currencies.Add(new Currency { Id = currencyId, Code = "USD", Name = "US Dollar", Symbol = "$", DecimalPlaces = 2, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow });
@@ -1086,8 +1070,11 @@ public class ServiceTests4
 
         var deactivated = await context.Currencies.FirstAsync(c => c.Id == currencyId);
         Assert.False(deactivated.IsActive);
-        await context.DisposeAsync();
     }
 
     #endregion
 }
+
+
+
+

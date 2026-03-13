@@ -15,11 +15,39 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;
+using Testcontainers.PostgreSql;
 
 namespace Maliev.CurrencyService.Tests;
 
-public class InfrastructureTests
+public class InfrastructureTests : IAsyncLifetime
 {
+    private readonly PostgreSqlContainer _dbContainer = 
+                #pragma warning disable CS0618
+        new PostgreSqlBuilder().WithImage("postgres:18-alpine")
+        .Build();
+#pragma warning restore CS0618
+
+    public async Task InitializeAsync()
+    {
+        await _dbContainer.StartAsync();
+    }
+
+    public async Task DisposeAsync()
+    {
+        await _dbContainer.DisposeAsync();
+    }
+
+    private CurrencyDbContext CreateDbContext()
+    {
+        var options = new DbContextOptionsBuilder<CurrencyDbContext>()
+            .UseNpgsql(_dbContainer.GetConnectionString())
+            .Options;
+
+        var context = new CurrencyDbContext(options);
+        context.Database.EnsureCreated();
+        return context;
+    }
+
     #region CacheTagServiceTests
 
     [Fact]
@@ -86,11 +114,7 @@ public class InfrastructureTests
     [Fact]
     public async Task ImportBatchAsync_ReturnsFailure_WhenCurrencyNotFound()
     {
-        var options = new DbContextOptionsBuilder<CurrencyDbContext>()
-            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
-            .Options;
-
-        using var context = new CurrencyDbContext(options);
+        using var context = CreateDbContext();
         var cacheServiceMock = new Mock<ICacheService>();
         var loggerMock = new Mock<ILogger<SnapshotService>>();
         var metricsMock = new Mock<IRateServiceMetrics>();
@@ -120,11 +144,7 @@ public class InfrastructureTests
     [Fact]
     public async Task ImportBatchAsync_StagesValidSnapshots_WhenCurrenciesExist()
     {
-        var options = new DbContextOptionsBuilder<CurrencyDbContext>()
-            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
-            .Options;
-
-        using var context = new CurrencyDbContext(options);
+        using var context = CreateDbContext();
         var cacheServiceMock = new Mock<ICacheService>();
         var loggerMock = new Mock<ILogger<SnapshotService>>();
         var metricsMock = new Mock<IRateServiceMetrics>();
@@ -155,11 +175,7 @@ public class InfrastructureTests
     [Fact]
     public async Task PromoteBatchAsync_ReturnsFalse_WhenInvalidBatchId()
     {
-        var options = new DbContextOptionsBuilder<CurrencyDbContext>()
-            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
-            .Options;
-
-        using var context = new CurrencyDbContext(options);
+        using var context = CreateDbContext();
         var cacheServiceMock = new Mock<ICacheService>();
         var loggerMock = new Mock<ILogger<SnapshotService>>();
         var metricsMock = new Mock<IRateServiceMetrics>();
@@ -174,11 +190,7 @@ public class InfrastructureTests
     [Fact]
     public async Task CleanupOldSnapshotsAsync_ReturnsZero_WhenNoOldSnapshots()
     {
-        var options = new DbContextOptionsBuilder<CurrencyDbContext>()
-            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
-            .Options;
-
-        using var context = new CurrencyDbContext(options);
+        using var context = CreateDbContext();
         var cacheServiceMock = new Mock<ICacheService>();
         var loggerMock = new Mock<ILogger<SnapshotService>>();
         var metricsMock = new Mock<IRateServiceMetrics>();
@@ -193,11 +205,7 @@ public class InfrastructureTests
     [Fact]
     public async Task GetBatchAuditAsync_ReturnsNull_WhenInvalidBatchId()
     {
-        var options = new DbContextOptionsBuilder<CurrencyDbContext>()
-            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
-            .Options;
-
-        using var context = new CurrencyDbContext(options);
+        using var context = CreateDbContext();
         var cacheServiceMock = new Mock<ICacheService>();
         var loggerMock = new Mock<ILogger<SnapshotService>>();
         var metricsMock = new Mock<IRateServiceMetrics>();
@@ -248,11 +256,7 @@ public class InfrastructureTests
         var loggerMock = new Mock<ILogger<RateService>>();
         var appLifetimeMock = new Mock<IHostApplicationLifetime>();
 
-        var options = new DbContextOptionsBuilder<CurrencyDbContext>()
-            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
-            .Options;
-
-        using var context = new CurrencyDbContext(options);
+        using var context = CreateDbContext();
 
         var service = new RateService(
             providerChain,
@@ -286,11 +290,7 @@ public class InfrastructureTests
         var loggerMock = new Mock<ILogger<RateService>>();
         var appLifetimeMock = new Mock<IHostApplicationLifetime>();
 
-        var options = new DbContextOptionsBuilder<CurrencyDbContext>()
-            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
-            .Options;
-
-        using var context = new CurrencyDbContext(options);
+        using var context = CreateDbContext();
 
         var service = new RateService(
             providerChain,
@@ -323,11 +323,7 @@ public class InfrastructureTests
         var loggerMock = new Mock<ILogger<RateService>>();
         var appLifetimeMock = new Mock<IHostApplicationLifetime>();
 
-        var options = new DbContextOptionsBuilder<CurrencyDbContext>()
-            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
-            .Options;
-
-        using var context = new CurrencyDbContext(options);
+        using var context = CreateDbContext();
 
         var service = new RateService(
             providerChain,
@@ -360,11 +356,7 @@ public class InfrastructureTests
         var loggerMock = new Mock<ILogger<RateService>>();
         var appLifetimeMock = new Mock<IHostApplicationLifetime>();
 
-        var options = new DbContextOptionsBuilder<CurrencyDbContext>()
-            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
-            .Options;
-
-        using var context = new CurrencyDbContext(options);
+        using var context = CreateDbContext();
 
         var service = new RateService(
             providerChain,
@@ -399,11 +391,7 @@ public class InfrastructureTests
         var loggerMock = new Mock<ILogger<RateService>>();
         var appLifetimeMock = new Mock<IHostApplicationLifetime>();
 
-        var options = new DbContextOptionsBuilder<CurrencyDbContext>()
-            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
-            .Options;
-
-        using var context = new CurrencyDbContext(options);
+        using var context = CreateDbContext();
 
         var service = new RateService(
             providerChain,
@@ -428,3 +416,7 @@ public class InfrastructureTests
 
     #endregion
 }
+
+
+
+

@@ -6,27 +6,28 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;
+using Testcontainers.PostgreSql;
 
 namespace Maliev.CurrencyService.Tests;
 
-public class SnapshotQueueUnitTests : IDisposable
+public class SnapshotQueueUnitTests : IAsyncLifetime
 {
+    private readonly PostgreSqlContainer _dbContainer = 
+                #pragma warning disable CS0618
+        new PostgreSqlBuilder().WithImage("postgres:18-alpine")
+        .Build();
+#pragma warning restore CS0618
+
     private readonly Mock<IServiceProvider> _serviceProviderMock;
     private readonly Mock<ILogger<SnapshotQueue>> _loggerMock;
     private readonly Mock<IServiceScopeFactory> _scopeFactoryMock;
     private readonly Mock<IServiceScope> _scopeMock;
-    private readonly CurrencyDbContext _context;
+    private CurrencyDbContext _context = null!;
 
     public SnapshotQueueUnitTests()
     {
         _serviceProviderMock = new Mock<IServiceProvider>();
         _loggerMock = new Mock<ILogger<SnapshotQueue>>();
-
-        var options = new DbContextOptionsBuilder<CurrencyDbContext>()
-            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
-            .Options;
-
-        _context = new CurrencyDbContext(options);
 
         _scopeMock = new Mock<IServiceScope>();
         _scopeMock.Setup(s => s.ServiceProvider).Returns(_serviceProviderMock.Object);
@@ -37,10 +38,28 @@ public class SnapshotQueueUnitTests : IDisposable
         _serviceProviderMock
             .Setup(sp => sp.GetService(typeof(IServiceScopeFactory)))
             .Returns(_scopeFactoryMock.Object);
+    }
+
+    public async Task InitializeAsync()
+    {
+        await _dbContainer.StartAsync();
+
+        var options = new DbContextOptionsBuilder<CurrencyDbContext>()
+            .UseNpgsql(_dbContainer.GetConnectionString())
+            .Options;
+
+        _context = new CurrencyDbContext(options);
+        await _context.Database.EnsureCreatedAsync();
 
         _serviceProviderMock
             .Setup(sp => sp.GetService(typeof(CurrencyDbContext)))
             .Returns(_context);
+    }
+
+    public async Task DisposeAsync()
+    {
+        if (_context != null) await _context.DisposeAsync();
+        await _dbContainer.DisposeAsync();
     }
 
     private SnapshotQueue CreateService()
@@ -126,9 +145,8 @@ public class SnapshotQueueUnitTests : IDisposable
         Assert.Equal("NotFound", status);
         Assert.Null(error);
     }
-
-    public void Dispose()
-    {
-        _context.Dispose();
-    }
 }
+
+
+
+

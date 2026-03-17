@@ -20,7 +20,7 @@ namespace Maliev.CurrencyService.Api.Controllers;
 /// All endpoints require JWT authentication (admin role).
 /// </remarks>
 [ApiController]
-[ApiVersion("1.0")]
+[ApiVersion("1")]
 [Route("currency/v{version:apiVersion}/admin/snapshots")]
 [Produces("application/json")]
 [Authorize] // Requires JWT authentication

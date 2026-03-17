@@ -20,7 +20,7 @@ namespace Maliev.CurrencyService.Api.Controllers;
 /// User Story 1: Provides currency metadata lookup and country-to-currency resolution.
 /// </remarks>
 [ApiController]
-[ApiVersion("1.0")]
+[ApiVersion("1")]
 [Route("currency/v{version:apiVersion}/currencies")]
 [Produces("application/json")]
 public class CurrenciesController : ControllerBase

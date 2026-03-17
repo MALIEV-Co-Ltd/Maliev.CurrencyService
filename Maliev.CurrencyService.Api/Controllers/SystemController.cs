@@ -12,7 +12,7 @@ namespace Maliev.CurrencyService.Api.Controllers;
 
 /// <summary>System management and diagnostics endpoints.</summary>
 [ApiController]
-[ApiVersion("1.0")]
+[ApiVersion("1")]
 [Route("currency/v{version:apiVersion}/system")]
 [Produces("application/json")]
 [Authorize]

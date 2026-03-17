@@ -20,7 +20,7 @@ namespace Maliev.CurrencyService.Api.Controllers;
 /// User Story 2: Provides live exchange rate retrieval with caching and provider fallback.
 /// </remarks>
 [ApiController]
-[ApiVersion("1.0")]
+[ApiVersion("1")]
 [Route("currency/v{version:apiVersion}/rates")]
 [Produces("application/json")]
 public class RatesController : ControllerBase

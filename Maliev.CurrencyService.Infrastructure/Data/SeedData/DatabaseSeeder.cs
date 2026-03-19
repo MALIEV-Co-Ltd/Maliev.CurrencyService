@@ -1,3 +1,4 @@
+using Maliev.CurrencyService.Domain.Entities;
 using Maliev.CurrencyService.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -13,6 +14,7 @@ public static class DatabaseSeeder
 {
     /// <summary>
     /// Seeds the currencies table from the bundled C# seed data if the table is empty.
+    /// Uses a single multi-row INSERT to minimize database round-trips.
     /// </summary>
     /// <param name="host">The application host to resolve services from.</param>
     /// <returns>A task representing the asynchronous seeding operation.</returns>
@@ -36,8 +38,7 @@ public static class DatabaseSeeder
             var strategy = context.Database.CreateExecutionStrategy();
             await strategy.ExecuteAsync(async () =>
             {
-                await context.Currencies.AddRangeAsync(currencies);
-                await context.SaveChangesAsync();
+                await BulkInsertCurrenciesAsync(context, currencies);
                 logger.LogInformation("Successfully seeded {Count} currencies.", currencies.Count);
             });
         }
@@ -45,5 +46,20 @@ public static class DatabaseSeeder
         {
             logger.LogError(ex, "An error occurred while seeding the database.");
         }
+    }
+
+    private static async Task BulkInsertCurrenciesAsync(CurrencyDbContext context, IReadOnlyList<Currency> currencies)
+    {
+        if (currencies.Count == 0) return;
+
+        var now = DateTime.UtcNow;
+        foreach (var currency in currencies)
+        {
+            currency.CreatedAt = currency.CreatedAt != default ? currency.CreatedAt : now;
+            currency.UpdatedAt = currency.UpdatedAt != default ? currency.UpdatedAt : now;
+        }
+
+        await context.Currencies.AddRangeAsync(currencies);
+        await context.SaveChangesAsync();
     }
 }

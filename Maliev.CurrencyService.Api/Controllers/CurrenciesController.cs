@@ -6,7 +6,7 @@ using Maliev.CurrencyService.Api.Services;
 using Maliev.CurrencyService.Application.Common;
 using Maliev.CurrencyService.Application.DTOs.Currencies;
 using Maliev.CurrencyService.Application.Interfaces;
-using Microsoft.AspNetCore.Authorization;
+
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
@@ -379,7 +379,6 @@ public class CurrenciesController : ControllerBase
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Currency details with ETag</returns>
     [HttpGet("~/currency/v{version:apiVersion}/admin/currencies/{id:guid}")]
-    [Authorize] // Requires JWT authentication
     [RequirePermission(CurrencyPermissions.CurrenciesRead)]
     [EnableRateLimiting(RateLimitPolicies.Api)]
     [ProducesResponseType(typeof(CurrencyResponse), StatusCodes.Status200OK)]
@@ -438,7 +437,6 @@ public class CurrenciesController : ControllerBase
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Created currency</returns>
     [HttpPost("~/currency/v{version:apiVersion}/admin/currencies")]
-    [Authorize] // Requires JWT authentication
     [RequirePermission(CurrencyPermissions.CurrenciesCreate)]
     [EnableRateLimiting(RateLimitPolicies.Api)]
     [ProducesResponseType(typeof(CurrencyResponse), StatusCodes.Status201Created)]
@@ -529,7 +527,6 @@ public class CurrenciesController : ControllerBase
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Updated currency</returns>
     [HttpPut("{code}")]
-    [Authorize] // Requires JWT authentication
     [RequirePermission(CurrencyPermissions.CurrenciesUpdate)]
     [EnableRateLimiting(RateLimitPolicies.Api)]
     [ProducesResponseType(typeof(CurrencyResponse), StatusCodes.Status200OK)]
@@ -625,7 +622,6 @@ public class CurrenciesController : ControllerBase
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Updated currency</returns>
     [HttpPut("~/currency/v{version:apiVersion}/admin/currencies/{id:guid}")]
-    [Authorize] // Requires JWT authentication
     [RequirePermission(CurrencyPermissions.CurrenciesUpdate)]
     [EnableRateLimiting(RateLimitPolicies.Api)]
     [ProducesResponseType(typeof(CurrencyResponse), StatusCodes.Status200OK)]
@@ -765,7 +761,6 @@ public class CurrenciesController : ControllerBase
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Success indicator</returns>
     [HttpDelete("~/currency/v{version:apiVersion}/admin/currencies/{id:guid}")]
-    [Authorize] // Requires JWT authentication
     [RequirePermission(CurrencyPermissions.CurrenciesDelete)]
     [EnableRateLimiting(RateLimitPolicies.Api)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
@@ -831,7 +826,6 @@ public class CurrenciesController : ControllerBase
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Success indicator</returns>
     [HttpDelete("{code}")]
-    [Authorize] // Requires JWT authentication
     [RequirePermission(CurrencyPermissions.CurrenciesDelete)]
     [EnableRateLimiting(RateLimitPolicies.Api)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
@@ -881,21 +875,6 @@ public class CurrenciesController : ControllerBase
     /// Activate a currency (admin only)
     /// </summary>
     [HttpPost("~/currency/v{version:apiVersion}/admin/currencies/{id:guid}/activate")]
-    [Authorize]
-    [RequirePermission(CurrencyPermissions.CurrenciesActivate)]
-    [EnableRateLimiting(RateLimitPolicies.Api)]
-    public async Task<IActionResult> Activate(Guid id, CancellationToken cancellationToken = default)
-    {
-        var success = await _currencyService.ActivateAsync(id, cancellationToken);
-        if (!success) return NotFound();
-        return Ok();
-    }
-
-    /// <summary>
-    /// Deactivate a currency (admin only)
-    /// </summary>
-    [HttpPost("~/currency/v{version:apiVersion}/admin/currencies/{id:guid}/deactivate")]
-    [Authorize]
     [RequirePermission(CurrencyPermissions.CurrenciesActivate)]
     [EnableRateLimiting(RateLimitPolicies.Api)]
     public async Task<IActionResult> Deactivate(Guid id, CancellationToken cancellationToken = default)

@@ -7,7 +7,7 @@ using Maliev.CurrencyService.Api.Services;
 using Maliev.CurrencyService.Application.Common;
 using Maliev.CurrencyService.Application.DTOs.Rates;
 using Maliev.CurrencyService.Application.Interfaces;
-using Microsoft.AspNetCore.Authorization;
+
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 
@@ -245,7 +245,6 @@ public class RatesController : ControllerBase
     /// Update a specific exchange rate (admin only)
     /// </summary>
     [HttpPut]
-    [Authorize]
     [RequirePermission(CurrencyPermissions.RatesUpdate)]
     [EnableRateLimiting(RateLimitPolicies.Api)]
     public async Task<IActionResult> UpdateRate([FromBody] UpdateRateRequest request)
@@ -258,7 +257,6 @@ public class RatesController : ControllerBase
     /// Bulk update exchange rates (admin only)
     /// </summary>
     [HttpPost("bulk-update")]
-    [Authorize]
     [RequirePermission(CurrencyPermissions.RatesBulkUpdate)]
     [EnableRateLimiting(RateLimitPolicies.Api)]
     public async Task<IActionResult> BulkUpdateRates([FromBody] BulkUpdateRatesRequest request)
@@ -271,7 +269,6 @@ public class RatesController : ControllerBase
     /// Set the active rate source provider (admin only)
     /// </summary>
     [HttpPost("set-source")]
-    [Authorize]
     [RequirePermission(CurrencyPermissions.RatesSetSource)]
     [EnableRateLimiting(RateLimitPolicies.Api)]
     public async Task<IActionResult> SetRateSource([FromBody] SetRateSourceRequest request)
@@ -285,7 +282,6 @@ public class RatesController : ControllerBase
     /// Trigger manual rate refresh from external providers (admin only)
     /// </summary>
     [HttpPost("refresh")]
-    [Authorize]
     [RequirePermission(CurrencyPermissions.SystemRefreshRates)]
     [EnableRateLimiting(RateLimitPolicies.Api)]
     public async Task<IActionResult> RefreshRatesFromProvider()

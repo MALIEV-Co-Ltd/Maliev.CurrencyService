@@ -1,94 +1,157 @@
 # Maliev.CurrencyService Agent Guidelines
 
-This document provides essential information for agentic coding assistants working on the Maliev.CurrencyService codebase.
+> **Workspace root** `B:\maliev` contains **41 independent git repos**. Each `Maliev.*` folder and `maliev-gitops` is its own repo. There is no single repo at the workspace root. Always work within this service directory (`B:\maliev\Maliev.CurrencyService`).
+
+---
 
 ## 1. Project Overview
 
 - **Framework**: .NET 10.0
-- **Architecture**: Microservice (Aspire-based) with Layered Architecture (Api, Data, Tests).
+- **Architecture**: Microservice (Aspire-based) with Clean Architecture (Api, Application, Domain, Infrastructure, Tests).
 - **Core Dependencies**:
     - **Data**: Entity Framework Core (PostgreSQL), StackExchange.Redis.
     - **Messaging**: MassTransit (RabbitMQ).
     - **Observability**: OpenTelemetry, HealthChecks.
     - **Resilience**: Polly.
 
-## 2. Build & Test Commands
+---
 
-### Build
-To build the entire solution:
-```bash
+## 2. Build, Test & Lint Commands
+
+All commands run from within this service directory (`B:\maliev\Maliev.CurrencyService`).
+
+```powershell
+# Build (treats warnings as errors — all must be fixed)
 dotnet build Maliev.CurrencyService.slnx
-```
 
-### Test
-**Important**: Tests require Docker to be running (uses Testcontainers for Postgres, Redis, RabbitMQ).
-To run all tests:
-```bash
-dotnet test Maliev.CurrencyService.slnx
-```
+# Run all tests
+dotnet test Maliev.CurrencyService.slnx --verbosity normal
 
-To run a specific test project:
-```bash
-dotnet test Maliev.CurrencyService.Tests/Maliev.CurrencyService.Tests.csproj
-```
+# Run a single test method
+dotnet test --filter "FullyQualifiedName~CurrencyServiceTests.GetCurrencyById_ReturnsExpectedCurrency"
 
-To run a single test class:
-```bash
-dotnet test Maliev.CurrencyService.Tests/Maliev.CurrencyService.Tests.csproj --filter "FullyQualifiedName~Maliev.CurrencyService.Tests.Services.CurrencyServiceTests"
-```
+# Run all tests in a class
+dotnet test --filter "FullyQualifiedName~CurrencyServiceTests"
 
-### Run
-To run the API project:
-```bash
+# Run with code coverage
+dotnet test Maliev.CurrencyService.slnx --collect:"XPlat Code Coverage"
+
+# Format check
+dotnet format Maliev.CurrencyService.slnx
+
+# Run the API project
 dotnet run --project Maliev.CurrencyService.Api/Maliev.CurrencyService.Api.csproj
+
+# EF Core migrations (Infrastructure project only)
+dotnet ef migrations add <Name> --project Maliev.CurrencyService.Infrastructure --startup-project Maliev.CurrencyService.Infrastructure
 ```
+
+**Important**: Tests require Docker to be running (uses Testcontainers for Postgres, Redis, RabbitMQ).
+
+---
 
 ## 3. Code Style & Conventions
 
-### General
-- **Formatting**: Follow standard C# conventions. `ImplicitUsings` and `Nullable` are enabled.
-- **Namespaces**: Use **file-scoped namespaces** (e.g., `namespace Maliev.CurrencyService.Api.Services;`).
-- **Constructors**: Use explicit constructor injection (not Primary Constructors yet).
+### Workspace Structure
+```
+Maliev.CurrencyService/
+├── Maliev.CurrencyService.Api/              # Controllers, Consumers, Middleware
+├── Maliev.CurrencyService.Application/      # Use cases, DTOs, Interfaces, Handlers
+├── Maliev.CurrencyService.Domain/           # Entities, value objects, domain interfaces
+├── Maliev.CurrencyService.Infrastructure/   # EF Core DbContext, repositories, HTTP clients
+├── Maliev.CurrencyService.Tests/            # Unit + Integration tests (xUnit)
+├── Directory.Build.props                    # Central package versioning
+└── Maliev.CurrencyService.slnx             # Solution file (.slnx preferred over .sln)
+```
 
-### Naming
-- **Classes/Methods**: `PascalCase`
-- **Parameters/Locals**: `camelCase`
-- **Private Fields**: `_camelCase` (e.g., `_currencyService`)
+### C# Naming & Formatting
+- **Namespaces**: File-scoped (`namespace Maliev.CurrencyService.Api.Services;`)
+- **Classes/Methods/Properties**: `PascalCase`
+- **Private fields**: `_camelCase` (underscore prefix)
+- **Parameters/locals**: `camelCase`
+- **Async methods**: Suffix with `Async` (e.g., `GetCurrencyAsync`)
 - **Interfaces**: Prefix with `I` (e.g., `ICurrencyService`)
+- **Permissions**: GCP-style `{domain}.{plural-resource}.{action}` as `public const string` in a `Permissions` static class
+  - Valid: `currency.currencies.create`, `currency.rates.update`
+  - Invalid: `currency.currency.create` (singular), `currency.create` (missing resource)
+- **XML docs**: Required on ALL public methods and properties
+- **Nullable**: Enabled (`<Nullable>enable</Nullable>`). Use `?` explicitly
+- **Imports**: System first, then third-party, then local. Alphabetize within groups. Remove unused `using`
+- **Braces**: Allman style (new line) for methods and control structures. Expression-bodied for properties/accessors
+- **Indentation**: 4 spaces, LF line endings, UTF-8, trim trailing whitespace
 
-### Error Handling
-- **Exceptions**: Use standard exceptions (`InvalidOperationException`, `ArgumentException`) for logic errors.
-- **API Responses**:
-    - Success: Return `Ok(result)`, `Created(...)`, or `NoContent()`.
-    - Errors: Return `ErrorResponse` object (Status 400/404/500).
-    - **Do not** return raw strings or exceptions to the client. Use `ErrorResponse`.
-- **Concurrency**: Handle `DbUpdateConcurrencyException` for 412/409 responses using ETags (`If-Match`).
-
-### Logging
-- Inject `ILogger<T>`.
-- Use structured logging (e.g., `_logger.LogInformation("Getting currency {Id}", id)`).
-- Use `LoggerMessage` source generators for high-volume logs (see `Program.cs` for examples) if applicable.
+### C# Patterns
+- **DI**: Constructor injection with `private readonly` fields (not Primary Constructors)
+- **Controllers**: `[ApiController]`, `[ApiVersion("1")]`, `[Route("currency/v{version:apiVersion}")]`
+- **Logging**: `ILogger<T>` with structured placeholders (never interpolate): `_logger.LogInformation("Getting currency {Id}", id)`
+  - Use `LoggerMessage` source generators for high-volume logs (see `Program.cs` for examples) if applicable
+- **Error handling**: Global exception middleware. Return `ProblemDetails` / `ErrorResponse` DTOs. Never expose stack traces
+  - Success: Return `Ok(result)`, `Created(...)`, or `NoContent()`
+  - Errors: Return `ErrorResponse` object (Status 400/404/500)
+  - **Do not** return raw strings or exceptions to the client
+  - **Concurrency**: Handle `DbUpdateConcurrencyException` for 412/409 responses using ETags (`If-Match`)
+- **JSON**: Check existing conventions in this service for naming policy
+- **Manual mapping**: Static extension methods (`ToDto()`, `ToEntity()`). AutoMapper is banned
+- **Validation**: `System.ComponentModel.DataAnnotations` on DTOs. FluentValidation is banned
 
 ### Async/Await
-- Always use `async/await` for I/O bound operations.
-- Pass `CancellationToken` to all async methods and EF Core calls.
+- Always use `async/await` for I/O bound operations
+- Pass `CancellationToken` to all async methods and EF Core calls
 
-### Attributes & Metadata
-- **Controllers**: Decorate with `[ApiController]`, `[ApiVersion]`, `[Route]`.
-- **Documentation**: All public APIs and Controllers **must** have XML documentation (`/// <summary>`) for Swagger/OpenAPI generation.
-- **Authorization**: Use `[Authorize]` and `[RequirePermission(...)]` for protected endpoints.
+---
 
 ## 4. Database & Data Access
-- **EF Core**: Use `CurrencyDbContext`.
-- **Queries**: Use `AsNoTracking()` for read-only queries to improve performance.
-- **Migrations**: 
-  - Database migrations run on startup (`app.MigrateDatabaseAsync`).
-  - **Never** add `Microsoft.EntityFrameworkCore.Design` to the Api project. It must only be in the Infrastructure project where migrations live.
-  - To run migrations, use `--startup-project` pointing to **Infrastructure** project.
+
+- **EF Core**: Use `CurrencyDbContext`
+- **Queries**: Use `AsNoTracking()` for read-only queries to improve performance
+- **Migrations**: Database migrations run on startup (`app.MigrateDatabaseAsync`)
+
+### EF Core Design Package
+- ❌ `Microsoft.EntityFrameworkCore.Design` MUST NOT be in Api projects
+- ✅ It belongs ONLY in the Infrastructure project where migrations live
+- Migration commands must target Infrastructure as both project and startup-project:
+  ```
+  dotnet ef migrations add <Name> --project Maliev.CurrencyService.Infrastructure --startup-project Maliev.CurrencyService.Infrastructure
+  ```
+
+### PostgreSQL xmin Concurrency — Mandatory Pattern
+Use shadow property ONLY. Never add a Xmin/xmin property to domain entities.
+```csharp
+entity.Property<uint>("xmin").HasColumnType("xid").IsRowVersion();
+```
+- ❌ Never use `UseXminAsConcurrencyToken()` (removed in Npgsql EF v7)
+- ❌ Never use entity property `public uint Xmin { get; set; }` or `public uint xmin { get; set; }`
+- ❌ Never use `.Ignore(e => e.Xmin)` — remove the entity property instead
+
+---
 
 ## 5. File System Operations
-- **Paths**: Always use **absolute paths** when using tools.
-- **Modifications**: Verify existence of files before editing. Use `grep`/`glob` to find usages before refactoring.
+- **Paths**: Always use **absolute paths** when using tools
+- **Modifications**: Verify existence of files before editing. Use `grep`/`glob` to find usages before refactoring
+
+---
+
+## 6. Banned Libraries (Build Will Fail)
+
+| Banned | Use Instead |
+|--------|-------------|
+| AutoMapper | Manual mapping extensions |
+| FluentValidation | DataAnnotations or manual validation |
+| FluentAssertions | Standard xUnit `Assert.*` |
+| Swashbuckle/Swagger | Scalar (at `/{service}/scalar`) |
+| InMemoryDatabase (EF Core) | Testcontainers with real PostgreSQL |
+
+---
+
+## 7. Testing Rules
+
+- **Framework**: xUnit with standard `Assert` (`Assert.Equal`, `Assert.NotNull`, etc.)
+- **Naming**: `MethodName_StateUnderTest_ExpectedBehavior` or `HTTP_METHOD_Path_Scenario_ExpectedStatus`
+- **Coverage**: Minimum 80% per service
+- **Integration tests**: `BaseIntegrationTestFactory<TProgram, TDbContext>` with Testcontainers (PostgreSQL, Redis, RabbitMQ). Never InMemoryDatabase
+- **System tests** (Tier 3): `AspireTestFixture` with `[Collection("AspireDomainTests")]` — shared AppHost, never one per class
+- **Eventual consistency**: Use `TestHelpers.WaitForAsync`. Never `Task.Delay`
+- **MassTransit consumers**: Must have consumer tests using `AddMassTransitTestHarness()`
 
 ### Testing Strategy (4-Tier Pyramid Context)
 
@@ -101,44 +164,28 @@ This service's tests cover **Tier 1 (Unit)** and **Tier 2 (Service Integration)*
 
 **Tier 3 (System Integration)** — cross-service workflows and event chains — is tested in `Maliev.Aspire.Tests/`.
 
-#### Key Rules
-- Use `BaseIntegrationTestFactory<TProgram, TDbContext>` for integration tests (real Testcontainers, never InMemoryDatabase)
-- Test naming: `MethodName_StateUnderTest_ExpectedBehavior`
-- Minimum 80% code coverage
-- Use `[Fact]` for single cases, `[Theory]` for parameterized tests
-
 > Full ecosystem test strategy: `Maliev.Aspire.Tests/TEST_PLAN.md`
 
+---
 
-## Git & Version Control — Mandatory Rules
+## 8. Mandatory Rules
 
-### 🚨 CRITICAL: Always Commit Code Changes (Non-Negotiable)
-- **You MUST commit your changes to the local repository after completing any meaningful unit of work.**
-- **Never accumulate uncommitted changes.** Do not wait until end of session or until something breaks.
-- **Commit early and often** — if a change is meaningful (even a small fix or refactor), commit it.
-- **You do NOT need to push to remote** — local commits are sufficient to protect against accidental loss.
-- **If you are unsure whether to commit, commit anyway.** Extra commits are harmless; lost work is irreversible.
-- This rule applies even if you are just "testing" or "exploring" — use git branches to isolate experimental work and commit those changes too.
+- **`TreatWarningsAsErrors = true`**: Zero warnings allowed. No suppression
+- **`[RequirePermission("currency.resources.action")]`**: On all endpoints, not plain `[Authorize]`
+- **API versioning**: All routes versioned (`v1/`)
+- **Service prefix**: Routes prefixed with service domain (e.g., `/currency`)
+- **Scalar docs**: Configured at `/currency/scalar`
+- **Secrets**: Never hardcoded. Use GCP Secret Manager or environment variables
+- **Async/await**: All the way down. Pass `CancellationToken`
+- **EF Core Design package**: Only in Infrastructure project, never in Api
+- **PostgreSQL xmin**: Shadow property only — `entity.Property<uint>("xmin").HasColumnType("xid").IsRowVersion()`. Never add entity property
+- **Temporary files**: Generate in `/temp` folder, clean up afterwards
 
-### 🚨 CRITICAL: Never Use `git checkout` to Restore Broken Files
-- **NEVER use `git checkout` to restore or recover files.** This operation discards uncommitted changes permanently and will result in data loss.
-- **To undo/recover from broken files: first commit your current changes, then use `git revert` or `git reset --soft` to safely undo.**
+---
 
-## Database & EF Core — Mandatory Rules
+## 9. Git Rules
 
-### EF Core Design Package
-- ❌ `Microsoft.EntityFrameworkCore.Design` MUST NOT be in Api projects
-- ✅ It belongs ONLY in the Infrastructure (or Data) project where migrations live
-- Migration commands must target Infrastructure as both project and startup-project (since EF Core Design package is in Infrastructure):
-  ```
-  dotnet ef migrations add <Name> --project Maliev.<Domain>Service.Infrastructure --startup-project Maliev.<Domain>Service.Infrastructure
-  ```
-
-### PostgreSQL xmin Concurrency — Mandatory Pattern
-Use shadow property ONLY. Never add a Xmin/xmin property to domain entities.
-```csharp
-entity.Property<uint>("xmin").HasColumnType("xid").IsRowVersion();
-```
-- ❌ Never use `UseXminAsConcurrencyToken()` (removed in Npgsql EF v7)
-- ❌ Never use entity property `public uint Xmin { get; set; }` or `public uint xmin { get; set; }`
-- ❌ Never use `.Ignore(e => e.Xmin)` — remove the entity property instead
+- Each `Maliev.*` folder is an independent git repo. `cd` into it before git commands
+- **Commit early and often** after every meaningful unit of work. Do not accumulate changes
+- **Never use `git checkout` to restore files** — commit first, then `git revert` or `git reset --soft`
+- Feature branches merged to `develop` via PR. Do not push without being asked

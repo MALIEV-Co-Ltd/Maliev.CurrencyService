@@ -23,7 +23,6 @@ namespace Maliev.CurrencyService.Api.Controllers;
 [ApiVersion("1")]
 [Route("currency/v{version:apiVersion}/admin/snapshots")]
 [Produces("application/json")]
-[Authorize] // Requires JWT authentication
 [EnableRateLimiting(RateLimitPolicies.Batch)]
 public class SnapshotsController : ControllerBase
 {

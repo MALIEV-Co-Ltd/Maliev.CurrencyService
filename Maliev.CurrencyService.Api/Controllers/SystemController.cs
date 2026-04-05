@@ -15,7 +15,6 @@ namespace Maliev.CurrencyService.Api.Controllers;
 [ApiVersion("1")]
 [Route("currency/v{version:apiVersion}/system")]
 [Produces("application/json")]
-[Authorize]
 [EnableRateLimiting(RateLimitPolicies.Admin)]
 public class SystemController : ControllerBase
 {

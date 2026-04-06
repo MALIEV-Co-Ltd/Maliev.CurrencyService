@@ -877,6 +877,19 @@ public class CurrenciesController : ControllerBase
     [HttpPost("~/currency/v{version:apiVersion}/admin/currencies/{id:guid}/activate")]
     [RequirePermission(CurrencyPermissions.CurrenciesActivate)]
     [EnableRateLimiting(RateLimitPolicies.Api)]
+    public async Task<IActionResult> Activate(Guid id, CancellationToken cancellationToken = default)
+    {
+        var success = await _currencyService.ActivateAsync(id, cancellationToken);
+        if (!success) return NotFound();
+        return Ok();
+    }
+
+    /// <summary>
+    /// Deactivate a currency (admin only)
+    /// </summary>
+    [HttpPost("~/currency/v{version:apiVersion}/admin/currencies/{id:guid}/deactivate")]
+    [RequirePermission(CurrencyPermissions.CurrenciesActivate)]
+    [EnableRateLimiting(RateLimitPolicies.Api)]
     public async Task<IActionResult> Deactivate(Guid id, CancellationToken cancellationToken = default)
     {
         var success = await _currencyService.DeactivateAsync(id, cancellationToken);

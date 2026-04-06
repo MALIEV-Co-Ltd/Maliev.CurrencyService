@@ -11,6 +11,7 @@ public class ConvertCurrencyRequest
     /// The source currency code (ISO 4217, e.g., "USD").
     /// </summary>
     [Required]
+    [StringLength(3, MinimumLength = 3)]
     [RegularExpression("^[A-Z]{3}$", ErrorMessage = "'from' currency code must be 3 uppercase letters.")]
     public required string From { get; init; }
 
@@ -18,6 +19,7 @@ public class ConvertCurrencyRequest
     /// The target currency code (ISO 4217, e.g., "EUR").
     /// </summary>
     [Required]
+    [StringLength(3, MinimumLength = 3)]
     [RegularExpression("^[A-Z]{3}$", ErrorMessage = "'to' currency code must be 3 uppercase letters.")]
     public required string To { get; init; }
 

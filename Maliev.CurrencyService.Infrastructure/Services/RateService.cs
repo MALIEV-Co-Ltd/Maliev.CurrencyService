@@ -376,6 +376,46 @@ public class RateService : IRateService
         _logger.LogInformation("Admin bulk updated {Count} rates", rates.Count);
     }
 
+    /// <inheritdoc />
+    public async Task<ConversionResult?> ConvertCurrencyAsync(
+        string fromCurrency,
+        string toCurrency,
+        decimal amount,
+        CancellationToken cancellationToken = default)
+    {
+        var from = fromCurrency.ToUpperInvariant();
+        var to = toCurrency.ToUpperInvariant();
+
+        _logger.LogDebug("ConvertCurrencyAsync: {Amount} {From} → {To}", amount, from, to);
+
+        // Get the live exchange rate
+        var rateResponse = await GetLiveRateAsync(from, to, cancellationToken);
+        if (rateResponse == null)
+        {
+            _logger.LogWarning("No rate available for conversion {From}:{To}", from, to);
+            return null;
+        }
+
+        // Calculate converted amount
+        var convertedAmount = amount * rateResponse.Rate;
+
+        _logger.LogInformation("Converted {Amount} {From} to {ConvertedAmount} {To} at rate {Rate}",
+            amount, from, convertedAmount, to, rateResponse.Rate);
+
+        return new ConversionResult
+        {
+            FromCurrency = from,
+            ToCurrency = to,
+            OriginalAmount = amount,
+            ConvertedAmount = convertedAmount,
+            ExchangeRate = rateResponse.Rate,
+            RateTimestamp = rateResponse.Timestamp,
+            Source = rateResponse.Source,
+            IsTransitive = rateResponse.IsTransitive,
+            IntermediateCurrency = rateResponse.IntermediateCurrency
+        };
+    }
+
     private static ExchangeRateResponse MapToResponse(
         ExchangeRate rate,
         bool isFresh,

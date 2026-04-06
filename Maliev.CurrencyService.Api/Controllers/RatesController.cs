@@ -42,6 +42,120 @@ public class RatesController : ControllerBase
     }
 
     /// <summary>
+    /// Convert an amount from one currency to another
+    /// </summary>
+    /// <param name="request">The conversion request containing from, to, and amount</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>Conversion result with converted amount and exchange rate</returns>
+    [HttpPost("convert")]
+    [RequirePermission(CurrencyPermissions.RatesRead)]
+    [EnableRateLimiting(RateLimitPolicies.Public)]
+    [ProducesResponseType(typeof(ConvertCurrencyResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status429TooManyRequests)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status503ServiceUnavailable)]
+    public async Task<ActionResult<ConvertCurrencyResponse>> ConvertCurrency(
+        [FromBody] ConvertCurrencyRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            _logger.LogInformation("POST /v1/rates/convert - From: {From}, To: {To}, Amount: {Amount}",
+                request.From, request.To, request.Amount);
+
+            // Validate request (data annotations handle most validation)
+            var validationErrors = new List<string>();
+
+            if (string.IsNullOrWhiteSpace(request.From) || request.From.Length != 3)
+                validationErrors.Add("'from' currency code must be exactly 3 characters");
+
+            if (string.IsNullOrWhiteSpace(request.To) || request.To.Length != 3)
+                validationErrors.Add("'to' currency code must be exactly 3 characters");
+
+            if (!string.IsNullOrWhiteSpace(request.From) && !System.Text.RegularExpressions.Regex.IsMatch(request.From, "^[A-Z]{3}$"))
+                validationErrors.Add("'from' currency code must contain only uppercase letters");
+
+            if (!string.IsNullOrWhiteSpace(request.To) && !System.Text.RegularExpressions.Regex.IsMatch(request.To, "^[A-Z]{3}$"))
+                validationErrors.Add("'to' currency code must contain only uppercase letters");
+
+            if (request.Amount <= 0)
+                validationErrors.Add("'amount' must be greater than 0");
+
+            if (validationErrors.Count > 0)
+            {
+                _logger.LogWarning("Validation failed for conversion request: {Errors}",
+                    string.Join(", ", validationErrors));
+
+                return BadRequest(new ErrorResponse
+                {
+                    Error = "BadRequest",
+                    Message = "Invalid request parameters",
+                    Timestamp = DateTime.UtcNow,
+                    CorrelationId = HttpContext.TraceIdentifier,
+                    Details = new Dictionary<string, string[]>
+                    {
+                        { "validation", validationErrors.ToArray() }
+                    }
+                });
+            }
+
+            // Perform currency conversion
+            var conversionResult = await _rateService.ConvertCurrencyAsync(
+                request.From.ToUpperInvariant(),
+                request.To.ToUpperInvariant(),
+                request.Amount,
+                cancellationToken);
+
+            if (conversionResult == null)
+            {
+                _logger.LogWarning("No rate available for conversion {From}:{To}",
+                    request.From, request.To);
+
+                // Add Retry-After header
+                Response.Headers.RetryAfter = "30";
+
+                return StatusCode(StatusCodes.Status503ServiceUnavailable, new ErrorResponse
+                {
+                    Error = "ServiceUnavailable",
+                    Message = $"Exchange rate temporarily unavailable for {request.From}/{request.To}. All providers are down. Please retry after 30 seconds.",
+                    Timestamp = DateTime.UtcNow,
+                    CorrelationId = HttpContext.TraceIdentifier
+                });
+            }
+
+            // Map to response DTO
+            var response = new ConvertCurrencyResponse
+            {
+                FromCurrency = conversionResult.FromCurrency,
+                ToCurrency = conversionResult.ToCurrency,
+                OriginalAmount = conversionResult.OriginalAmount,
+                ConvertedAmount = conversionResult.ConvertedAmount,
+                ExchangeRate = conversionResult.ExchangeRate,
+                RateTimestamp = conversionResult.RateTimestamp,
+                Source = conversionResult.Source
+            };
+
+            // Add response headers
+            Response.Headers["X-Correlation-ID"] = HttpContext.TraceIdentifier;
+
+            return Ok(response);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error processing conversion request for {From}:{To}", request.From, request.To);
+
+            return StatusCode(StatusCodes.Status500InternalServerError, new ErrorResponse
+            {
+                Error = "InternalServerError",
+                Message = "An error occurred while converting currency",
+                Timestamp = DateTime.UtcNow,
+                CorrelationId = HttpContext.TraceIdentifier
+            });
+        }
+    }
+
+    /// <summary>
     /// Get exchange rate between two currencies
     /// </summary>
     /// <param name="from">Source currency code (ISO 4217)</param>

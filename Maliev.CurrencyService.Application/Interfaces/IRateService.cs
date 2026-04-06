@@ -63,4 +63,18 @@ public interface IRateService
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A task representing the asynchronous operation.</returns>
     Task BulkUpdateRatesAsync(List<UpdateRateRequest> rates, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Converts an amount from one currency to another using the current exchange rate.
+    /// </summary>
+    /// <param name="fromCurrency">Source currency code (ISO 4217).</param>
+    /// <param name="toCurrency">Target currency code (ISO 4217).</param>
+    /// <param name="amount">The amount to convert.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The conversion result with converted amount and exchange rate, or null if unavailable.</returns>
+    Task<ConversionResult?> ConvertCurrencyAsync(
+        string fromCurrency,
+        string toCurrency,
+        decimal amount,
+        CancellationToken cancellationToken = default);
 }

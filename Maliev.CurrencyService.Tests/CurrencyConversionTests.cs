@@ -41,39 +41,6 @@ public class CurrencyConversionTests : IClassFixture<BaseIntegrationTestFactory<
         await _context.DisposeAsync();
     }
 
-    private RateService CreateRateService(Mock<ProviderChain>? providerChainMock = null)
-    {
-        var cacheMock = new Mock<ICacheService>();
-        var loggerMock = new Mock<ILogger<RateService>>();
-        var metricsMock = new Mock<IRateServiceMetrics>();
-        var appLifetimeMock = new Mock<IHostApplicationLifetime>();
-        
-        appLifetimeMock.Setup(x => x.ApplicationStopping).Returns(CancellationToken.None);
-
-        var providerChain = providerChainMock?.Object ?? CreateDefaultProviderChain();
-        
-        return new RateService(
-            providerChain,
-            cacheMock.Object,
-            _context,
-            loggerMock.Object,
-            metricsMock.Object,
-            appLifetimeMock.Object);
-    }
-
-    private ProviderChain CreateDefaultProviderChain()
-    {
-        var loggerMock = new Mock<ILogger<ProviderChain>>();
-        var metricsMock = new Mock<IProviderMetrics>();
-        var fawazahmedMock = new Mock<IExchangeRateProvider>();
-        var frankfurterMock = new Mock<IExchangeRateProvider>();
-        
-        return new ProviderChain(
-            new[] { fawazahmedMock.Object, frankfurterMock.Object },
-            loggerMock.Object,
-            metricsMock.Object);
-    }
-
     /// <summary>ConvertCurrencyAsync returns conversion result when rate is available.</summary>
     [Fact]
     public async Task ConvertCurrencyAsync_Should_Return_Conversion_When_Rate_Available()

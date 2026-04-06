@@ -65,42 +65,6 @@ public class RatesController : ControllerBase
             _logger.LogInformation("POST /v1/rates/convert - From: {From}, To: {To}, Amount: {Amount}",
                 request.From, request.To, request.Amount);
 
-            // Validate request (data annotations handle most validation)
-            var validationErrors = new List<string>();
-
-            if (string.IsNullOrWhiteSpace(request.From) || request.From.Length != 3)
-                validationErrors.Add("'from' currency code must be exactly 3 characters");
-
-            if (string.IsNullOrWhiteSpace(request.To) || request.To.Length != 3)
-                validationErrors.Add("'to' currency code must be exactly 3 characters");
-
-            if (!string.IsNullOrWhiteSpace(request.From) && !System.Text.RegularExpressions.Regex.IsMatch(request.From, "^[A-Z]{3}$"))
-                validationErrors.Add("'from' currency code must contain only uppercase letters");
-
-            if (!string.IsNullOrWhiteSpace(request.To) && !System.Text.RegularExpressions.Regex.IsMatch(request.To, "^[A-Z]{3}$"))
-                validationErrors.Add("'to' currency code must contain only uppercase letters");
-
-            if (request.Amount <= 0)
-                validationErrors.Add("'amount' must be greater than 0");
-
-            if (validationErrors.Count > 0)
-            {
-                _logger.LogWarning("Validation failed for conversion request: {Errors}",
-                    string.Join(", ", validationErrors));
-
-                return BadRequest(new ErrorResponse
-                {
-                    Error = "BadRequest",
-                    Message = "Invalid request parameters",
-                    Timestamp = DateTime.UtcNow,
-                    CorrelationId = HttpContext.TraceIdentifier,
-                    Details = new Dictionary<string, string[]>
-                    {
-                        { "validation", validationErrors.ToArray() }
-                    }
-                });
-            }
-
             // Perform currency conversion
             var conversionResult = await _rateService.ConvertCurrencyAsync(
                 request.From.ToUpperInvariant(),

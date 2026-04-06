@@ -1,4 +1,3 @@
-```
 # Build artifacts and binaries
 *.exe
 *.dll
@@ -55,4 +54,3 @@ julia-*/
 zig*/
 .gradle/
 target/
-```

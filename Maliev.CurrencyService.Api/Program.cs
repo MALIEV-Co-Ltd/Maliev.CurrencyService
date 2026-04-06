@@ -94,11 +94,7 @@ try
     builder.AddIAMServiceClient("currency");
     builder.Services.AddIAMRegistration<CurrencyIAMRegistrationService>("currency");
 
-    builder.Services.AddControllers()
-        .ConfigureApiBehaviorOptions(options =>
-        {
-            options.SuppressModelStateInvalidFilter = true;
-        });
+    builder.Services.AddControllers();
 
     var app = builder.Build();
 

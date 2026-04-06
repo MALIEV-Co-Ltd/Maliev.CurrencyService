@@ -12,19 +12,21 @@ public class ConvertCurrencyRequest
     /// </summary>
     [Required]
     [StringLength(3, MinimumLength = 3)]
-    public required string From { get; set; }
+    [RegularExpression("^[A-Z]{3}$", ErrorMessage = "'from' currency code must be 3 uppercase letters.")]
+    public required string From { get; init; }
 
     /// <summary>
     /// The target currency code (ISO 4217, e.g., "EUR").
     /// </summary>
     [Required]
     [StringLength(3, MinimumLength = 3)]
-    public required string To { get; set; }
+    [RegularExpression("^[A-Z]{3}$", ErrorMessage = "'to' currency code must be 3 uppercase letters.")]
+    public required string To { get; init; }
 
     /// <summary>
     /// The amount to convert.
     /// </summary>
     [Required]
-    [Range(0.01, 1000000000000.00, ErrorMessage = "Amount must be greater than 0")]
-    public decimal Amount { get; set; }
+    [Range(typeof(decimal), "0.0000000000000000000000000001", "79228162514264337593543950335", ErrorMessage = "'amount' must be greater than 0.")]
+    public decimal Amount { get; init; }
 }

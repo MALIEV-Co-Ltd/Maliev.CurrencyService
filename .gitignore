@@ -1,213 +1,56 @@
-# Build results
-[Bb]in/
-[Oo]bj/
-[Dd]ebug/
-[Dd]ebugPublic/
-[Rr]elease/
-[Rr]eleases/
-x64/
-x86/
-[Aa][Rr][Mm]/
-[Aa][Rr][Mm]64/
-bld/
-[Ll]og/
-[Ll]ogs/
-[Dd]ebugPS/
-[Rr]eleasePS/
-dlldata.c
-Generated\ Files/
-
-# Build artifacts
-*.dll
+# Build artifacts and binaries
 *.exe
-*.pdb
-*.mdb
-*.ilk
-*.meta
+*.dll
+*.so
+*.a
 *.obj
-*.iobj
-*.pch
-*.ipdb
-*.pgc
-*.pgd
-*.rsp
-*.sbr
-*.tlb
-*.tli
-*.tlh
-*.tmp
-*.tmp_proj
-*_wpftmp.csproj
-*.vspscc
-*.vssscc
-.builds
-*.pidb
-*.svclog
-*.scc
-*.ilk
-*.aps
-*.ncb
-*.opendb
-*.opensdf
-*.sdf
-*.cachefile
-*.VC.db
-*.VC.VC.opendb
-*.psess
-*.vsp
-*.vspx
-*.sap
-*.e2e
-$tf/
-*.gpState
-orleans.codegen.cs
+*.out
+bin/
+obj/
+Debug/
+Release/
 
-# IDE files
-.vs/
-.vscode/
-.idea/
-*.swp
-*.swo
-*.user
-*.suo
-*.sln.docstates
-*.sln.iml
-_ReSharper*/
-*.[Rr]e[Ss]harper
-*.DotSettings.user
-_TeamCity*
-.ntvs_analysis.dat
-.cr/personal
-BenchmarkDotNet.Artifacts/
-
-# NuGet Packages
-*.nupkg
-*.snupkg
+# Dependencies
 packages/
 node_modules/
 .nuget/
-project.lock.json
-project.fragment.lock.json
-artifacts/
+.nyc_output/
+coverage/
 
-# Environment & Secrets
-*.env
-*.env.*
-secrets.yaml
-*.secret.yaml
-k8s/*-secret.yaml
-appsettings.Local.json
-appsettings.*.local.json
+# IDE files
+.vs/
+.idea/
+*.userprefs
+*.suo
+*.user
+*.aps
+*.ncb
+*.log
+*.tmp
 
 # OS files
 .DS_Store
 Thumbs.db
-NUL
-ehthumbs.db
 
-# Temporary & Logs
-*.log
-*.bak
-*.sql
-build_errors.txt
-ClientBin/
-~$*
-*~
-*.dbmdl
-*.dbproj.schemaview
-*.jfm
-*.pfx
-*.publishsettings
-logs/
-*.csv.bak
-currency-*.csv
-parse_currency_csv.py
-*.temp
+# Environment
+.env
+.env.local
+*.env.*
 
-# Test Artifacts
-TestResults/
-[Tt]est[Rr]esult*/
-[Bb]uild[Ll]og.*
-*.trx
-*.coverage
-*.coveragexml
+# Test coverage
 coverage/
-*.VisualState.xml
-TestResult.xml
-nunit-*.xml
-*.dotCover
-.axoCover/*
-!.axoCover/settings.json
-coverage*.json
-coverage*.xml
-coverage*.info
-_NCrunch_*
-.*crunch*.local.xml
-nCrunchTemp_*
-*.mm.*
-AutoTest.Net/
-*.dotCover
-CoverageReport/
-*.cobertura.xml
-*test-output.txt
-*_error.txt
+htmlcov/
+*.coverage
 
-# Repository Specific
-.claude/settings.local.json
-.gemini/settings.local.json
-*MIGRATION*.md
-*SUMMARY*.md
-*AUDIT*.md
-*.Improvements.md
+# Compiled files
+*.compiled
+*.dll
+*.exe
+*.pdb
+*.so
 
-# Publishing
-publish/
-*.[Pp]ublish.xml
-*.azurePubxml
-*.pubxml
-*.publishproj
-csx/
-*.build.csdef
-ecf/
-rcf/
-AppPackages/
-BundleArtifacts/
-Package.StoreAssociation.xml
-_pkginfo.txt
-*.appx
-*.appxbundle
-*.appxupload
-Generated_Code/
-_UpgradeReport_Files/
-Backup*/
-UpgradeLog*.XML
-UpgradeLog*.htm
-CConversionReport.html
-ServiceFabricBackup/
-*.rptproj.bak
-MigrationBackup/
-
-# Database
-*.mdf
-*.ldf
-*.ndf
-
-# Business Intelligence
-*.rdl.data
-*.bim.layout
-*.bim_*.settings
-*.rptproj.rsuser
-*- [Bb]ackup.rdl
-
-# OpenAPI & Documentation
-*-openapi.json
-*-openapi-*.json
-StyleCopReport.xml
-DocProject/buildhelp/
-DocProject/Help/
-
-# Enforced Rules (User Request)
-appsettings.Development.json
-docker-compose*.yml
-docker-compose.override.yml
-code-coverage/
+# Package manager
+julia-*/
+zig*/
+.gradle/
+target/

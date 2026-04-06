@@ -111,27 +111,8 @@ public class TestsExtra2
             Assert.Equal("2025-01-15T00:00:00Z", dto.Timestamp);
         }
 
-        [Fact]
-        public void SnapshotEntryDto_RegularExpression_ForFromCurrency()
-        {
-            var type = typeof(SnapshotEntryDto);
-            var fromProperty = type.GetProperty(nameof(SnapshotEntryDto.From));
-            Assert.NotNull(fromProperty);
-
-            var regexAttr = fromProperty.GetCustomAttributes(typeof(System.ComponentModel.DataAnnotations.RegularExpressionAttribute), false);
-            Assert.NotEmpty(regexAttr);
-        }
-
-        [Fact]
-        public void SnapshotEntryDto_RangeAttribute_ForRate()
-        {
-            var type = typeof(SnapshotEntryDto);
-            var rateProperty = type.GetProperty(nameof(SnapshotEntryDto.Rate));
-            Assert.NotNull(rateProperty);
-
-            var rangeAttr = rateProperty.GetCustomAttributes(typeof(System.ComponentModel.DataAnnotations.RangeAttribute), false);
-            Assert.NotEmpty(rangeAttr);
-        }
+        // NOTE: Data annotations were removed from SnapshotEntryDto to support dry-run mode.
+        // The controller handles validation manually to return detailed error reports.
     }
 
     public class BulkUpdateRatesRequestValidationTests

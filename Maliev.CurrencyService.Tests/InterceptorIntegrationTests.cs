@@ -57,7 +57,7 @@ public class InterceptorIntegrationTests : IClassFixture<BaseIntegrationTestFact
         // Assert Audit
         _auditLoggerMock.Verify(
             x => x.Log(
-                LogLevel.Information,
+                LogLevel.Debug,
                 It.IsAny<EventId>(),
                 It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("Audit: Added on Currency")),
                 It.IsAny<Exception>(),

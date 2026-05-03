@@ -79,7 +79,7 @@ public class RatesControllerMoreTests
         var result = await _controller.GetExchangeRate("USD", "EUR", "snapshot", DateOnly.FromDateTime(DateTime.UtcNow), CancellationToken.None);
 
         var okResult = Assert.IsType<OkObjectResult>(result.Result);
-        Assert.True(_controller.Response.Headers["Cache-Control"].ToString().Contains("max-age=86400"));
+        Assert.Contains("max-age=86400", _controller.Response.Headers["Cache-Control"].ToString());
     }
 
     [Fact]
@@ -103,7 +103,7 @@ public class RatesControllerMoreTests
         var result = await _controller.GetExchangeRate("USD", "EUR", "live", null, CancellationToken.None);
 
         var okResult = Assert.IsType<OkObjectResult>(result.Result);
-        Assert.True(_controller.Response.Headers["Cache-Control"].ToString().Contains("max-age=300"));
+        Assert.Contains("max-age=300", _controller.Response.Headers["Cache-Control"].ToString());
     }
 
     [Fact]
@@ -127,7 +127,7 @@ public class RatesControllerMoreTests
         var result = await _controller.GetExchangeRate("USD", "EUR", "live", null, CancellationToken.None);
 
         var okResult = Assert.IsType<OkObjectResult>(result.Result);
-        Assert.True(_controller.Response.Headers["X-Rate-Staleness"].ToString().Contains("stale"));
+        Assert.Contains("stale", _controller.Response.Headers["X-Rate-Staleness"].ToString());
     }
 
     [Fact]
@@ -402,7 +402,7 @@ public class CurrenciesControllerMoreTests
         var result = await _controller.ListCurrencies(1, 50, null, CancellationToken.None);
 
         var okResult = Assert.IsType<OkObjectResult>(result.Result);
-        Assert.True(_controller.Response.Headers["Cache-Control"].ToString().Contains("max-age=300"));
+        Assert.Contains("max-age=300", _controller.Response.Headers["Cache-Control"].ToString());
     }
 
     [Fact]
@@ -469,7 +469,7 @@ public class CurrenciesControllerMoreTests
 
         await _controller.GetByCode("USD", CancellationToken.None);
 
-        Assert.True(_controller.Response.Headers["Cache-Control"].ToString().Contains("max-age=300"));
+        Assert.Contains("max-age=300", _controller.Response.Headers["Cache-Control"].ToString());
     }
 
     [Fact]
@@ -494,7 +494,7 @@ public class CurrenciesControllerMoreTests
 
         await _controller.GetCurrencyById(currency.Id, CancellationToken.None);
 
-        Assert.True(_controller.Response.Headers["Cache-Control"].ToString().Contains("max-age=300"));
+        Assert.Contains("max-age=300", _controller.Response.Headers["Cache-Control"].ToString());
     }
 
     [Fact]
@@ -553,7 +553,7 @@ public class CurrenciesControllerMoreTests
 
         await _controller.GetCurrencyByCountryPath("TH", CancellationToken.None);
 
-        Assert.True(_controller.Response.Headers["Cache-Control"].ToString().Contains("max-age=3600"));
+        Assert.Contains("max-age=3600", _controller.Response.Headers["Cache-Control"].ToString());
     }
 
     [Fact]

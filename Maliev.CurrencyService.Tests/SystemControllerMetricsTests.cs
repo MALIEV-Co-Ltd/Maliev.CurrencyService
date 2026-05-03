@@ -19,7 +19,7 @@ public class TestsV5
     #region SystemController Tests
 
     [Fact]
-    public void SystemController_RebuildCache_RemovesCurrencyCachePattern()
+    public async Task SystemController_RebuildCache_RemovesCurrencyCachePattern()
     {
         var cacheServiceMock = new Mock<ICacheService>();
         var configMock = new Mock<IConfiguration>();
@@ -36,7 +36,7 @@ public class TestsV5
         httpContext.TraceIdentifier = "test-trace-id";
         controller.ControllerContext = new ControllerContext { HttpContext = httpContext };
 
-        var result = controller.RebuildCache(CancellationToken.None).Result;
+        var result = await controller.RebuildCache(CancellationToken.None);
 
         var okResult = Assert.IsType<OkObjectResult>(result);
         Assert.NotNull(okResult.Value);

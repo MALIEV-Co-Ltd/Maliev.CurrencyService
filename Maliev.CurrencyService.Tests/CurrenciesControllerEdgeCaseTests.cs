@@ -501,7 +501,7 @@ public class RatesControllerEdgeCaseTests
         var result = await _controller.GetExchangeRate("USD", "EUR", "live", null, CancellationToken.None);
 
         var okResult = Assert.IsType<OkObjectResult>(result.Result);
-        Assert.NotNull(_controller.Response.Headers.CacheControl);
+        Assert.NotEmpty(_controller.Response.Headers.CacheControl.ToString());
     }
 
     [Fact]
@@ -526,7 +526,7 @@ public class RatesControllerEdgeCaseTests
         var result = await _controller.GetExchangeRate("USD", "EUR", "snapshot", DateOnly.FromDateTime(DateTime.UtcNow), CancellationToken.None);
 
         var okResult = Assert.IsType<OkObjectResult>(result.Result);
-        Assert.NotNull(_controller.Response.Headers.CacheControl);
+        Assert.NotEmpty(_controller.Response.Headers.CacheControl.ToString());
     }
 
     [Fact]
@@ -573,7 +573,7 @@ public class RatesControllerEdgeCaseTests
 
         var result = await _controller.GetExchangeRate("USD", "EUR", "live", null, CancellationToken.None);
 
-        Assert.NotNull(_controller.Response.Headers.RetryAfter);
+        Assert.NotEmpty(_controller.Response.Headers.RetryAfter.ToString());
         Assert.Equal("30", _controller.Response.Headers.RetryAfter.ToString());
     }
 }

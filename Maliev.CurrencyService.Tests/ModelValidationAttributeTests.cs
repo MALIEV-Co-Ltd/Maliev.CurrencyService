@@ -634,9 +634,9 @@ public class RatesControllerAdditionalTests
 
         await _controller.GetExchangeRate("USD", "EUR", "live", null, CancellationToken.None);
 
-        Assert.NotNull(_controller.Response.Headers.ETag);
-        Assert.NotNull(_controller.Response.Headers["X-Correlation-ID"]);
-        Assert.NotNull(_controller.Response.Headers["Cache-Control"]);
+        Assert.NotEmpty(_controller.Response.Headers.ETag.ToString());
+        Assert.NotEmpty(_controller.Response.Headers["X-Correlation-ID"].ToString());
+        Assert.NotEmpty(_controller.Response.Headers["Cache-Control"].ToString());
     }
 
     [Fact]

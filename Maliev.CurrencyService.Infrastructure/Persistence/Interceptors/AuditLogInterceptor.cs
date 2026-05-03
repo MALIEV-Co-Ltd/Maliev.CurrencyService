@@ -44,7 +44,7 @@ public class AuditLogInterceptor : SaveChangesInterceptor
     /// <inheritdoc />
     public override int SavedChanges(SaveChangesCompletedEventData eventData, int result)
     {
-        foreach (var log in _tempLogs) _logger.LogInformation("{Log}", log);
+        foreach (var log in _tempLogs) _logger.LogDebug("{Log}", log);
         _tempLogs.Clear();
         return base.SavedChanges(eventData, result);
     }
@@ -52,7 +52,7 @@ public class AuditLogInterceptor : SaveChangesInterceptor
     /// <inheritdoc />
     public override ValueTask<int> SavedChangesAsync(SaveChangesCompletedEventData eventData, int result, CancellationToken cancellationToken = default)
     {
-        foreach (var log in _tempLogs) _logger.LogInformation("{Log}", log);
+        foreach (var log in _tempLogs) _logger.LogDebug("{Log}", log);
         _tempLogs.Clear();
         return base.SavedChangesAsync(eventData, result, cancellationToken);
     }

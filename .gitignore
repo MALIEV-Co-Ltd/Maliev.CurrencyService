@@ -23,6 +23,9 @@ coverage/
 *.userprefs
 *.suo
 *.user
+*.csproj.user
+*.rsuser
+*.DotSettings.user
 *.aps
 *.ncb
 *.log

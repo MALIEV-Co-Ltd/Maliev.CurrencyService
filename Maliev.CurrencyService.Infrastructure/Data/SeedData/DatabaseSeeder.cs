@@ -26,21 +26,25 @@ public static class DatabaseSeeder
 
         try
         {
-            if (await context.Currencies.AnyAsync())
+            var hasCurrencies = await context.Currencies.AnyAsync();
+            if (hasCurrencies)
             {
                 logger.LogInformation("Currencies table already has data. Skipping seed.");
-                return;
+            }
+            else
+            {
+                logger.LogInformation("Seeding currencies from C# seed data...");
+                var currencies = CurrencySeedData.GetAll().ToList();
+
+                var strategy = context.Database.CreateExecutionStrategy();
+                await strategy.ExecuteAsync(async () =>
+                {
+                    await BulkInsertCurrenciesAsync(context, currencies);
+                    logger.LogInformation("Successfully seeded {Count} currencies.", currencies.Count);
+                });
             }
 
-            logger.LogInformation("Seeding currencies from C# seed data...");
-            var currencies = CurrencySeedData.GetAll().ToList();
-
-            var strategy = context.Database.CreateExecutionStrategy();
-            await strategy.ExecuteAsync(async () =>
-            {
-                await BulkInsertCurrenciesAsync(context, currencies);
-                logger.LogInformation("Successfully seeded {Count} currencies.", currencies.Count);
-            });
+            await SeedCountryCurrencyMappingsAsync(context, logger);
         }
         catch (Exception ex)
         {
@@ -61,5 +65,50 @@ public static class DatabaseSeeder
 
         await context.Currencies.AddRangeAsync(currencies);
         await context.SaveChangesAsync();
+    }
+
+    private static async Task SeedCountryCurrencyMappingsAsync(CurrencyDbContext context, ILogger logger)
+    {
+        var mappings = new[]
+        {
+            new CountryCurrency
+            {
+                Id = Guid.NewGuid(),
+                CountryIso2 = "TH",
+                CountryIso3 = "THA",
+                CurrencyCode = "THB",
+                IsPrimary = true,
+                CreatedAt = DateTime.UtcNow
+            },
+            new CountryCurrency
+            {
+                Id = Guid.NewGuid(),
+                CountryIso2 = "US",
+                CountryIso3 = "USA",
+                CurrencyCode = "USD",
+                IsPrimary = true,
+                CreatedAt = DateTime.UtcNow
+            }
+        };
+
+        var added = 0;
+        foreach (var mapping in mappings)
+        {
+            var exists = await context.CountryCurrencies.AnyAsync(
+                c => c.CountryIso2 == mapping.CountryIso2 && c.CurrencyCode == mapping.CurrencyCode);
+            if (exists)
+            {
+                continue;
+            }
+
+            context.CountryCurrencies.Add(mapping);
+            added++;
+        }
+
+        if (added > 0)
+        {
+            await context.SaveChangesAsync();
+            logger.LogInformation("Seeded {Count} country-currency mappings.", added);
+        }
     }
 }

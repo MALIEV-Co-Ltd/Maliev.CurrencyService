@@ -64,7 +64,7 @@ public class BaseIntegrationTestFactory<TProgram, TDbContext> : WebApplicationFa
         {
             if (!_containersStarted)
             {
-                _postgresContainer = 
+                _postgresContainer =
 #pragma warning disable CS0618
         new PostgreSqlBuilder().WithImage("postgres:18-alpine")
                     .Build();
@@ -175,13 +175,21 @@ public class BaseIntegrationTestFactory<TProgram, TDbContext> : WebApplicationFa
                 ["ConnectionStrings:rabbitmq"] = _rabbitmqContainer!.GetConnectionString(),
                 ["CORS:AllowedOrigins:0"] = "http://localhost:3000",
                 ["CORS_ALLOWED_ORIGINS"] = "http://localhost:3000",
+                ["ServiceAuthentication:ClientId"] = "service-currency-service",
+                ["ServiceAuthentication:ClientSecret"] = "currency-test-secret-with-at-least-32-bytes",
+                ["Services:AuthService:BaseUrl"] = "https://auth.test",
+                ["Services:IAMService:BaseUrl"] = "https://iam.test",
+                ["Jwt:PublicKey"] = Convert.ToBase64String(
+                    Encoding.UTF8.GetBytes(_testRsa.ExportSubjectPublicKeyInfoPem())),
+                ["Jwt:Issuer"] = "https://test-issuer.maliev.com",
+                ["Jwt:Audience"] = "https://test-audience.maliev.com",
                 ["RateLimiting:PermitLimit"] = "10000",
                 ["RateLimiting:WindowMinutes"] = "1",
                 ["RateLimiting:Admin:PermitLimit"] = "10000",
                 ["RateLimiting:Auth:PermitLimit"] = "10000",
                 ["RateLimiting:Public:PermitLimit"] = "10000",
                 ["IAM:RegistrationDelaySeconds"] = "0",
-                ["Features:FailOpenOnIAMError"] = "true"
+                ["Features:FailOpenOnIAMError"] = "false"
             });
         });
 

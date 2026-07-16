@@ -91,7 +91,8 @@ try
     builder.Services.AddHostedService<SnapshotProcessingService>();
 
     // IAM Registration
-    builder.AddIAMServiceClient("currency");
+    builder.AddAuthServiceTokenExchange("CurrencyService");
+    builder.AddAuthServiceIAMClient();
     builder.Services.AddIAMRegistration<CurrencyIAMRegistrationService>("currency");
 
     builder.Services.AddControllers();

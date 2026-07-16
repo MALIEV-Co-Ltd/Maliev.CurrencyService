@@ -189,7 +189,7 @@ public class BaseIntegrationTestFactory<TProgram, TDbContext> : WebApplicationFa
                 ["RateLimiting:Auth:PermitLimit"] = "10000",
                 ["RateLimiting:Public:PermitLimit"] = "10000",
                 ["IAM:RegistrationDelaySeconds"] = "0",
-                ["Features:FailOpenOnIAMError"] = "true"
+                ["Features:FailOpenOnIAMError"] = "false"
             });
         });
 

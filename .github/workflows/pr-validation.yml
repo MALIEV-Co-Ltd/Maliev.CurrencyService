@@ -1,15 +1,16 @@
-name: CI - Main
+name: Pull Request Validation
 
 on:
-  push:
+  pull_request:
     branches:
+      - develop
       - main
 
 permissions:
   contents: read
 
 concurrency:
-  group: currency-service-main-${{ github.ref }}
+  group: currency-service-pr-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:

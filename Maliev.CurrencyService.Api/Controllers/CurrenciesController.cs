@@ -4,6 +4,8 @@ using Maliev.CurrencyService.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace Maliev.CurrencyService.Api.Controllers;
 
@@ -31,9 +33,9 @@ public class CurrenciesController : ControllerBase
     public async Task<ActionResult<CurrencyDto>> GetById(int id)
     {
         _logger.LogDebug("Getting currency by ID: {Id}", id);
-        
+
         var currency = await _currencyService.GetByIdAsync(id);
-        
+
         if (currency == null)
         {
             _logger.LogWarning("Currency not found with ID: {Id}", id);
@@ -51,14 +53,14 @@ public class CurrenciesController : ControllerBase
     public async Task<ActionResult<CurrencyDto>> GetByCode(string code)
     {
         _logger.LogDebug("Getting currency by code: {Code}", code);
-        
+
         if (string.IsNullOrWhiteSpace(code) || code.Length != 3)
         {
             return BadRequest("Currency code must be exactly 3 characters");
         }
 
         var currency = await _currencyService.GetByShortNameAsync(code);
-        
+
         if (currency == null)
         {
             _logger.LogWarning("Currency not found with code: {Code}", code);
@@ -78,7 +80,7 @@ public class CurrenciesController : ControllerBase
         [FromQuery] int pageSize = 20,
         [FromQuery] string? search = null)
     {
-        _logger.LogDebug("Getting currencies - Page: {Page}, PageSize: {PageSize}, Search: {Search}", 
+        _logger.LogDebug("Getting currencies - Page: {Page}, PageSize: {PageSize}, Search: {Search}",
             page, pageSize, search);
 
         if (page < 1)
@@ -92,8 +94,8 @@ public class CurrenciesController : ControllerBase
         }
 
         var result = await _currencyService.GetAllAsync(page, pageSize, search);
-        
-        _logger.LogDebug("Retrieved {Count} currencies out of {Total}", 
+
+        _logger.LogDebug("Retrieved {Count} currencies out of {Total}",
             result.Items.Count(), result.TotalCount);
 
         return Ok(result);
@@ -106,9 +108,9 @@ public class CurrenciesController : ControllerBase
     public async Task<ActionResult<IEnumerable<string>>> GetCurrencyCodes()
     {
         _logger.LogDebug("Getting all currency codes");
-        
+
         var codes = await _currencyService.GetCurrencyCodesAsync();
-        
+
         return Ok(codes);
     }
 
@@ -120,7 +122,7 @@ public class CurrenciesController : ControllerBase
     [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
     public async Task<ActionResult<CurrencyDto>> Create([FromBody] CreateCurrencyRequest request)
     {
-        _logger.LogDebug("Creating currency: {ShortName} - {LongName}", 
+        _logger.LogDebug("Creating currency: {ShortName} - {LongName}",
             request.ShortName, request.LongName);
 
         if (!ModelState.IsValid)
@@ -131,15 +133,22 @@ public class CurrenciesController : ControllerBase
         try
         {
             var currency = await _currencyService.CreateAsync(request);
-            
-            _logger.LogInformation("Created currency: {ShortName} - {LongName} with ID {Id}", 
+
+            _logger.LogInformation("Created currency: {ShortName} - {LongName} with ID {Id}",
                 currency.ShortName, currency.LongName, currency.Id);
 
             return CreatedAtAction(nameof(GetById), new { id = currency.Id }, currency);
         }
         catch (InvalidOperationException ex) when (ex.Message.Contains("duplicate") || ex.Message.Contains("unique"))
         {
-            _logger.LogWarning("Attempt to create duplicate currency: {ShortName} - {LongName}", 
+            _logger.LogWarning("Attempt to create duplicate currency: {ShortName} - {LongName}",
+                request.ShortName, request.LongName);
+            return Conflict("A currency with this code or name already exists");
+        }
+        catch (DbUpdateException ex) when (
+            ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
+        {
+            _logger.LogWarning("Attempt to create duplicate currency: {ShortName} - {LongName}",
                 request.ShortName, request.LongName);
             return Conflict("A currency with this code or name already exists");
         }
@@ -154,7 +163,7 @@ public class CurrenciesController : ControllerBase
     [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
     public async Task<ActionResult<CurrencyDto>> Update(int id, [FromBody] UpdateCurrencyRequest request)
     {
-        _logger.LogDebug("Updating currency ID {Id}: {ShortName} - {LongName}", 
+        _logger.LogDebug("Updating currency ID {Id}: {ShortName} - {LongName}",
             id, request.ShortName, request.LongName);
 
         if (!ModelState.IsValid)
@@ -165,21 +174,28 @@ public class CurrenciesController : ControllerBase
         try
         {
             var currency = await _currencyService.UpdateAsync(id, request);
-            
+
             if (currency == null)
             {
                 _logger.LogWarning("Attempt to update non-existent currency ID: {Id}", id);
                 return NotFound($"Currency with ID {id} not found");
             }
 
-            _logger.LogInformation("Updated currency ID {Id}: {ShortName} - {LongName}", 
+            _logger.LogInformation("Updated currency ID {Id}: {ShortName} - {LongName}",
                 id, currency.ShortName, currency.LongName);
 
             return Ok(currency);
         }
         catch (InvalidOperationException ex) when (ex.Message.Contains("duplicate") || ex.Message.Contains("unique"))
         {
-            _logger.LogWarning("Attempt to update currency ID {Id} with duplicate data: {ShortName} - {LongName}", 
+            _logger.LogWarning("Attempt to update currency ID {Id} with duplicate data: {ShortName} - {LongName}",
+                id, request.ShortName, request.LongName);
+            return Conflict("A currency with this code or name already exists");
+        }
+        catch (DbUpdateException ex) when (
+            ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
+        {
+            _logger.LogWarning("Attempt to update currency ID {Id} with duplicate data: {ShortName} - {LongName}",
                 id, request.ShortName, request.LongName);
             return Conflict("A currency with this code or name already exists");
         }
@@ -195,7 +211,7 @@ public class CurrenciesController : ControllerBase
         _logger.LogDebug("Deleting currency ID: {Id}", id);
 
         var deleted = await _currencyService.DeleteAsync(id);
-        
+
         if (!deleted)
         {
             _logger.LogWarning("Attempt to delete non-existent currency ID: {Id}", id);
@@ -203,7 +219,7 @@ public class CurrenciesController : ControllerBase
         }
 
         _logger.LogInformation("Deleted currency ID: {Id}", id);
-        
+
         return NoContent();
     }
 }

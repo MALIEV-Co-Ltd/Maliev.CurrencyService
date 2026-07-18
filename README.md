@@ -301,11 +301,15 @@ dotnet test --filter "FullyQualifiedName~HealthCheckTests"
 
 ### CI/CD Pipeline
 
-The service uses GitOps deployment with GitHub Actions:
+GitHub Actions provides credential-free validation for pull requests, `main`,
+`develop`, and `release/v*` tags. The shared validation job restores and audits
+dependencies, builds the solution, and runs the complete test suite.
 
-1. **Development**: Push to `develop` → Build → Test → Deploy to dev environment
-2. **Staging**: Create tag `release/v*` → Build → Test → Deploy to staging
-3. **Production**: Push to `main` → Build → Test → Deploy to production
+No workflow in this repository publishes container images, authenticates to
+Google Cloud, modifies the GitOps repository, or deploys to Kubernetes. Release
+promotion remains intentionally separate and pending Aspire owner review. The
+owner must approve the final release after local Aspire validation; this CI
+boundary does not authorize or perform a production cutover.
 
 ### Environment Configuration
 

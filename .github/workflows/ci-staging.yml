@@ -1,17 +1,9 @@
-name: CI - Release Candidate
-
+name: CI - Release Tag
 on:
   push:
-    tags:
-      - 'release/v*'
-
+    tags: ["release/v*"]
 permissions:
   contents: read
-
-concurrency:
-  group: currency-service-release-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
   validate:
     uses: ./.github/workflows/_validate.yml

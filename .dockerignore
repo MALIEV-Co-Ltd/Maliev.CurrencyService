@@ -89,3 +89,24 @@ docker-compose*.yml
 # Secrets
 secrets.yaml
 secrets.json
+
+# Speckit documentation (not needed in container)
+.specify/
+.claude/
+specs/
+
+# Monitoring assets (not needed in runtime container)
+monitoring/
+
+# Additional .NET artifacts
+**/*.DotSettings
+**/*.DotSettings.user
+**/launchSettings.json
+**/Properties/launchSettings.json
+
+# NuGet packages (restored during build)
+*.nupkg
+*.snupkg
+
+# Entity Framework migrations temporary files
+**/Migrations/*.Designer.cs.bak

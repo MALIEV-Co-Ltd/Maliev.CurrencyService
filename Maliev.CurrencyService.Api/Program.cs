@@ -1,265 +1,166 @@
-using Asp.Versioning;
-using Asp.Versioning.ApiExplorer;
-using HealthChecks.UI.Client;
-using Maliev.CurrencyService.Api.Configurations;
-using Maliev.CurrencyService.Api.HealthChecks;
-using Maliev.CurrencyService.Api.Middleware;
+using Maliev.Aspire.ServiceDefaults;
+using Maliev.CurrencyService.Api.BackgroundServices;
+using Maliev.CurrencyService.Api.Metrics;
 using Maliev.CurrencyService.Api.Services;
-using Maliev.CurrencyService.Data.DbContexts;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.AspNetCore.Diagnostics.HealthChecks;
-using Microsoft.AspNetCore.HttpOverrides;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
-using Microsoft.IdentityModel.Tokens;
-using Serilog;
-using Swashbuckle.AspNetCore.SwaggerGen;
-using System.Text;
-using System.Threading.RateLimiting;
+using Maliev.CurrencyService.Application.Interfaces;
+using Maliev.CurrencyService.Infrastructure.Data.SeedData;
+using Maliev.CurrencyService.Infrastructure.Persistence;
+using Maliev.CurrencyService.Infrastructure.Persistence.Interceptors;
+using Maliev.CurrencyService.Infrastructure.Services;
+using Maliev.CurrencyService.Infrastructure.Services.External;
 
-var builder = WebApplication.CreateBuilder(args);
-
-// Configure Serilog
-Log.Logger = new LoggerConfiguration()
-    .ReadFrom.Configuration(builder.Configuration)
-    .CreateLogger();
-
-builder.Host.UseSerilog();
+// Initialize bootstrap logging
+using var loggerFactory = LoggerFactory.Create(logBuilder => logBuilder.AddConsole());
+var bootstrapLogger = loggerFactory.CreateLogger("Program");
 
 try
 {
-    Log.Information("Starting Maliev Currency Service");
+    Log.StartingHost(bootstrapLogger, "Currency Service");
 
-    // Load secrets.yaml
-    builder.Configuration.AddYamlFile("secrets.yaml", optional: true, reloadOnChange: true);
+    var builder = WebApplication.CreateBuilder(args);
 
-    // Load secrets from mounted Kubernetes secrets
-    var secretsPath = "/mnt/secrets";
-    if (Directory.Exists(secretsPath))
+    // --- Secrets & Configuration ---
+    builder.AddGoogleSecretManagerVolume(); // Load secrets from /mnt/secrets if available
+
+    // --- Infrastructure & Observability ---
+    builder.AddServiceDefaults(); // OpenTelemetry, health checks, resilience
+    builder.AddDefaultApiVersioning(); // API versioning with URL segment reader
+    builder.AddStandardMiddleware(options =>
     {
-        builder.Configuration.AddKeyPerFile(directoryPath: secretsPath, optional: true);
+        options.EnableRequestLogging = true;
+    });
+    builder.AddServiceMeters("currencies-meter"); // Register service meters for OpenTelemetry business metrics
+
+    builder.AddPostgresDbContext<CurrencyDbContext>(connectionName: "CurrencyDbContext"); // PostgreSQL with retry logic
+
+    // Add Cache Service (standardized via ServiceDefaults)
+    builder.AddStandardCache("currency:"); // Redis + in-memory fallback, memory-optimized
+    builder.Services.AddMemoryCache();
+
+    // MassTransit with RabbitMQ
+    builder.AddMassTransitWithRabbitMq();
+
+    // --- API Configuration ---
+    builder.AddStandardCors(); // CORS with fail-fast validation
+
+    // JWT Authentication (tests override via PostConfigureAll with dynamic RSA keys)
+    builder.AddJwtAuthentication();
+    builder.Services.AddPermissionAuthorization();
+
+    // Add OpenAPI (must be in Program.cs for XML comments to work via source generator)
+    if (!builder.Environment.IsProduction())
+    {
+        builder.AddStandardOpenApi(
+            title: "MALIEV Currency Service API",
+            description: "Currency and exchange rate service. Provides ISO 4217 currency metadata, country-to-currency resolution, exchange rate snapshots with historical tracking, and administrative endpoints for currency management with optimistic concurrency control.");
     }
 
-    // API Versioning
-    builder.Services.AddApiVersioning(options =>
-    {
-        options.DefaultApiVersion = new ApiVersion(1, 0);
-        options.AssumeDefaultVersionWhenUnspecified = true;
-        options.ReportApiVersions = true;
-        options.ApiVersionReader = new UrlSegmentApiVersionReader();
-    }).AddApiExplorer(options =>
-    {
-        options.GroupNameFormat = "'v'VVV";
-        options.SubstituteApiVersionInUrl = true;
-    });
+    // Add Rate Limiting
+    builder.AddStandardRateLimiting(); // Memory-optimized for low-spec nodes
+    // Add Metrics
+    builder.Services.AddSingleton<CurrencyServiceMetrics>();
+    // Register IDatabaseMetrics to resolve to the same CurrencyServiceMetrics instance
+    builder.Services.AddSingleton<Maliev.CurrencyService.Domain.Interfaces.IDatabaseMetrics>(
+        sp => sp.GetRequiredService<CurrencyServiceMetrics>());
+    // Register IProviderMetrics and IRateServiceMetrics to resolve to the same CurrencyServiceMetrics instance
+    builder.Services.AddSingleton<IProviderMetrics>(
+        sp => sp.GetRequiredService<CurrencyServiceMetrics>());
+    builder.Services.AddSingleton<IRateServiceMetrics>(
+        sp => sp.GetRequiredService<CurrencyServiceMetrics>());
 
-    // Add controllers
+    // Add Data Interceptors
+    builder.Services.AddScoped<DatabaseMetricsInterceptor>();
+    builder.Services.AddScoped<AuditLogInterceptor>();
+
+    // Add Domain Services
+    builder.Services.AddScoped<ICurrencyService, CurrencyService>();
+    builder.Services.AddScoped<ISnapshotService, SnapshotService>();
+    builder.Services.AddScoped<IRateService, RateService>();
+
+    // Add External Providers
+    builder.Services.AddHttpClient<FawazahmedProvider>().AddStandardResilienceHandler();
+    builder.Services.AddHttpClient<FrankfurterProvider>().AddStandardResilienceHandler();
+
+    // Register them as IExchangeRateProvider by resolving the typed client
+    builder.Services.AddScoped<IExchangeRateProvider>(sp => sp.GetRequiredService<FawazahmedProvider>());
+    builder.Services.AddScoped<IExchangeRateProvider>(sp => sp.GetRequiredService<FrankfurterProvider>());
+
+    builder.Services.AddScoped<ProviderChain>();
+
+    builder.Services.AddSingleton<ISnapshotQueue, SnapshotQueue>();
+    builder.Services.AddHostedService<SnapshotProcessingService>();
+
+    // IAM Registration
+    builder.AddAuthServiceTokenExchange("CurrencyService");
+    builder.AddAuthServiceIAMClient();
+    builder.Services.AddIAMRegistration<CurrencyIAMRegistrationService>("currency");
+
     builder.Services.AddControllers();
-
-    // Configure Currency DbContext
-    if (builder.Environment.IsEnvironment("Testing"))
-    {
-        builder.Services.AddDbContext<CurrencyDbContext>(options =>
-            options.UseInMemoryDatabase("TestDb"));
-    }
-    else
-    {
-        builder.Services.AddDbContext<CurrencyDbContext>(options =>
-        {
-            options.UseNpgsql(builder.Configuration.GetConnectionString("Default"));
-        });
-    }
-
-    // Configure caching
-    var cacheOptions = new CacheOptions();
-    builder.Configuration.GetSection("Cache").Bind(cacheOptions);
-    builder.Services.AddSingleton(cacheOptions);
-
-    builder.Services.AddMemoryCache(options =>
-    {
-        options.SizeLimit = cacheOptions.MaxCacheSize;
-    });
-
-    // Configure rate limiting
-    builder.Services.AddRateLimiter(options =>
-    {
-        options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-        
-        options.AddPolicy("CurrencyPolicy", context =>
-            RateLimitPartition.GetSlidingWindowLimiter(
-                partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-                factory: _ => new SlidingWindowRateLimiterOptions
-                {
-                    PermitLimit = 100,
-                    Window = TimeSpan.FromMinutes(1),
-                    SegmentsPerWindow = 2,
-                    QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
-                    QueueLimit = 10
-                }));
-    });
-
-    // Register services
-    builder.Services.AddScoped<ICurrencyService, Maliev.CurrencyService.Api.Services.CurrencyService>();
-
-    // Configure Swagger
-    builder.Services.AddTransient<IConfigureOptions<SwaggerGenOptions>, ConfigureSwaggerOptions>();
-    builder.Services.AddSwaggerGen();
-
-    // Configure CORS
-    builder.Services.AddCors(options =>
-    {
-        options.AddDefaultPolicy(
-            policy =>
-            {
-                policy.WithOrigins(
-                    "https://maliev.com",
-                    "https://*.maliev.com",
-                    "http://maliev.com",
-                    "http://*.maliev.com")
-                .AllowAnyHeader()
-                .AllowAnyMethod();
-            });
-    });
-
-    // Configure JWT Authentication (skip in Testing environment)
-    if (!builder.Environment.IsEnvironment("Testing"))
-    {
-        var jwtSection = builder.Configuration.GetSection(JwtOptions.SectionName);
-        if (jwtSection.Exists())
-        {
-            builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-                .AddJwtBearer(options =>
-                {
-                    var jwtOptions = new JwtOptions
-                    {
-                        Issuer = "default-issuer",
-                        Audience = "default-audience", 
-                        SecurityKey = "default-key"
-                    };
-                    jwtSection.Bind(jwtOptions);
-
-                    options.TokenValidationParameters = new TokenValidationParameters
-                    {
-                        ValidateIssuer = true,
-                        ValidateAudience = true,
-                        ValidateLifetime = true,
-                        ValidateIssuerSigningKey = true,
-                        ValidIssuer = jwtOptions.Issuer,
-                        ValidAudience = jwtOptions.Audience,
-                        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtOptions.SecurityKey))
-                    };
-                });
-        }
-        else
-        {
-            // Log warning that JWT is not configured for local development
-            Log.Warning("JWT configuration not found - API will start but authentication will not work. Configure JWT secrets for full functionality.");
-        }
-    }
-
-    builder.Services.AddAuthorization();
-
-    builder.Services.Configure<ForwardedHeadersOptions>(options =>
-    {
-        options.ForwardedHeaders =
-            ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
-        options.KnownNetworks.Clear();
-        options.KnownProxies.Clear();
-    });
-
-    builder.Services.AddHealthChecks()
-        .AddDbContextCheck<CurrencyDbContext>("CurrencyDbContext", tags: new[] { "readiness" })
-        .AddCheck<DatabaseHealthCheck>("Database Health Check", tags: new[] { "readiness" });
 
     var app = builder.Build();
 
-    app.UseForwardedHeaders();
+    // Force instantiation of metrics service to ensure OpenTelemetry meters are created
+    var metricsService = app.Services.GetRequiredService<CurrencyServiceMetrics>();
 
-    // Add correlation ID middleware early in pipeline
-    app.UseCorrelationId();
+    var logger = app.Services.GetRequiredService<ILogger<Program>>();
 
-    // Configure the HTTP request pipeline
-    app.UseSwagger(c => 
+    // Run database migrations on startup
+    await app.MigrateDatabaseAsync<CurrencyDbContext>();
+
+    // Seed currency data
+    await app.SeedCurrenciesAsync();
+
+    app.UseStandardMiddleware();
+    if (!app.Environment.IsDevelopment())
     {
-        c.RouteTemplate = "currencies/swagger/{documentName}/swagger.json";
-    });
-    app.UseSwaggerUI(c =>
-    {
-        var provider = app.Services.GetRequiredService<IApiVersionDescriptionProvider>();
-        foreach (var description in provider.ApiVersionDescriptions)
-        {
-            c.SwaggerEndpoint($"/currencies/swagger/{description.GroupName}/swagger.json", description.GroupName.ToUpperInvariant());
-        }
-        c.RoutePrefix = "currencies/swagger";
-    });
-
-    app.UseMiddleware<ExceptionHandlingMiddleware>();
-    app.UseHttpsRedirection();
-
+        app.UseHttpsRedirection();
+    }
     app.UseRateLimiter();
     app.UseCors();
 
-    // JWT Authentication & Authorization (only if configured and not in Testing environment)
-    if (!app.Environment.IsEnvironment("Testing"))
-    {
-        var jwtSection = app.Configuration.GetSection(JwtOptions.SectionName);
-        if (jwtSection.Exists())
-        {
-            app.UseAuthentication();
-            app.UseAuthorization();
-        }
-    }
+    // JWT Authentication & Authorization
+    app.UseAuthentication();
+    app.UseAuthorization();
 
+    // Map endpoints after middleware
     app.MapControllers();
 
-    // Health check endpoints
-    app.MapGet("/currencies/liveness", () => "Healthy");
+    // Map Aspire default endpoints (/health, /alive, /metrics)
+    app.MapDefaultEndpoints(servicePrefix: "currency");
 
-    app.MapHealthChecks("/currencies/readiness", new HealthCheckOptions
-    {
-        Predicate = healthCheck => healthCheck.Tags.Contains("readiness"),
-        ResponseWriter = UIResponseWriter.WriteHealthCheckUIResponse
-    });
+    // Map OpenAPI and Scalar documentation (dev/staging only)
+    app.MapApiDocumentation(servicePrefix: "currency");
 
-    // Ensure database is created and seeded
-    using (var scope = app.Services.CreateScope())
-    {
-        var context = scope.ServiceProvider.GetRequiredService<CurrencyDbContext>();
-        try
-        {
-            if (context.Database.IsRelational())
-            {
-                context.Database.Migrate();
-            }
-            else
-            {
-                context.Database.EnsureCreated();
-            }
-            Log.Information("Database initialization completed");
-        }
-        catch (Exception ex)
-        {
-            Log.Error(ex, "An error occurred while initializing the database");
-        }
-    }
-
-    Log.Information("Maliev Currency Service started successfully");
-    app.Run();
+    Log.ServiceStarted(logger, "Currency Service");
+    await app.RunAsync();
 }
 catch (Exception ex)
 {
-    Log.Fatal(ex, "Application terminated unexpectedly");
+    Log.HostTerminated(bootstrapLogger, ex, "Currency Service");
+    // Force flush to ensure Aspire captures the error before process exits
+    Console.Out.Flush();
+    Console.Error.Flush();
+    throw;
 }
 finally
 {
-    Log.CloseAndFlush();
+    loggerFactory.Dispose();
 }
 
-public class JwtOptions
+/// <summary>
+/// Main entry point for the Maliev Currency Service API.
+/// </summary>
+public partial class Program
 {
-    public const string SectionName = "Jwt";
-    
-    public required string Issuer { get; set; }
-    public required string Audience { get; set; }
-    public required string SecurityKey { get; set; }
+    internal static partial class Log
+    {
+        [LoggerMessage(Level = LogLevel.Information, Message = "Starting {ServiceName} host")]
+        public static partial void StartingHost(ILogger logger, string serviceName);
+
+        [LoggerMessage(Level = LogLevel.Critical, Message = "{ServiceName} host terminated unexpectedly during startup")]
+        public static partial void HostTerminated(ILogger logger, Exception ex, string serviceName);
+
+        [LoggerMessage(Level = LogLevel.Information, Message = "{ServiceName} started successfully")]
+        public static partial void ServiceStarted(ILogger logger, string serviceName);
+    }
 }

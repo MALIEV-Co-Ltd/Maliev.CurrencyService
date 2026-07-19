@@ -19,7 +19,7 @@ namespace Maliev.CurrencyService.Tests;
 
 public class RateServiceCacheTests : IAsyncLifetime
 {
-    private readonly PostgreSqlContainer _dbContainer = 
+    private readonly PostgreSqlContainer _dbContainer =
 #pragma warning disable CS0618
         new PostgreSqlBuilder().WithImage("postgres:18-alpine")
         .Build();
@@ -328,7 +328,7 @@ public class RateServiceCacheTests : IAsyncLifetime
 
 public class SnapshotServiceBatchTests : IAsyncLifetime
 {
-    private readonly PostgreSqlContainer _dbContainer = 
+    private readonly PostgreSqlContainer _dbContainer =
                 new PostgreSqlBuilder().WithImage("postgres:18-alpine")
         .Build();
 
@@ -649,7 +649,7 @@ public class SnapshotServiceBatchTests : IAsyncLifetime
 
 public class CurrencyServiceCachingTests : IAsyncLifetime
 {
-    private readonly PostgreSqlContainer _dbContainer = 
+    private readonly PostgreSqlContainer _dbContainer =
                 new PostgreSqlBuilder().WithImage("postgres:18-alpine")
         .Build();
 #pragma warning restore CS0618

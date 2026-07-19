@@ -48,7 +48,7 @@ public class CurrencyConversionTests : IClassFixture<BaseIntegrationTestFactory<
         // Arrange - Setup mocks for the provider chain
         var fawazahmedMock = new Mock<IExchangeRateProvider>();
         var frankfurterMock = new Mock<IExchangeRateProvider>();
-        
+
         var expectedRate = 0.0285m; // THB to USD approximate rate
         fawazahmedMock.Setup(x => x.GetRateAsync("THB", "USD", It.IsAny<CancellationToken>()))
             .ReturnsAsync(new ExchangeRate
@@ -92,14 +92,14 @@ public class CurrencyConversionTests : IClassFixture<BaseIntegrationTestFactory<
         var appLifetimeMock = new Mock<IHostApplicationLifetime>();
         var providerMetricsMock = new Mock<IProviderMetrics>();
         var providerLoggerMock = new Mock<ILogger<ProviderChain>>();
-        
+
         appLifetimeMock.Setup(x => x.ApplicationStopping).Returns(CancellationToken.None);
 
         var providerChain = new ProviderChain(
             new[] { fawazahmedMock.Object, frankfurterMock.Object },
             providerLoggerMock.Object,
             providerMetricsMock.Object);
-        
+
         return new RateService(
             providerChain,
             cacheMock.Object,
@@ -116,7 +116,7 @@ public class CurrencyConversionTests : IClassFixture<BaseIntegrationTestFactory<
         // Arrange
         var fawazahmedMock = new Mock<IExchangeRateProvider>();
         var frankfurterMock = new Mock<IExchangeRateProvider>();
-        
+
         fawazahmedMock.Setup(x => x.GetRateAsync("THB", "XXX", It.IsAny<CancellationToken>()))
             .ReturnsAsync((ExchangeRate?)null);
         frankfurterMock.Setup(x => x.GetRateAsync("THB", "XXX", It.IsAny<CancellationToken>()))
@@ -138,7 +138,7 @@ public class CurrencyConversionTests : IClassFixture<BaseIntegrationTestFactory<
         // Arrange
         var fawazahmedMock = new Mock<IExchangeRateProvider>();
         var frankfurterMock = new Mock<IExchangeRateProvider>();
-        
+
         var expectedRate = 0.024m;
         fawazahmedMock.Setup(x => x.GetRateAsync("THB", "EUR", It.IsAny<CancellationToken>()))
             .ReturnsAsync(new ExchangeRate
@@ -178,7 +178,7 @@ public class CurrencyConversionTests : IClassFixture<BaseIntegrationTestFactory<
         // Arrange
         var fawazahmedMock = new Mock<IExchangeRateProvider>();
         var frankfurterMock = new Mock<IExchangeRateProvider>();
-        
+
         fawazahmedMock.Setup(x => x.GetRateAsync("THB", "USD", It.IsAny<CancellationToken>()))
             .ReturnsAsync(new ExchangeRate
             {
@@ -212,7 +212,7 @@ public class CurrencyConversionTests : IClassFixture<BaseIntegrationTestFactory<
         // Arrange
         var fawazahmedMock = new Mock<IExchangeRateProvider>();
         var frankfurterMock = new Mock<IExchangeRateProvider>();
-        
+
         var expectedRate = 0.0285m;
         fawazahmedMock.Setup(x => x.GetRateAsync("THB", "USD", It.IsAny<CancellationToken>()))
             .ReturnsAsync(new ExchangeRate
@@ -256,7 +256,7 @@ public class CurrencyConversionTests : IClassFixture<BaseIntegrationTestFactory<
         // Arrange
         var fawazahmedMock = new Mock<IExchangeRateProvider>();
         var frankfurterMock = new Mock<IExchangeRateProvider>();
-        
+
         var expectedRate = targetCurrency switch
         {
             "USD" => 0.0285m,
@@ -307,7 +307,7 @@ public class CurrencyConversionTests : IClassFixture<BaseIntegrationTestFactory<
         // Arrange
         var fawazahmedMock = new Mock<IExchangeRateProvider>();
         var frankfurterMock = new Mock<IExchangeRateProvider>();
-        
+
         fawazahmedMock.Setup(x => x.GetRateAsync("THB", "USD", It.IsAny<CancellationToken>()))
             .ReturnsAsync(new ExchangeRate
             {

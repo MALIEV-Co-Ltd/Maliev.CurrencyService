@@ -1,43 +1,57 @@
-# Use the official .NET 9.0 runtime as the base image for running the app
-FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS base
+# syntax=docker/dockerfile:1.4
+# See https://aka.ms/customizecontainer to learn how to customize your debug container and how Visual Studio uses this Dockerfile to build your images for faster debugging.
+
+# This stage is used when running from VS in fast mode (Default for Debug configuration)
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS base
+USER $APP_UID
 WORKDIR /app
 EXPOSE 8080
 EXPOSE 8081
 
-# Use the .NET 9.0 SDK for building the application
-FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
+# This stage is used to build the service project
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
-
-# Copy project files and restore dependencies
+COPY ["Directory.Build.props", "."]
 COPY ["Maliev.CurrencyService.Api/Maliev.CurrencyService.Api.csproj", "Maliev.CurrencyService.Api/"]
-COPY ["Maliev.CurrencyService.Data/Maliev.CurrencyService.Data.csproj", "Maliev.CurrencyService.Data/"]
-RUN dotnet restore "./Maliev.CurrencyService.Api/Maliev.CurrencyService.Api.csproj"
-
-# Copy the rest of the application code
+COPY ["Maliev.CurrencyService.Application/Maliev.CurrencyService.Application.csproj", "Maliev.CurrencyService.Application/"]
+COPY ["Maliev.CurrencyService.Domain/Maliev.CurrencyService.Domain.csproj", "Maliev.CurrencyService.Domain/"]
+COPY ["Maliev.CurrencyService.Infrastructure/Maliev.CurrencyService.Infrastructure.csproj", "Maliev.CurrencyService.Infrastructure/"]
+COPY ["nuget.config", "."]
+RUN --mount=type=secret,id=nuget_username \
+  --mount=type=secret,id=nuget_password \
+  GITHUB_ACTIONS=true \
+  NUGET_USERNAME=$(cat /run/secrets/nuget_username) \
+  NUGET_PASSWORD=$(cat /run/secrets/nuget_password) \
+  dotnet restore "./Maliev.CurrencyService.Api/Maliev.CurrencyService.Api.csproj"
 COPY . .
-
-# Build the application
 WORKDIR "/src/Maliev.CurrencyService.Api"
-RUN dotnet build "./Maliev.CurrencyService.Api.csproj" -c $BUILD_CONFIGURATION -o /app/build
+RUN GITHUB_ACTIONS=true dotnet build "./Maliev.CurrencyService.Api.csproj" -c $BUILD_CONFIGURATION -o /app/build
 
-# Publish the application
+# This stage is used to publish the service project to be copied to the final stage
 FROM build AS publish
 ARG BUILD_CONFIGURATION=Release
-RUN dotnet publish "./Maliev.CurrencyService.Api.csproj" -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
+RUN GITHUB_ACTIONS=true dotnet publish "./Maliev.CurrencyService.Api.csproj" -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
 
-# Final stage: copy the published application to the runtime image
+# This stage is used in production or when running from VS in regular mode (Default when not using the Debug configuration)
 FROM base AS final
 WORKDIR /app
-COPY --from=publish /app/publish .
 
-# Create a non-root user for security
-RUN addgroup --group dotnet --gid 2000 \
-    && adduser --uid 1000 --gid 2000 --shell /bin/false --no-create-home --disabled-password dotnet
+# Ensure 'app' owns the workdir (app user already exists in ASP.NET runtime image)
+RUN chown -R app:app /app
 
-# Set ownership and switch to non-root user
-RUN chown -R dotnet:dotnet /app
-USER dotnet
+# Switch to non-root user
+USER app
 
-# Set the entry point
+# Copy published application (now owned by app)
+COPY --chown=app:app --from=publish /app/publish .
+
+# Set environment variables
+ENV ASPNETCORE_URLS=http://+:8080
+ENV ASPNETCORE_ENVIRONMENT=Production
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:8080/currency/liveness || exit 1
+
 ENTRYPOINT ["dotnet", "Maliev.CurrencyService.Api.dll"]

@@ -1,40 +1,27 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
-    <TargetFramework>net9.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <UserSecretsId>52fd7eaf-6677-4f94-a08d-70cf48a1e1bb</UserSecretsId>
-    <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <UserSecretsId>maliev-currencyservice-api</UserSecretsId>
+    <SharedLibraryVersion Condition="'$(SharedLibraryVersion)' == ''">1.0.*-*</SharedLibraryVersion>
   </PropertyGroup>
 
-  <ItemGroup>
-    <InternalsVisibleTo Include="Maliev.CurrencyService.Tests" />
-    
-    <PackageReference Include="Asp.Versioning.Mvc.ApiExplorer" Version="8.1.0" />
-    <PackageReference Include="AspNetCore.HealthChecks.UI.Client" Version="9.0.0" />
-    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="9.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks" Version="9.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="9.0.0" />
-    <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.22.1" />
-    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="9.0.0" />
-    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.0.0" />
-    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.8.1" />
-    <PackageReference Include="NetEscapades.Configuration.Yaml" Version="2.2.0" />
-    <PackageReference Include="Microsoft.AspNetCore.Diagnostics.EntityFrameworkCore" Version="9.0.0" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.0" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="9.0.0" />
-    <PackageReference Include="Serilog.AspNetCore" Version="9.0.0" />
-    <PackageReference Include="Serilog.Sinks.Console" Version="6.0.0" />
-    <PackageReference Include="Serilog.Sinks.File" Version="6.0.0" />
-    <PackageReference Include="Serilog.Enrichers.Environment" Version="3.0.1" />
-    <PackageReference Include="Serilog.Enrichers.Process" Version="3.0.0" />
-    <PackageReference Include="Serilog.Enrichers.Thread" Version="4.0.0" />
-    <PackageReference Include="Serilog.Extensions.Hosting" Version="9.0.0" />
+  <ItemGroup Condition="'$(SharedSourceRoot)' != ''">
+    <ProjectReference Include="$(SharedSourceRoot)\Maliev.Aspire\Maliev.Aspire.ServiceDefaults\Maliev.Aspire.ServiceDefaults.csproj" />
   </ItemGroup>
 
+  <ItemGroup Condition="'$(SharedSourceRoot)' == ''">
+    <PackageReference Include="Maliev.Aspire.ServiceDefaults" Version="$(ServiceDefaultsVersion)" />
+  </ItemGroup>
+
+
   <ItemGroup>
-    <ProjectReference Include="..\Maliev.CurrencyService.Data\Maliev.CurrencyService.Data.csproj" />
+    <ProjectReference Include="..\Maliev.CurrencyService.Application\Maliev.CurrencyService.Application.csproj" />
+    <ProjectReference Include="..\Maliev.CurrencyService.Infrastructure\Maliev.CurrencyService.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

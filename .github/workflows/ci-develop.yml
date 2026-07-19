@@ -1,17 +1,10 @@
 name: CI - Develop
-
 on:
+  workflow_dispatch:
   push:
-    branches:
-      - develop
-
+    branches: [develop]
 permissions:
   contents: read
-
-concurrency:
-  group: currency-service-develop-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
   validate:
     uses: ./.github/workflows/_validate.yml

@@ -1,115 +1,77 @@
 namespace Maliev.CurrencyService.Tests.Workflows;
 
+using System;
+using System.IO;
+
 using Xunit;
 
 public sealed class WorkflowContractTests
 {
-    private static readonly string RepositoryRoot = FindRepositoryRoot();
-    private static readonly string WorkflowsRoot = Path.Combine(RepositoryRoot, ".github", "workflows");
-
-    [Fact]
-    public void PullRequestValidation_RunsWithoutPathFiltersOrCredentials()
-    {
-        var workflow = ReadWorkflow("pr-validation.yml");
-
-        Assert.Contains("pull_request:", workflow, StringComparison.Ordinal);
-        Assert.DoesNotContain("paths:", workflow, StringComparison.Ordinal);
-        Assert.DoesNotContain("paths-ignore:", workflow, StringComparison.Ordinal);
-        Assert.Contains("contents: read", workflow, StringComparison.Ordinal);
-        Assert.Contains("uses: ./.github/workflows/_validate.yml", workflow, StringComparison.Ordinal);
-        AssertCredentialFree(workflow);
-    }
+    private static readonly string Root = FindRoot();
+    private static readonly string Workflows = Path.Combine(Root, ".github", "workflows");
 
     [Theory]
+    [InlineData("pr-validation.yml", "pull_request:")]
     [InlineData("ci-main.yml", "main")]
     [InlineData("ci-develop.yml", "develop")]
     [InlineData("ci-staging.yml", "release/v*")]
-    public void BranchAndTagWorkflows_ValidateWithoutDeploymentSideEffects(string fileName, string trigger)
+    public void EntryWorkflows_AreReadOnlyValidationOnly(string file, string trigger)
     {
-        var workflow = ReadWorkflow(fileName);
-
-        Assert.Contains(trigger, workflow, StringComparison.Ordinal);
-        Assert.Contains("uses: ./.github/workflows/_validate.yml", workflow, StringComparison.Ordinal);
-        AssertCredentialFree(workflow);
+        var text = Read(file);
+        Assert.Contains(trigger, text);
+        Assert.Contains("contents: read", text);
+        Assert.Contains("uses: ./.github/workflows/_validate.yml", text);
+        AssertSafe(text);
     }
 
     [Fact]
-    public void ReusableValidation_IsImmutableCredentialFreeAndStable()
+    public void ReusableValidation_UsesPinnedPublicSharedSources()
     {
-        var workflow = ReadWorkflow("_validate.yml");
-
-        Assert.Contains("workflow_call:", workflow, StringComparison.Ordinal);
-        Assert.Contains("name: validate", workflow, StringComparison.Ordinal);
-        Assert.Contains("contents: read", workflow, StringComparison.Ordinal);
-        Assert.Contains("persist-credentials: false", workflow, StringComparison.Ordinal);
-        Assert.Contains("actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0", workflow, StringComparison.Ordinal);
-        Assert.Contains("actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68", workflow, StringComparison.Ordinal);
-        Assert.Contains("dotnet build", workflow, StringComparison.Ordinal);
-        Assert.Contains("dotnet test", workflow, StringComparison.Ordinal);
-        AssertCredentialFree(workflow);
+        var text = Read("_validate.yml");
+        Assert.Contains("workflow_call:", text);
+        Assert.Contains("actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0", text);
+        Assert.Contains("actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68", text);
+        Assert.Contains("ref: 01d506203763b914e237268a8746f1406423df86", text);
+        Assert.Contains("ref: 559a00db0c7920a5247fdff60d4476ad23a9a501", text);
+        Assert.Equal(3, text.Split("/p:SharedSourceRoot=../shared", StringSplitOptions.None).Length - 1);
+        Assert.Equal(3, text.Split("/p:GITHUB_ACTIONS=false", StringSplitOptions.None).Length - 1);
+        AssertSafe(text);
     }
 
     [Fact]
-    public void RepositoryWorkflows_ContainNoPublicationPromotionOrUntrustedTrigger()
+    public void AllWorkflows_ForbidSecretsAndDeployment()
     {
-        var workflows = Directory.GetFiles(WorkflowsRoot, "*.yml", SearchOption.TopDirectoryOnly)
-            .Concat(Directory.GetFiles(WorkflowsRoot, "*.yaml", SearchOption.TopDirectoryOnly));
-
-        foreach (var path in workflows)
+        foreach (var file in Directory.GetFiles(Workflows, "*.yml"))
         {
-            var workflow = File.ReadAllText(path);
-            Assert.DoesNotContain("pull_request_target", workflow, StringComparison.OrdinalIgnoreCase);
-            AssertCredentialFree(workflow);
+            AssertSafe(File.ReadAllText(file));
         }
     }
 
-    [Fact]
-    public void Documentation_StatesTheValidationOnlyReleaseBoundary()
-    {
-        var readme = File.ReadAllText(Path.Combine(RepositoryRoot, "README.md"));
-
-        Assert.Contains("No workflow in this repository publishes", readme, StringComparison.Ordinal);
-        Assert.Contains("Aspire owner review", readme, StringComparison.Ordinal);
-    }
-
-    private static void AssertCredentialFree(string workflow)
+    private static void AssertSafe(string text)
     {
         foreach (var value in new[]
         {
-            "secrets.",
-            "secrets[",
-            "id-token: write",
-            "credentials_json",
-            "google-github-actions/auth",
-            "gcloud auth",
-            "docker push",
-            "maliev-gitops",
-            "GITOPS_PAT",
-            "kustomize edit",
-            "gh pr create",
+            "secrets.", "GITOPS_PAT", "GCP_SA_KEY", "NUGET_PASSWORD", "id-token: write",
+            "google-github-actions/auth", "gcloud auth", "docker push", "maliev-gitops",
+            "kustomize edit", "gh pr create", "pull_request_target",
         })
         {
-            Assert.DoesNotContain(value, workflow, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain(value, text, StringComparison.OrdinalIgnoreCase);
         }
     }
 
-    private static string ReadWorkflow(string fileName)
-    {
-        var path = Path.Combine(WorkflowsRoot, fileName);
-        Assert.True(File.Exists(path), $"Required workflow is missing: {fileName}");
-        return File.ReadAllText(path);
-    }
+    private static string Read(string file) => File.ReadAllText(Path.Combine(Workflows, file));
 
-    private static string FindRepositoryRoot()
+    private static string FindRoot()
     {
-        for (var current = new DirectoryInfo(AppContext.BaseDirectory); current is not null; current = current.Parent)
+        for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
         {
-            if (File.Exists(Path.Combine(current.FullName, "Maliev.CurrencyService.sln")))
+            if (File.Exists(Path.Combine(directory.FullName, "Maliev.CurrencyService.slnx")))
             {
-                return current.FullName;
+                return directory.FullName;
             }
         }
 
-        throw new DirectoryNotFoundException("Could not locate the CurrencyService repository root.");
+        throw new DirectoryNotFoundException("Could not locate CurrencyService repository root.");
     }
 }

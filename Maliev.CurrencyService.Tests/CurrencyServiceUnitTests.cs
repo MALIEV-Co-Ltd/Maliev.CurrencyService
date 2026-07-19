@@ -1,347 +1,159 @@
-using FluentAssertions;
-using Maliev.CurrencyService.Api.Models;
-using Maliev.CurrencyService.Api.Services;
-using Maliev.CurrencyService.Data.DbContexts;
-using Maliev.CurrencyService.Data.Entities;
+using Maliev.Aspire.ServiceDefaults.Caching;
+using Maliev.CurrencyService.Application.DTOs.Currencies;
+using Maliev.CurrencyService.Application.Interfaces;
+using Maliev.CurrencyService.Domain.Entities;
+using Maliev.CurrencyService.Infrastructure.Persistence;
+using CurrencyServiceImpl = Maliev.CurrencyService.Infrastructure.Services.CurrencyService;
+using Maliev.CurrencyService.Tests.Testing;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;
 
 namespace Maliev.CurrencyService.Tests;
 
-public class CurrencyServiceUnitTests : IDisposable
+/// <summary>
+/// Unit tests for <see cref="CurrencyService"/> using real PostgreSQL via Testcontainers.
+/// </summary>
+public class CurrencyServiceUnitTests : IClassFixture<BaseIntegrationTestFactory<Program, CurrencyDbContext>>, IAsyncLifetime
 {
-    private readonly CurrencyDbContext _context;
-    private readonly IMemoryCache _cache;
-    private readonly Mock<ILogger<Api.Services.CurrencyService>> _loggerMock;
-    private readonly Api.Services.CurrencyService _currencyService;
-    private readonly CacheOptions _cacheOptions;
+    private readonly BaseIntegrationTestFactory<Program, CurrencyDbContext> _factory;
+    private CurrencyDbContext _context = null!;
 
-    public CurrencyServiceUnitTests()
+    /// <summary>Initializes a new instance of the <see cref="CurrencyServiceUnitTests"/> class.</summary>
+    public CurrencyServiceUnitTests(BaseIntegrationTestFactory<Program, CurrencyDbContext> factory)
     {
-        // Setup in-memory database
-        var options = new DbContextOptionsBuilder<CurrencyDbContext>()
-            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
-            .Options;
-        
-        _context = new CurrencyDbContext(options);
-        _cache = new MemoryCache(new MemoryCacheOptions { SizeLimit = 100 });
-        _loggerMock = new Mock<ILogger<Api.Services.CurrencyService>>();
-        _cacheOptions = new CacheOptions
-        {
-            CurrencyCacheDurationMinutes = 60,
-            SearchCacheDurationMinutes = 30,
-            MaxCacheSize = 1000
-        };
-        
-        _currencyService = new Api.Services.CurrencyService(_context, _cache, _loggerMock.Object, _cacheOptions);
-        
-        // Seed test data
-        SeedTestData();
+        _factory = factory;
     }
 
-    private void SeedTestData()
+    /// <inheritdoc/>
+    public async Task InitializeAsync()
     {
-        var currencies = new List<Currency>
-        {
-            new Currency { Id = 1, ShortName = "USD", LongName = "US Dollar", CreatedDate = DateTime.UtcNow, ModifiedDate = DateTime.UtcNow },
-            new Currency { Id = 2, ShortName = "EUR", LongName = "Euro", CreatedDate = DateTime.UtcNow, ModifiedDate = DateTime.UtcNow },
-            new Currency { Id = 3, ShortName = "THB", LongName = "Thai Baht", CreatedDate = DateTime.UtcNow, ModifiedDate = DateTime.UtcNow },
-            new Currency { Id = 4, ShortName = "GBP", LongName = "British Pound Sterling", CreatedDate = DateTime.UtcNow, ModifiedDate = DateTime.UtcNow },
-            new Currency { Id = 5, ShortName = "JPY", LongName = "Japanese Yen", CreatedDate = DateTime.UtcNow, ModifiedDate = DateTime.UtcNow }
-        };
-
-        _context.Currencies.AddRange(currencies);
-        _context.SaveChanges();
+        await _factory.CleanDatabaseAsync();
+        _context = _factory.CreateDbContext();
     }
 
-    public void Dispose()
+    /// <inheritdoc/>
+    public async Task DisposeAsync()
     {
-        _context.Dispose();
-        _cache.Dispose();
+        await _context.DisposeAsync();
     }
 
+    private CurrencyServiceImpl CreateService()
+    {
+        var cacheMock = new Mock<ICacheService>();
+        var loggerMock = new Mock<ILogger<CurrencyServiceImpl>>();
+        return new CurrencyServiceImpl(_context, cacheMock.Object, loggerMock.Object);
+    }
+
+    /// <summary>GetByCodeAsync returns the currency when it exists.</summary>
     [Fact]
-    public async Task GetAllAsync_ShouldReturnPagedResult()
-    {
-        // Act
-        var result = await _currencyService.GetAllAsync();
-
-        // Assert
-        result.Should().NotBeNull();
-        result.Items.Should().HaveCount(5);
-        result.TotalCount.Should().Be(5);
-        result.Page.Should().Be(1);
-        result.PageSize.Should().Be(20);
-        result.Items.Should().Contain(c => c.ShortName == "USD");
-        result.Items.Should().Contain(c => c.ShortName == "EUR");
-        result.Items.Should().Contain(c => c.ShortName == "THB");
-    }
-
-    [Fact]
-    public async Task GetAllAsync_WithPagination_ShouldReturnCorrectPage()
-    {
-        // Act
-        var result = await _currencyService.GetAllAsync(page: 1, pageSize: 2);
-
-        // Assert
-        result.Should().NotBeNull();
-        result.Items.Should().HaveCount(2);
-        result.TotalCount.Should().Be(5);
-        result.Page.Should().Be(1);
-        result.PageSize.Should().Be(2);
-    }
-
-    [Fact]
-    public async Task GetAllAsync_WithSearch_ShouldReturnFilteredResults()
-    {
-        // Act
-        var result = await _currencyService.GetAllAsync(search: "Dollar");
-
-        // Assert
-        result.Should().NotBeNull();
-        result.Items.Should().HaveCount(1);
-        result.Items.First().ShortName.Should().Be("USD");
-    }
-
-    [Fact]
-    public async Task GetAllAsync_ShouldCacheResults()
-    {
-        // Act - First call
-        var result1 = await _currencyService.GetAllAsync();
-        
-        // Act - Second call
-        var result2 = await _currencyService.GetAllAsync();
-
-        // Assert
-        result1.Should().BeEquivalentTo(result2);
-        
-        // Verify cache was used
-        var cacheKey = "currency_list_1_20_all";
-        _cache.TryGetValue(cacheKey, out var cachedValue).Should().BeTrue();
-        cachedValue.Should().NotBeNull();
-    }
-
-    [Fact]
-    public async Task GetByIdAsync_WithValidId_ShouldReturnCurrency()
-    {
-        // Act
-        var result = await _currencyService.GetByIdAsync(1);
-
-        // Assert
-        result.Should().NotBeNull();
-        result!.Id.Should().Be(1);
-        result.ShortName.Should().Be("USD");
-        result.LongName.Should().Be("US Dollar");
-    }
-
-    [Fact]
-    public async Task GetByIdAsync_WithInvalidId_ShouldReturnNull()
-    {
-        // Act
-        var result = await _currencyService.GetByIdAsync(999);
-
-        // Assert
-        result.Should().BeNull();
-    }
-
-    [Fact]
-    public async Task GetByIdAsync_ShouldCacheResults()
-    {
-        // Act - First call
-        var result1 = await _currencyService.GetByIdAsync(1);
-        
-        // Act - Second call
-        var result2 = await _currencyService.GetByIdAsync(1);
-
-        // Assert
-        result1.Should().BeEquivalentTo(result2);
-        
-        // Verify cache was used
-        var cacheKey = "currency_id_1";
-        _cache.TryGetValue(cacheKey, out var cachedValue).Should().BeTrue();
-        cachedValue.Should().NotBeNull();
-    }
-
-    [Fact]
-    public async Task GetByShortNameAsync_WithValidShortName_ShouldReturnCurrency()
-    {
-        // Act
-        var result = await _currencyService.GetByShortNameAsync("USD");
-
-        // Assert
-        result.Should().NotBeNull();
-        result!.ShortName.Should().Be("USD");
-        result.LongName.Should().Be("US Dollar");
-    }
-
-    [Fact]
-    public async Task GetByShortNameAsync_WithInvalidShortName_ShouldReturnNull()
-    {
-        // Act
-        var result = await _currencyService.GetByShortNameAsync("XYZ");
-
-        // Assert
-        result.Should().BeNull();
-    }
-
-    [Fact]
-    public async Task GetByShortNameAsync_ShouldBeCaseInsensitive()
-    {
-        // Act
-        var result1 = await _currencyService.GetByShortNameAsync("usd");
-        var result2 = await _currencyService.GetByShortNameAsync("USD");
-        var result3 = await _currencyService.GetByShortNameAsync("Usd");
-
-        // Assert
-        result1.Should().NotBeNull();
-        result2.Should().NotBeNull();
-        result3.Should().NotBeNull();
-        result1!.ShortName.Should().Be("USD");
-        result2!.ShortName.Should().Be("USD");
-        result3!.ShortName.Should().Be("USD");
-    }
-
-    [Fact]
-    public async Task CreateAsync_WithValidData_ShouldCreateCurrency()
+    public async Task GetByCodeAsync_Should_Return_Currency_When_Exists()
     {
         // Arrange
-        var createRequest = new CreateCurrencyRequest
-        {
-            ShortName = "CAD",
-            LongName = "Canadian Dollar"
-        };
+        var currency = new Currency { Code = "USD", Name = "US Dollar", Symbol = "$", DecimalPlaces = 2, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow };
+        _context.Currencies.Add(currency);
+        await _context.SaveChangesAsync();
+
+        var service = CreateService();
 
         // Act
-        var result = await _currencyService.CreateAsync(createRequest);
+        var result = await service.GetByCodeAsync("USD");
 
         // Assert
-        result.Should().NotBeNull();
-        result.Id.Should().BeGreaterThan(0);
-        result.ShortName.Should().Be("CAD");
-        result.LongName.Should().Be("Canadian Dollar");
-
-        // Verify it's in the database
-        var createdCurrency = await _context.Currencies.FindAsync(result.Id);
-        createdCurrency.Should().NotBeNull();
-        createdCurrency!.ShortName.Should().Be("CAD");
+        Assert.NotNull(result);
+        Assert.Equal("USD", result!.Code);
     }
 
+    /// <summary>GetByCodeAsync returns null when currency does not exist.</summary>
     [Fact]
-    public async Task CreateAsync_ShouldNormalizeShortName()
+    public async Task GetByCodeAsync_Should_Return_Null_When_Not_Exists()
+    {
+        var service = CreateService();
+
+        // Act
+        var result = await service.GetByCodeAsync("XYZ");
+
+        // Assert
+        Assert.Null(result);
+    }
+
+    /// <summary>GetByCountryCodeAsync returns the currency for a given ISO2 country code.</summary>
+    [Fact]
+    public async Task GetByCountryCodeAsync_Should_Return_Currency_For_Iso2()
     {
         // Arrange
-        var createRequest = new CreateCurrencyRequest
-        {
-            ShortName = "cad", // lowercase
-            LongName = "Canadian Dollar"
-        };
+        var currency = new Currency { Code = "THB", Name = "Thai Baht", Symbol = "฿", DecimalPlaces = 2, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow };
+        var mapping = new CountryCurrency { CountryIso2 = "TH", CountryIso3 = "THA", CurrencyCode = "THB", IsPrimary = true };
+        _context.Currencies.Add(currency);
+        _context.CountryCurrencies.Add(mapping);
+        await _context.SaveChangesAsync();
+
+        var service = CreateService();
 
         // Act
-        var result = await _currencyService.CreateAsync(createRequest);
+        var result = await service.GetByCountryCodeAsync("TH");
 
         // Assert
-        result.ShortName.Should().Be("CAD"); // Should be uppercase
+        Assert.NotNull(result);
+        Assert.Equal("THB", result!.Code);
     }
 
+    /// <summary>CreateAsync throws when currency already exists.</summary>
     [Fact]
-    public async Task UpdateAsync_WithValidData_ShouldUpdateCurrency()
+    public async Task CreateAsync_Should_Throw_If_Already_Exists()
     {
         // Arrange
-        var updateRequest = new UpdateCurrencyRequest
-        {
-            ShortName = "USD",
-            LongName = "Updated US Dollar"
-        };
+        var currency = new Currency { Code = "USD", Name = "US Dollar", Symbol = "$", DecimalPlaces = 2, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow };
+        _context.Currencies.Add(currency);
+        await _context.SaveChangesAsync();
 
-        // Act
-        var result = await _currencyService.UpdateAsync(1, updateRequest);
+        var request = new Application.DTOs.Currencies.CreateCurrencyRequest { Code = "USD", Name = "New Dollar", Symbol = "$", DecimalPlaces = 2 };
+        var service = CreateService();
 
-        // Assert
-        result.Should().NotBeNull();
-        result!.Id.Should().Be(1);
-        result.ShortName.Should().Be("USD");
-        result.LongName.Should().Be("Updated US Dollar");
-
-        // Verify in database
-        var updatedCurrency = await _context.Currencies.FindAsync(1);
-        updatedCurrency!.LongName.Should().Be("Updated US Dollar");
+        // Act & Assert
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.CreateAsync(request));
     }
 
+    /// <summary>ActivateAsync sets IsActive to true.</summary>
     [Fact]
-    public async Task UpdateAsync_WithInvalidId_ShouldReturnNull()
+    public async Task ActivateAsync_Should_Set_IsActive_True()
     {
         // Arrange
-        var updateRequest = new UpdateCurrencyRequest
-        {
-            ShortName = "XYZ",
-            LongName = "Non-existent Currency"
-        };
+        var id = Guid.NewGuid();
+        var currency = new Currency { Id = id, Code = "GBP", Name = "Pound", Symbol = "£", DecimalPlaces = 2, IsActive = false, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow };
+        _context.Currencies.Add(currency);
+        await _context.SaveChangesAsync();
+
+        var service = CreateService();
 
         // Act
-        var result = await _currencyService.UpdateAsync(999, updateRequest);
+        var result = await service.ActivateAsync(id);
 
         // Assert
-        result.Should().BeNull();
+        Assert.True(result);
+        var updated = await _context.Currencies.FindAsync(id);
+        Assert.True(updated!.IsActive);
     }
 
+    /// <summary>DeactivateAsync sets IsActive to false.</summary>
     [Fact]
-    public async Task DeleteAsync_WithValidId_ShouldDeleteCurrency()
+    public async Task DeactivateAsync_Should_Set_IsActive_False()
     {
+        // Arrange
+        var id = Guid.NewGuid();
+        var currency = new Currency { Id = id, Code = "GBP", Name = "Pound", Symbol = "£", DecimalPlaces = 2, IsActive = true, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow };
+        _context.Currencies.Add(currency);
+        await _context.SaveChangesAsync();
+
+        var service = CreateService();
+
         // Act
-        var result = await _currencyService.DeleteAsync(1);
+        var result = await service.DeactivateAsync(id);
 
         // Assert
-        result.Should().BeTrue();
-
-        // Verify it's deleted
-        var deletedCurrency = await _context.Currencies.FindAsync(1);
-        deletedCurrency.Should().BeNull();
-    }
-
-    [Fact]
-    public async Task DeleteAsync_WithInvalidId_ShouldReturnFalse()
-    {
-        // Act
-        var result = await _currencyService.DeleteAsync(999);
-
-        // Assert
-        result.Should().BeFalse();
-    }
-
-    [Fact]
-    public async Task GetCurrencyCodesAsync_ShouldReturnAllCodes()
-    {
-        // Act
-        var result = await _currencyService.GetCurrencyCodesAsync();
-
-        // Assert
-        result.Should().NotBeNull();
-        result.Should().HaveCount(5);
-        result.Should().Contain("USD");
-        result.Should().Contain("EUR");
-        result.Should().Contain("THB");
-        result.Should().Contain("GBP");
-        result.Should().Contain("JPY");
-    }
-
-    [Fact]
-    public async Task GetCurrencyCodesAsync_ShouldCacheResults()
-    {
-        // Act - First call
-        var result1 = await _currencyService.GetCurrencyCodesAsync();
-        
-        // Act - Second call
-        var result2 = await _currencyService.GetCurrencyCodesAsync();
-
-        // Assert
-        result1.Should().BeEquivalentTo(result2);
-        
-        // Verify cache was used
-        var cacheKey = "currency_codes_all";
-        _cache.TryGetValue(cacheKey, out var cachedValue).Should().BeTrue();
-        cachedValue.Should().NotBeNull();
+        Assert.True(result);
+        var updated = await _context.Currencies.FindAsync(id);
+        Assert.False(updated!.IsActive);
     }
 }

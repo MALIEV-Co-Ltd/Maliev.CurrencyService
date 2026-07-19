@@ -1,17 +1,9 @@
 name: CI - Main
-
 on:
   push:
-    branches:
-      - main
-
+    branches: [main]
 permissions:
   contents: read
-
-concurrency:
-  group: currency-service-main-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
   validate:
     uses: ./.github/workflows/_validate.yml
